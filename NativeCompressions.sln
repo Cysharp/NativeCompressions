@@ -1,0 +1,39 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NativeCompressions.ZStandard", "src\NativeCompressions.ZStandard\NativeCompressions.ZStandard.csproj", "{318D5256-9BA3-43FE-9064-21C0079A9FB3}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{D2E583E9-79D4-48F1-8D3A-84DD7F64BB11}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "sandbox", "sandbox", "{3E35D47E-89FF-4063-A322-4C4971817BF6}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NativeCompressions.Sandbox.ConsoleApp", "sandbox\NativeCompressions.Sandbox.ConsoleApp\NativeCompressions.Sandbox.ConsoleApp.csproj", "{50AE63F3-AE52-4B6A-B5A2-3613E7989F13}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{318D5256-9BA3-43FE-9064-21C0079A9FB3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{318D5256-9BA3-43FE-9064-21C0079A9FB3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{318D5256-9BA3-43FE-9064-21C0079A9FB3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{318D5256-9BA3-43FE-9064-21C0079A9FB3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{50AE63F3-AE52-4B6A-B5A2-3613E7989F13}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{50AE63F3-AE52-4B6A-B5A2-3613E7989F13}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{50AE63F3-AE52-4B6A-B5A2-3613E7989F13}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{50AE63F3-AE52-4B6A-B5A2-3613E7989F13}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{318D5256-9BA3-43FE-9064-21C0079A9FB3} = {D2E583E9-79D4-48F1-8D3A-84DD7F64BB11}
+		{50AE63F3-AE52-4B6A-B5A2-3613E7989F13} = {3E35D47E-89FF-4063-A322-4C4971817BF6}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FE1051F2-C78B-44CC-B982-7F87759C8405}
+	EndGlobalSection
+EndGlobal
