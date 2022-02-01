@@ -104,7 +104,7 @@ public static unsafe class LibZstd // NativeMethods
     /// Return runtime library version, like "1.4.5". Requires v1.3.0+.
     /// </summary>
     [DllImport(LibZstdDll, CallingConvention = CallingConvention.Cdecl)]
-    public static extern byte* ZSTD_versionString();
+    public static extern sbyte* ZSTD_versionString();
 
     #endregion
 
@@ -192,7 +192,7 @@ public static unsafe class LibZstd // NativeMethods
     /// provides readable string from an error code
     /// </summary>
     [DllImport(LibZstdDll, CallingConvention = CallingConvention.Cdecl)]
-    public static extern byte* ZSTD_getErrorName(size_t code);
+    public static extern sbyte* ZSTD_getErrorName(size_t code);
 
     /// <summary>
     /// minimum negative compression level allowed, requires v1.4.0+

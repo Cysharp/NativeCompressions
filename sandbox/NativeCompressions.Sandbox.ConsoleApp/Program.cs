@@ -3,7 +3,12 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 
+
 Console.WriteLine(ZStandard.Version);
+
+
+var a = ZStandard.GetErrorName((UIntPtr)100);
+Console.WriteLine(a);
 
 //var libzstdHandle = NativeLibrary.Load("libzstd.dll");
 
@@ -43,8 +48,8 @@ Console.WriteLine(ZStandard.Version);
 //    }
 
 //}
-var input = new byte[] { 1, 10, 10 };
+//var input = new byte[] { 1, 10, 10 };
 
 
-var comp = ZStandard.Compress(input);
-var bin = ZStandard.Decompress(comp);
+//var comp = ZStandard.Compress(input);
+//var bin = ZStandard.Decompress(comp);

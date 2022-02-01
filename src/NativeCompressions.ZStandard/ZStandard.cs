@@ -1,5 +1,4 @@
 ﻿using System.Buffers;
-using System.Text;
 using size_t = System.UIntPtr; // nuint is .NET size_t equivalent, internally nuint is represent as UIntPtr.
 
 namespace NativeCompressions.ZStandard;
@@ -41,9 +40,7 @@ public static unsafe class ZStandard
     {
         get
         {
-            var v = LibZstd.ZSTD_versionString();
-            var span = GetNullTerminatedString(v, 100);
-            return Encoding.UTF8.GetString(span);
+            return new string(LibZstd.ZSTD_versionString());
         }
     }
 
@@ -52,9 +49,7 @@ public static unsafe class ZStandard
     /// </summary>
     public static string GetErrorName(size_t code)
     {
-        var name = LibZstd.ZSTD_getErrorName(code);
-        var span = GetNullTerminatedString(name, 10000);
-        return Encoding.UTF8.GetString(span);
+        return new string(LibZstd.ZSTD_getErrorName(code));
     }
 
     /// <summary>
@@ -122,7 +117,6 @@ public static unsafe class ZStandard
         }
 
         var dest = new byte[size];
-
         fixed (byte* srcP = src)
         fixed (byte* destP = dest)
         {
@@ -170,17 +164,5 @@ public static unsafe class ZStandard
 
             return FrameContentSizeResult.Succeed;
         }
-    }
-
-    static ReadOnlySpan<byte> GetNullTerminatedString(byte* value, int limit)
-    {
-        var i = 0;
-        for (; i < limit; i++)
-        {
-            if (value[i] == 0) break;
-        }
-        if (i == limit) throw new InvalidOperationException("Not found null terminator in value.");
-
-        return new ReadOnlySpan<byte>(value, i);
     }
 }
