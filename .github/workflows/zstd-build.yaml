@@ -1,0 +1,158 @@
+name: zstd build
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+    inputs:
+      create-pullrequest:
+        description: true to craete PR for artifacts.
+        required: true
+        type: boolean
+        default: false
+
+# OUTPUT_DIR name follow to .NET RID rule. https://docs.microsoft.com/ja-jp/dotnet/core/rid-catalog
+# win-x64, linux-x64, osx-x64
+# win-x86, linux-x86
+# win-arm64, linux-arm64, osx-arm64, ios-arm64
+
+env:
+  CREATE_PR: ${{ github.event.inputs.create-pullrequest == 'true' && github.event.inputs.create-pullrequest || 'false' }}
+
+jobs:
+  ios:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: arm64
+            os: macos-latest
+    env:
+      OUTPUT_DIR: artifact/ios-${{ matrix.target }}/native
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: git fetch --tags
+        working-directory: zstd
+      - name: Build
+        run: bash ./builder/zstd/zstd-ios-arm64.sh
+      - name: show generated files
+        run: git ls-files --other --modified --exclude-standard
+      - uses: actions/upload-artifact@v3
+        with:
+          name: artifact
+          path: artifact
+        if: ${{ env.CREATE_PR == 'true' }}
+
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ["x64", "arm64"]
+    env:
+      OUTPUT_DIR: artifact/linux-${{ matrix.target }}/native
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: git fetch --tags
+        working-directory: zstd
+      - name: Build
+        run: bash ./builder/zstd/zstd-linux-${{ matrix.target }}.sh
+      - name: show generated files
+        run: git ls-files --other --modified --exclude-standard
+      - uses: actions/upload-artifact@v3
+        with:
+          name: artifact
+          path: artifact
+        if: ${{ env.CREATE_PR == 'true' }}
+
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x64
+            os: macos-latest
+    env:
+      OUTPUT_DIR: artifact/osx-${{ matrix.target }}/native
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: git fetch --tags
+        working-directory: zstd
+      - name: Build
+        run: bash ./builder/zstd/zstd-darwin.sh
+      - name: show generated files
+        run: git ls-files --other --modified --exclude-standard
+      - uses: actions/upload-artifact@v3
+        with:
+          name: artifact
+          path: artifact
+        if: ${{ env.CREATE_PR == 'true' }}
+
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ["x64", "x86", "arm64"]
+    env:
+      OUTPUT_DIR: artifact\win-${{ matrix.target }}\native
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: git fetch --tags
+        working-directory: zstd
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v1.1
+      - name: Build
+        run: builder\zstd\zstd-windows-${{ matrix.target }}-cmake.bat
+        shell: cmd
+      - name: show generated files
+        run: git ls-files --other --modified --exclude-standard
+      - uses: actions/upload-artifact@v3
+        with:
+          name: artifact
+          path: artifact
+        if: ${{ env.CREATE_PR == 'true' }}
+
+  pr:
+    if: ${{ github.event.inputs.create-pullrequest == 'true' }}
+    needs: [ios, linux, macos, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/download-artifact@v3
+        with:
+          name: artifact
+          path: _tmp
+      - name: Copy to artifact
+        run: mkdir -p ./src/runtimes && cp -fR ./_tmp/* ./src/runtimes/
+      - name: Check for modified files
+        id: git-check
+        run: echo "::set-output name=modified::$(if [[ "$(git status --porcelain=v1 2>/dev/null | wc -l)" == "0" ]]; then echo "false"; else echo "true"; fi)"
+      - if: steps.git-check.outputs.modified == 'true'
+        name: Create PullRequest
+        uses: peter-evans/create-pull-request@v4
+        with:
+          branch: "auto/zstd_artifact"
+          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          delete-branch: true
+          title: "[zstd] Update artifacts"
+          labels: |
+            automated pr
