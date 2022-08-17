@@ -23,4 +23,4 @@ dir zstd\zstd
 mkdir %OUTPUT_DIR%
 cp .\zstd\lib\libzstd.a .\%OUTPUT_DIR%\libzstd.a
 cp .\zstd\lib\libzstd.so.%FILE_ZSTD_VERSION% .\%OUTPUT_DIR%\libzstd.so
-cp .\zstd\programs\zstd .\%OUTPUT_DIR%\zstd
+::cp .\zstd\programs\zstd .\%OUTPUT_DIR%\zstd

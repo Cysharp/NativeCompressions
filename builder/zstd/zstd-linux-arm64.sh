@@ -21,4 +21,4 @@ ls zstd/programs/zstd
 mkdir -p "./${OUTPUT_DIR}/"
 cp ./zstd/lib/libzstd.a "./${OUTPUT_DIR}/."
 cp "./zstd/lib/libzstd.so.${FILE_ZSTD_VERSION}" "./${OUTPUT_DIR}/libzstd.so"
-cp ./zstd/programs/zstd "./${OUTPUT_DIR}/."
+#cp ./zstd/programs/zstd "./${OUTPUT_DIR}/."

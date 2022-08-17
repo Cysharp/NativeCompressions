@@ -27,4 +27,4 @@ dir zstd\build\cmake\build\programs\Release\zstd.exe
 :: copy
 mkdir %OUTPUT_DIR%
 cp zstd\build\cmake\build\lib\Release\zstd.dll .\%OUTPUT_DIR%\libzstd.dll
-cp zstd\build\cmake\build\programs\Release\zstd.exe .\%OUTPUT_DIR%\zstd.exe
+::cp zstd\build\cmake\build\programs\Release\zstd.exe .\%OUTPUT_DIR%\zstd.exe
