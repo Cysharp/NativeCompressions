@@ -10,7 +10,7 @@ PLATFORM=arm64
 OUTPUT_DIR=${OUTPUT_DIR:=src/runtimes/${OS}-${PLATFORM}/}
 
 PACKAGE_NAME=zstd
-TARGET=${OS}/${PLATFORM}/8.0
+TARGET=iPhoneOS/arm64/8.0
 
 # prepare
 source ./builder/zstd/docker/zstd-builder-ios-arm64.sh
