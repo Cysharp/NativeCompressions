@@ -78,12 +78,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: x64
-            os: macos-latest
+        target: ["x64", "arm64"]
     env:
       OUTPUT_DIR: artifact/osx-${{ matrix.target }}/native
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v3
@@ -92,7 +90,7 @@ jobs:
       - run: git fetch --tags
         working-directory: zstd
       - name: Build
-        run: bash ./builder/zstd/zstd-darwin.sh
+        run: bash ./builder/zstd/zstd-darwin-${{ matrix.target }}.sh
       - name: show generated files
         run: git ls-files --other --modified --exclude-standard
       - uses: actions/upload-artifact@v3

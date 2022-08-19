@@ -8,20 +8,19 @@ ZSTD_VERSION=$(cd zstd && echo "$(git tag --points-at HEAD | tr -d '[:space:]')"
 GIT_ZSTD_VERSION=${ZSTD_VERSION}
 FILE_ZSTD_VERSION=$(echo "${ZSTD_VERSION}" | cut -c 2-)
 OS=osx
-PLATFORM=$(uname -m)
-if [[ "$PLATFORM" == "x86_64" ]]; then PLATFORM="x64"; fi
+PLATFORM=arm64
 OUTPUT_DIR=${OUTPUT_DIR:=src/runtimes/${OS}-${PLATFORM}/}
 
 # build
 cd zstd
 make clean
-make
+make CFLAGS="-target arm64-apple-macos11" lib # github action alrady include x86_64 LZ4/LZMA and failed on arm64.
 cd ..
 
 # confirm
 ls zstd/lib/libzstd.a
 ls zstd/lib/libzstd.*dylib
-ls zstd/programs/zstd
+#ls zstd/programs/zstd
 
 # copy
 mkdir -p "./${OUTPUT_DIR}/"
