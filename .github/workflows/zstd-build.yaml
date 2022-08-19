@@ -139,7 +139,7 @@ jobs:
           name: artifact
           path: _tmp
       - name: Copy to artifact
-        run: mkdir -p ./src/runtimes && cp -fR ./_tmp/* ./src/runtimes/
+        run: mkdir -p ./src/NativeCompressions.ZStandard/runtimes && cp -fR ./_tmp/* ./src/NativeCompressions.ZStandard/runtimes/
       - name: Check for modified files
         id: git-check
         run: echo "::set-output name=modified::$(if [[ "$(git status --porcelain=v1 2>/dev/null | wc -l)" == "0" ]]; then echo "false"; else echo "true"; fi)"
