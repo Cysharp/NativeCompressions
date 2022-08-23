@@ -13,7 +13,7 @@ PACKAGE_NAME=zstd
 TARGET=iPhoneOS/arm64/8.0
 
 # prepare
-source ./builder/zstd/docker/zstd-builder-ios-arm64.sh
+source ./builder/zstd/core/zstd-builder-ios-arm64.sh
 __clean
 __find_build_toolchains "${PACKAGE_NAME}" "${TARGET}"
 __config_cmake_variables
@@ -32,4 +32,4 @@ ls -l ${WORKING_DIR_BUILD}/lib/libzstd.*dylib
 # copy
 mkdir -p "./${OUTPUT_DIR}/"
 cp "${WORKING_DIR_BUILD}/lib/libzstd.a" "./${OUTPUT_DIR}/."
-cp "${WORKING_DIR_BUILD}/lib/libzstd.${FILE_ZSTD_VERSION}.dylib" "./${OUTPUT_DIR}/libzstd.dylib"
+#cp "${WORKING_DIR_BUILD}/lib/libzstd.${FILE_ZSTD_VERSION}.dylib" "./${OUTPUT_DIR}/libzstd.dylib"

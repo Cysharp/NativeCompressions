@@ -14,7 +14,7 @@ OUTPUT_DIR=${OUTPUT_DIR:=src/runtimes/${OS}-${PLATFORM}/}
 # build
 cd zstd
 make clean
-make CFLAGS="-target x86_64-apple-macos10.12" lib # github action alrady include x86_64 LZ4/LZMA and failed on arm64
+make CFLAGS="-target x86_64-apple-macos10.12 -Werror -O3" lib # github action alrady include x86_64 LZ4/LZMA and failed on arm64
 cd ..
 
 # confirm
@@ -24,6 +24,6 @@ ls zstd/lib/libzstd.*dylib
 
 # copy
 mkdir -p "./${OUTPUT_DIR}/"
-cp ./zstd/lib/libzstd.a "./${OUTPUT_DIR}/."
+#cp ./zstd/lib/libzstd.a "./${OUTPUT_DIR}/."
 cp "./zstd/lib/libzstd.${FILE_ZSTD_VERSION}.dylib" "./${OUTPUT_DIR}/libzstd.dylib"
 #cp ./zstd/programs/zstd "./${OUTPUT_DIR}/."

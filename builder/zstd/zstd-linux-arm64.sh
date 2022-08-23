@@ -10,7 +10,7 @@ PLATFORM=arm64
 OUTPUT_DIR=${OUTPUT_DIR:=src/runtimes/${OS}-${PLATFORM}/}
 
 # build
-docker run --rm -v "$PWD/builder/zstd/docker:/builder" -v "$PWD/zstd:/src" ubuntu:22.04 /bin/sh /builder/zstd-builder-linux-arm64.sh
+docker run --rm -v "$PWD/builder/zstd/core:/builder" -v "$PWD/zstd:/src" ubuntu:22.04 /bin/sh /builder/zstd-builder-linux-arm64.sh
 
 # confirm
 ls zstd/lib/libzstd.a
@@ -19,6 +19,6 @@ ls zstd/programs/zstd
 
 # copy
 mkdir -p "./${OUTPUT_DIR}/"
-cp ./zstd/lib/libzstd.a "./${OUTPUT_DIR}/."
+#cp ./zstd/lib/libzstd.a "./${OUTPUT_DIR}/."
 cp "./zstd/lib/libzstd.so.${FILE_ZSTD_VERSION}" "./${OUTPUT_DIR}/libzstd.so"
 #cp ./zstd/programs/zstd "./${OUTPUT_DIR}/."
