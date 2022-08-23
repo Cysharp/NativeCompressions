@@ -22,6 +22,31 @@ env:
   CREATE_PR: ${{ github.event.inputs.create-pullrequest == 'true' && github.event.inputs.create-pullrequest || 'false' }}
 
 jobs:
+  android:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ["x86", "x64", "arm", "arm64"]
+    env:
+      OUTPUT_DIR: artifact/zstd/ios-${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: git fetch --tags
+        working-directory: zstd
+      - name: Build
+        run: bash ./builder/zstd/zstd-android-${{ matrix.target }}.sh
+      - name: show generated files
+        run: git ls-files --other --modified --exclude-standard
+      - uses: actions/upload-artifact@v3
+        with:
+          name: artifact
+          path: artifact
+        if: ${{ env.CREATE_PR == 'true' }}
+
   ios:
     strategy:
       fail-fast: false
@@ -129,17 +154,29 @@ jobs:
 
   pr:
     if: ${{ github.event.inputs.create-pullrequest == 'true' }}
-    needs: [ios, linux, macos, windows]
+    needs: [android, ios, linux, macos, windows]
+    env:
+      ARTIFACT_PATH: ./src/NativeCompressions.ZStandard/runtimes/
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: git fetch --tags
+        working-directory: zstd
+      - run: echo "::set-output name=value::$(git tag --points-at HEAD | tr -d '[:space:]')"
+        id: zstd-version
+        working-directory: zstd
       - uses: actions/download-artifact@v3
         with:
           name: artifact
           path: _tmp
       - name: Copy to artifact
-        run: mkdir -p ./src/NativeCompressions.ZStandard/runtimes && cp -fR ./_tmp/* ./src/NativeCompressions.ZStandard/runtimes/
+        run: |
+          rm -rf ${{ env.ARTIFACT_PATH }}
+          mkdir -p ${{ env.ARTIFACT_PATH }}
+          cp -fR ./_tmp/* ${{ env.ARTIFACT_PATH }}
       - name: Check for modified files
         id: git-check
         run: echo "::set-output name=modified::$(if [[ "$(git status --porcelain=v1 2>/dev/null | wc -l)" == "0" ]]; then echo "false"; else echo "true"; fi)"
@@ -151,6 +188,8 @@ jobs:
           author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
           committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
           delete-branch: true
-          title: "[zstd] Update artifacts"
+          title: "[zstd] Update artifacts ${{ steps.zstd-version.outputs.value }}"
+          body: |
+            Update zstd artifacts for ${{ steps.zstd-version.outputs.value }} 🚀
           labels: |
             automated pr
