@@ -28,7 +28,7 @@ jobs:
       matrix:
         target: ["x86", "x64", "arm", "arm64"]
     env:
-      OUTPUT_DIR: artifact/zstd/ios-${{ matrix.target }}
+      OUTPUT_DIR: artifact/android-${{ matrix.target }}/native
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
