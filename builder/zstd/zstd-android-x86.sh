@@ -8,7 +8,7 @@ FILE_ZSTD_VERSION=$(echo "${ZSTD_VERSION}" | cut -c 2-)
 OS=android
 ABI=x86
 PLATFORM=x86
-OUTPUT_DIR=${OUTPUT_DIR:=pkg/zstd/${GIT_ZSTD_VERSION}/${OS}/${PLATFORM}/}
+OUTPUT_DIR=${OUTPUT_DIR:=src/runtimes/${OS}-${PLATFORM}/}
 
 # build
 docker run --rm -v "$PWD/builder/zstd/core:/builder" -v "$PWD/zstd:/src" -e "ABI=$ABI" ubuntu:22.04 /bin/bash /builder/zstd-builder-android.sh
