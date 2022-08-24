@@ -5,9 +5,11 @@ set -eu
 NATIVE_OS_KIND=$(uname | tr "[:upper:]" "[:lower:]") # should be darwin
 BUILD_TYPE=Release # Release or Debug
 
-CMAKE_DIR="$(pwd)/zstd/build/cmake"
-BUILD_DIR="${CMAKE_DIR}/build"
-CMAKE_TOOLCHAIN_FILE="$(pwd)/builder/zstd/ios-arm64.toolchain.cmake"
+IOS_VERSION=${IOS_VERSION:=8.0}
+IOS_ARCH=${IOS_ARCH:=arm64}
+TARGET="iPhoneOS/${IOS_ARCH}/${IOS_VERSION}"
+
+INSTALL_DIR="$(pwd)/zstd/build/cmake/build/ios"
 
 # NOTE: zlib and lzma will found from iPhoneOS.sdk.
 # -- Found ZLIB: /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/usr/lib/libz.tbd (found version "1.2.11")
@@ -39,24 +41,17 @@ die() {
   exit 1
 }
 
-__clean() {
-  step "clean working space."
-
-  rm -rf "${BUILD_DIR}"
-  mkdir -p "${BUILD_DIR}"
-}
-
-# __find_build_toolchains zstd iPhoneOS/arm64/8.0
-__find_build_toolchains() {
-  step "Find build toolchains."
+# __find_build_toolchains iPhoneOS/arm64/8.0
+find_build_toolchains() {
+  step2 "Find build toolchains."
 
   if [ "$NATIVE_OS_KIND" != 'darwin' ] ; then
     die "this software can only be run on macOS."
   fi
 
-  TARGET_OS_NAME=$(printf '%s\n' "$2" | cut -d/ -f1)
-  TARGET_OS_VERS=$(printf '%s\n' "$2" | cut -d/ -f3)
-  TARGET_OS_ARCH=$(printf '%s\n' "$2" | cut -d/ -f2)
+  TARGET_OS_NAME=$(printf '%s\n' "${TARGET}" | cut -d/ -f1)
+  TARGET_OS_VERS=$(printf '%s\n' "${TARGET}" | cut -d/ -f3)
+  TARGET_OS_ARCH=$(printf '%s\n' "${TARGET}" | cut -d/ -f2)
   TARGET_OS_NAME_LOWER_CASE="$(echo "$TARGET_OS_NAME" | tr "[:upper:]" "[:lower:]")"
 
   PACKAGE_CDEFINE="__arm64__"
@@ -71,12 +66,20 @@ __find_build_toolchains() {
   SYSROOT="$TOOLCHAIN_ROOT/Platforms/${TARGET_OS_NAME}.platform/Developer/SDKs/${TARGET_OS_NAME}.sdk"
   SYSTEM_LIBRARY_DIR="$SYSROOT/usr/lib"
 
+  ZSTD_INSTALL_DIR="${INSTALL_DIR}/${IOS_ARCH}"
+
+  CMAKE_TOOLCHAIN="$(pwd)/builder/zstd/ios-arm64.toolchain.cmake"
+
   CC="$TOOLCHAIN_BIND/clang"
   CXX="$TOOLCHAIN_BIND/clang++"
 
   CCFLAGS="-isysroot $SYSROOT -arch $TARGET_OS_ARCH -m${TARGET_OS_NAME_LOWER_CASE}-version-min=$TARGET_OS_VERS -Qunused-arguments -Os -pipe"
   CPPFLAGS="-isysroot $SYSROOT -Qunused-arguments"
   LDFLAGS="-isysroot $SYSROOT -arch $TARGET_OS_ARCH -m${TARGET_OS_NAME_LOWER_CASE}-version-min=$TARGET_OS_VERS"
+
+  for item in $PACKAGE_INCLUDES; do
+    CPPFLAGS="-I${item} $CPPFLAGS"
+  done
 
   if [[ "$BUILD_TYPE" == "Release" ]] ; then
     CCFLAGS="$CCFLAGS -Wl,-S -Os -DNDEBUG"
@@ -90,8 +93,40 @@ __find_build_toolchains() {
   CXXFLAGS="$CCFLAGS"
 }
 
-__config_cmake_variables() {
-  step "Config cmake variables."
+print_build_toolchains() {
+  step2 "Print build toolchains."
+
+  cat <<EOF
+        BUILD_TYPE = ${BUILD_TYPE}
+
+    NATIVE_OS_KIND = ${NATIVE_OS_KIND}
+
+    TARGET_OS_NAME = ${TARGET_OS_NAME}
+    TARGET_OS_VERS = ${TARGET_OS_VERS}
+    TARGET_OS_ARCH = ${TARGET_OS_ARCH}
+
+           SYSROOT = ${SYSROOT}
+SYSTEM_LIBRARY_DIR = ${SYSTEM_LIBRARY_DIR}
+    TOOLCHAIN_BIND = ${TOOLCHAIN_BIND}
+
+   CMAKE_TOOLCHAIN = ${CMAKE_TOOLCHAIN}
+                CC = ${CC}
+               CXX = ${CXX}
+
+           CCFLAGS = ${CCFLAGS}
+          CPPFLAGS = ${CPPFLAGS}
+          CXXFLAGS = ${CXXFLAGS}
+           LDFLAGS = ${LDFLAGS}
+
+       INSTALL_DIR = ${INSTALL_DIR}
+
+  ZSTD_INSTALL_DIR = ${ZSTD_INSTALL_DIR}
+EOF
+
+}
+
+config_cmake_variables() {
+  step2 "Config cmake variables."
 
   CMAKE_VERBOSE_MAKEFILE=ON
   CMAKE_COLOR_MAKEFILE=ON
@@ -128,10 +163,10 @@ __config_cmake_variables() {
   CMAKE_LIBRARY_PATH="$SYSTEM_LIBRARY_DIR"
 }
 
-__create_cmake_toolchain_file() {
-  step "Create toolchain file."
+create_cmake_toolchain() {
+  step2 "Create cmake toolchain file."
 
-  cat <<EOF | tee "${CMAKE_TOOLCHAIN_FILE}"
+  cat <<EOF | tee "${CMAKE_TOOLCHAIN}"
 set(CMAKE_VERBOSE_MAKEFILE $CMAKE_VERBOSE_MAKEFILE)
 set(CMAKE_COLOR_MAKEFILE   $CMAKE_COLOR_MAKEFILE)
 
@@ -166,3 +201,53 @@ set(CMAKE_FIND_DEBUG_MODE $CMAKE_FIND_DEBUG_MODE)
 set(CMAKE_LIBRARY_PATH "$CMAKE_LIBRARY_PATH")
 EOF
 }
+
+__install_zstd() {
+  step "Install zstd."
+
+  # variables
+  CMAKE_DIR="$(pwd)/zstd/build/cmake"
+  BUILD_DIR="${CMAKE_DIR}/build"
+  PACKAGE_INCLUDES=""
+
+  find_build_toolchains
+  print_build_toolchains
+
+  # cmake toolchain
+  config_cmake_variables
+  create_cmake_toolchain
+
+  # create directory
+  rm -rf "${BUILD_DIR:=/src/build/cmake/build}"
+  mkdir -p "${BUILD_DIR}"
+
+  # build
+  pushd "${BUILD_DIR}" > /dev/null 2>&1
+    cmake \
+      -Wno-dev \
+      -S "${CMAKE_DIR}" \
+      -B "${BUILD_DIR}" \
+      -DCMAKE_INSTALL_PREFIX="${ZSTD_INSTALL_DIR}" \
+      -DCMAKE_TOOLCHAIN="${CMAKE_TOOLCHAIN}" \
+      -DCMAKE_VERBOSE_MAKEFILE=ON \
+      -DCMAKE_COLOR_MAKEFILE=ON \
+      -DZSTD_MULTITHREAD_SUPPORT=ON \
+      -DZSTD_BUILD_TESTS=OFF \
+      -DZSTD_BUILD_CONTRIB=OFF \
+      -DZSTD_BUILD_PROGRAMS=ON \
+      -DZSTD_BUILD_STATIC=ON \
+      -DZSTD_BUILD_SHARED=ON \
+      -DZSTD_LZ4_SUPPORT=OFF \
+      -DZSTD_ZLIB_SUPPORT=ON \
+      -DZSTD_LZMA_SUPPORT=ON
+
+    cmake --build "${BUILD_DIR}"  -- -j8
+    cmake --install "${BUILD_DIR}"
+  popd > /dev/null 2>&1
+
+  # cleanup
+  unset BUILD_DIR
+  unset PACKAGE_INCLUDES
+}
+
+__install_zstd
