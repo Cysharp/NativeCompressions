@@ -25,7 +25,7 @@ jobs:
       matrix:
         target: ["x86", "x64", "arm", "arm64"]
     env:
-      OUTPUT_DIR: artifact/android-${{ matrix.target }}/native
+      OUTPUT_DIR: _out/android-${{ matrix.target }}/native
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: artifact
-          path: artifact
+          path: _out
         if: ${{ inputs.create-pullrequest == true }}
 
   ios:
@@ -52,7 +52,7 @@ jobs:
           - target: arm64
             os: macos-latest
     env:
-      OUTPUT_DIR: artifact/ios-${{ matrix.target }}/native
+      OUTPUT_DIR: _out/ios-${{ matrix.target }}/native
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
@@ -68,7 +68,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: artifact
-          path: artifact
+          path: _out
         if: ${{ inputs.create-pullrequest == true }}
 
   linux:
@@ -77,7 +77,7 @@ jobs:
       matrix:
         target: ["x64", "arm64"]
     env:
-      OUTPUT_DIR: artifact/linux-${{ matrix.target }}/native
+      OUTPUT_DIR: _out/linux-${{ matrix.target }}/native
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -93,7 +93,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: artifact
-          path: artifact
+          path: _out
         if: ${{ inputs.create-pullrequest == true }}
 
   macos:
@@ -102,7 +102,7 @@ jobs:
       matrix:
         target: ["x64", "arm64"]
     env:
-      OUTPUT_DIR: artifact/osx-${{ matrix.target }}/native
+      OUTPUT_DIR: _out/osx-${{ matrix.target }}/native
     runs-on: macos-latest
     timeout-minutes: 10
     steps:
@@ -118,7 +118,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: artifact
-          path: artifact
+          path: _out
         if: ${{ inputs.create-pullrequest == true }}
 
   windows:
@@ -127,7 +127,7 @@ jobs:
       matrix:
         target: ["x64", "x86", "arm64"]
     env:
-      OUTPUT_DIR: artifact\win-${{ matrix.target }}\native
+      OUTPUT_DIR: _out\win-${{ matrix.target }}\native
     runs-on: windows-2022
     timeout-minutes: 10
     steps:
@@ -146,7 +146,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: artifact
-          path: artifact
+          path: _out
         if: ${{ inputs.create-pullrequest == true }}
 
   pr:
