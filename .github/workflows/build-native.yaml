@@ -24,7 +24,7 @@ on:
 
 jobs:
   android:
-    name: android (${{ matrix.value }}) - ${{ inputs.native }}
+    name: android (${{ matrix.target }}) - ${{ inputs.native }}
     strategy:
       fail-fast: false
       matrix:
@@ -50,7 +50,7 @@ jobs:
         if: ${{ inputs.create-pullrequest == true }}
 
   ios:
-    name: ios (${{ matrix.value }}) - ${{ inputs.native }}
+    name: ios (${{ matrix.target }}) - ${{ inputs.native }}
     strategy:
       fail-fast: false
       matrix:
@@ -78,7 +78,7 @@ jobs:
         if: ${{ inputs.create-pullrequest == true }}
 
   linux:
-    name: linux (${{ matrix.value }}) - ${{ inputs.native }}
+    name: linux (${{ matrix.target }}) - ${{ inputs.native }}
     strategy:
       fail-fast: false
       matrix:
@@ -104,7 +104,7 @@ jobs:
         if: ${{ inputs.create-pullrequest == true }}
 
   macos:
-    name: macos (${{ matrix.value }}) - ${{ inputs.native }}
+    name: macos (${{ matrix.target }}) - ${{ inputs.native }}
     strategy:
       fail-fast: false
       matrix:
@@ -130,7 +130,7 @@ jobs:
         if: ${{ inputs.create-pullrequest == true }}
 
   windows:
-    name: windows (${{ matrix.value }}) - ${{ inputs.native }}
+    name: windows (${{ matrix.target }}) - ${{ inputs.native }}
     strategy:
       fail-fast: false
       matrix:
