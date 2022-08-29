@@ -1,4 +1,4 @@
-name: zstd build
+name: Build Native
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
@@ -7,6 +7,14 @@ concurrency:
 on:
   workflow_dispatch:
     inputs:
+      native:
+        description: select which native to build.
+        required: true
+        type: choice
+        default: "zstd"
+        options:
+          - "zstd"
+          - "lz4"
       create-pullrequest:
         description: true to craete PR for artifacts.
         required: true
@@ -33,9 +41,9 @@ jobs:
         with:
           submodules: true
       - run: git fetch --tags
-        working-directory: zstd
+        working-directory: ${{ inputs.native }}
       - name: Build
-        run: bash ./builder/zstd/zstd-android-${{ matrix.target }}.sh
+        run: bash ./builder/${{ inputs.native }}/${{ inputs.native }}-android-${{ matrix.target }}.sh
       - name: show generated files
         run: git ls-files --other --modified --exclude-standard
       - uses: actions/upload-artifact@v3
@@ -60,9 +68,9 @@ jobs:
         with:
           submodules: true
       - run: git fetch --tags
-        working-directory: zstd
+        working-directory: ${{ inputs.native }}
       - name: Build
-        run: bash ./builder/zstd/zstd-ios-arm64.sh
+        run: bash ./builder/${{ inputs.native }}/${{ inputs.native }}-ios-arm64.sh
       - name: show generated files
         run: git ls-files --other --modified --exclude-standard
       - uses: actions/upload-artifact@v3
@@ -85,9 +93,9 @@ jobs:
         with:
           submodules: true
       - run: git fetch --tags
-        working-directory: zstd
+        working-directory: ${{ inputs.native }}
       - name: Build
-        run: bash ./builder/zstd/zstd-linux-${{ matrix.target }}.sh
+        run: bash ./builder/${{ inputs.native }}/${{ inputs.native }}-linux-${{ matrix.target }}.sh
       - name: show generated files
         run: git ls-files --other --modified --exclude-standard
       - uses: actions/upload-artifact@v3
@@ -110,9 +118,9 @@ jobs:
         with:
           submodules: true
       - run: git fetch --tags
-        working-directory: zstd
+        working-directory: ${{ inputs.native }}
       - name: Build
-        run: bash ./builder/zstd/zstd-darwin-${{ matrix.target }}.sh
+        run: bash ./builder/${{ inputs.native }}/${{ inputs.native }}-darwin-${{ matrix.target }}.sh
       - name: show generated files
         run: git ls-files --other --modified --exclude-standard
       - uses: actions/upload-artifact@v3
@@ -135,11 +143,11 @@ jobs:
         with:
           submodules: true
       - run: git fetch --tags
-        working-directory: zstd
+        working-directory: ${{ inputs.native }}
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v1.1
       - name: Build
-        run: builder\zstd\zstd-windows-${{ matrix.target }}.bat
+        run: builder\${{ inputs.native }}\${{ inputs.native }}-windows-${{ matrix.target }}.bat
         shell: cmd
       - name: show generated files
         run: git ls-files --other --modified --exclude-standard
@@ -161,10 +169,10 @@ jobs:
         with:
           submodules: true
       - run: git fetch --tags
-        working-directory: zstd
+        working-directory: ${{ inputs.native }}
       - run: echo "::set-output name=value::$(git tag --points-at HEAD | tr -d '[:space:]')"
-        id: zstd-version
-        working-directory: zstd
+        id: version
+        working-directory: ${{ inputs.native }}
       - uses: actions/download-artifact@v3
         with:
           name: artifact
@@ -181,12 +189,12 @@ jobs:
         name: Create PullRequest
         uses: peter-evans/create-pull-request@v4
         with:
-          branch: "auto/zstd_artifact"
+          branch: "auto/${{ inputs.native }}_artifact"
           author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
           committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
           delete-branch: true
-          title: "[zstd] Update artifacts ${{ steps.zstd-version.outputs.value }}"
+          title: "[${{ inputs.native }}] Update artifacts ${{ steps.version.outputs.value }}"
           body: |
-            Update zstd artifacts for ${{ steps.zstd-version.outputs.value }} 🚀
+            Update ${{ inputs.native }} build artifacts to ${{ steps.version.outputs.value }} 🚀
           labels: |
             automated pr
