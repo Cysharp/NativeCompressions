@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -eu
 
 NATIVE_OS_KIND=$(uname | tr "[:upper:]" "[:lower:]") # should be linux
