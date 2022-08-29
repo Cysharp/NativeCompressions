@@ -8,7 +8,9 @@ IOS_VERSION=${IOS_VERSION:=8.0}
 IOS_ARCH=${IOS_ARCH:=arm64}
 TARGET="iPhoneOS/${IOS_ARCH}/${IOS_VERSION}"
 
-INSTALL_DIR="$(pwd)/zstd/build/cmake/build/ios"
+CMAKE_DIR="$(pwd)/${SRC_DIR}/build/cmake"
+BUILD_DIR="${CMAKE_DIR}/build/"
+INSTALL_DIR="${BUILD_DIR}/install/${IOS_ARCH}"
 
 # NOTE: zlib and lzma will found from iPhoneOS.sdk.
 # -- Found ZLIB: /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/usr/lib/libz.tbd (found version "1.2.11")
@@ -39,8 +41,18 @@ die() {
   printf '%b\n' "${COLOR_RED}💔  $*${COLOR_OFF}" >&2
   exit 1
 }
+run() {
+  # caller should use \"\" instead of "" when you need keep argument double quotes.
+  printf '%b\n' "${COLOR_PURPLE}==>${COLOR_OFF}${COLOR_GREEN}$*${COLOR_OFF}"
+  eval "$*"
+}
 
-# __find_build_toolchains iPhoneOS/arm64/8.0
+__clean() {
+  step "clean working space."
+  run rm -rf "${BUILD_DIR}"
+  run mkdir -p "${INSTALL_DIR}"
+}
+
 find_build_toolchains() {
   step2 "Find build toolchains."
 
@@ -53,7 +65,7 @@ find_build_toolchains() {
   TARGET_OS_ARCH=$(printf '%s\n' "${TARGET}" | cut -d/ -f2)
   TARGET_OS_NAME_LOWER_CASE="$(echo "$TARGET_OS_NAME" | tr "[:upper:]" "[:lower:]")"
 
-  PACKAGE_CDEFINE="__arm64__"
+  PACKAGE_CDEFINE="__${IOS_ARCH}__"
 
   # should be "/Applications/Xcode.app/Contents/Developer"
   TOOLCHAIN_ROOT="$(xcode-select -p)"
@@ -65,10 +77,9 @@ find_build_toolchains() {
   SYSROOT="$TOOLCHAIN_ROOT/Platforms/${TARGET_OS_NAME}.platform/Developer/SDKs/${TARGET_OS_NAME}.sdk"
   SYSTEM_LIBRARY_DIR="$SYSROOT/usr/lib"
 
-  ZSTD_INSTALL_DIR="${INSTALL_DIR}/${IOS_ARCH}"
+  CMAKE_TOOLCHAIN="${BUILD_DIR}/toolchain.cmake"
 
-  CMAKE_TOOLCHAIN="$(pwd)/builder/zstd/ios-arm64.toolchain.cmake"
-
+  AR="${TOOLCHAIN_BIND}/ar"
   CC="$TOOLCHAIN_BIND/clang"
   CXX="$TOOLCHAIN_BIND/clang++"
 
@@ -111,6 +122,7 @@ SYSTEM_LIBRARY_DIR = ${SYSTEM_LIBRARY_DIR}
    CMAKE_TOOLCHAIN = ${CMAKE_TOOLCHAIN}
                 CC = ${CC}
                CXX = ${CXX}
+                AR = ${AR}
 
            CCFLAGS = ${CCFLAGS}
           CPPFLAGS = ${CPPFLAGS}
@@ -118,8 +130,6 @@ SYSTEM_LIBRARY_DIR = ${SYSTEM_LIBRARY_DIR}
            LDFLAGS = ${LDFLAGS}
 
        INSTALL_DIR = ${INSTALL_DIR}
-
-  ZSTD_INSTALL_DIR = ${ZSTD_INSTALL_DIR}
 EOF
 
 }
@@ -136,10 +146,10 @@ config_cmake_variables() {
 
   CMAKE_SYSTEM_NAME=Darwin
   CMAKE_SYSTEM_VERSION=8.0
-  CMAKE_SYSTEM_PROCESSOR=arm64
+  CMAKE_SYSTEM_PROCESSOR=${IOS_ARCH}
 
   CMAKE_ASM_COMPILER="$CC"
-  CMAKE_ASM_FLAGS="-arch arm64"
+  CMAKE_ASM_FLAGS="-arch ${IOS_ARCH}"
 
   CMAKE_C_COMPILER="$CC"
   CMAKE_C_FLAGS="$CCFLAGS $CPPFLAGS $LDFLAGS"
@@ -154,7 +164,6 @@ config_cmake_variables() {
 
   CMAKE_OSX_SYSROOT="$SYSROOT"
 
-  # https://cmake.org/cmake/help/latest/variable/CMAKE_OSX_ARCHITECTURES.html
   CMAKE_OSX_ARCHITECTURES="${TARGET_OS_ARCH}\" CACHE STRING \""
 
   CMAKE_FIND_DEBUG_MODE=OFF
@@ -193,6 +202,7 @@ set(CMAKE_STRIP  "$CMAKE_STRIP")
 
 set(CMAKE_OSX_SYSROOT "$CMAKE_OSX_SYSROOT")
 
+# https://cmake.org/cmake/help/latest/variable/CMAKE_OSX_ARCHITECTURES.html
 set(CMAKE_OSX_ARCHITECTURES "${CMAKE_OSX_ARCHITECTURES}")
 
 set(CMAKE_FIND_DEBUG_MODE $CMAKE_FIND_DEBUG_MODE)
@@ -205,8 +215,6 @@ __install_zstd() {
   step "Install zstd."
 
   # variables
-  CMAKE_DIR="$(pwd)/zstd/build/cmake"
-  BUILD_DIR="${CMAKE_DIR}/build"
   PACKAGE_INCLUDES=""
 
   find_build_toolchains
@@ -216,18 +224,14 @@ __install_zstd() {
   config_cmake_variables
   create_cmake_toolchain
 
-  # create directory
-  rm -rf "${BUILD_DIR:=/src/build/cmake/build}"
-  mkdir -p "${BUILD_DIR}"
-
   # build
   pushd "${BUILD_DIR}" > /dev/null 2>&1
-    cmake \
+    run cmake \
       -Wno-dev \
       -S "${CMAKE_DIR}" \
       -B "${BUILD_DIR}" \
-      -DCMAKE_INSTALL_PREFIX="${ZSTD_INSTALL_DIR}" \
-      -DCMAKE_TOOLCHAIN="${CMAKE_TOOLCHAIN}" \
+      -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" \
+      -DCMAKE_TOOLCHAIN_FILE="${CMAKE_TOOLCHAIN}" \
       -DCMAKE_VERBOSE_MAKEFILE=ON \
       -DCMAKE_COLOR_MAKEFILE=ON \
       -DZSTD_MULTITHREAD_SUPPORT=ON \
@@ -236,12 +240,12 @@ __install_zstd() {
       -DZSTD_BUILD_PROGRAMS=ON \
       -DZSTD_BUILD_STATIC=ON \
       -DZSTD_BUILD_SHARED=ON \
-      -DZSTD_LZ4_SUPPORT=OFF \
       -DZSTD_ZLIB_SUPPORT=ON \
-      -DZSTD_LZMA_SUPPORT=ON
+      -DZSTD_LZMA_SUPPORT=ON \
+      -DZSTD_LZ4_SUPPORT=OFF
 
-    cmake --build "${BUILD_DIR}"  -- -j8
-    cmake --install "${BUILD_DIR}"
+    run cmake --build "${BUILD_DIR}"  -- -j8
+    run cmake --install "${BUILD_DIR}"
   popd > /dev/null 2>&1
 
   # cleanup
@@ -249,4 +253,5 @@ __install_zstd() {
   unset PACKAGE_INCLUDES
 }
 
+__clean
 __install_zstd

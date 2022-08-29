@@ -1,25 +1,23 @@
 #!/bin/sh
-
 set -e
 
-ZSTD_VERSION=$(cd zstd && echo "$(git tag --points-at HEAD | tr -d '[:space:]')" && cd ..)
-GIT_ZSTD_VERSION=${ZSTD_VERSION}
-FILE_ZSTD_VERSION=$(echo "${ZSTD_VERSION}" | cut -c 2-)
+SCRIPT_DIR=$(cd $(dirname $0); pwd)
+source $SCRIPT_DIR/settings.sh
 OS=android
 ABI=armeabi-v7a
 PLATFORM=arm
 OUTPUT_DIR=${OUTPUT_DIR:=src/runtimes/${OS}-${PLATFORM}/}
 
 # build
-docker run --rm -v "$PWD/builder/zstd/core:/builder" -v "$PWD/zstd:/src" -e "ABI=$ABI" ubuntu:22.04 /bin/bash /builder/zstd-builder-android.sh
+docker run --rm -v "$SCRIPT_DIR/core:/builder" -v "$PWD/$SRC_DIR:/src" -e "ABI=$ABI" ubuntu:22.04 /bin/bash /builder/builder-android.sh
 
 # confirm
-ls zstd/build/cmake/build/lib/libzstd.a
-ls zstd/build/cmake/build/lib/libzstd.so*
-#ls zstd/build/cmake/build/programs/zstd
+ls $SRC_DIR/build/cmake/build/lib/$LIBNAME.a
+ls $SRC_DIR/build/cmake/build/lib/$LIBNAME.so*
+ls $SRC_DIR/build/cmake/build/programs/$EXENAME
 
 # copy
 mkdir -p "./${OUTPUT_DIR}/"
-#cp ./zstd/build/cmake/build/lib/libzstd.a "./${OUTPUT_DIR}/."
-cp "./zstd/build/cmake/build/lib/libzstd.so" "./${OUTPUT_DIR}/."
-#cp ./zstd/build/cmake/build/programs/zstd "./${OUTPUT_DIR}/."
+#cp ./$SRC_DIR/build/cmake/build/lib/$LIBNAME.a "./${OUTPUT_DIR}/."
+cp ./$SRC_DIR/build/cmake/build/lib/$LIBNAME.so "./${OUTPUT_DIR}/."
+#cp ./$SRC_DIR/build/cmake/build/programs/$EXENAME "./${OUTPUT_DIR}/."

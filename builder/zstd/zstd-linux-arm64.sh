@@ -1,24 +1,22 @@
-#!/bin/sh
-
+#!/bin/bash
 set -e
 
-ZSTD_VERSION=$(cd zstd && echo "$(git tag --points-at HEAD | tr -d '[:space:]')" && cd ..)
-GIT_ZSTD_VERSION=${ZSTD_VERSION}
-FILE_ZSTD_VERSION=$(echo "${ZSTD_VERSION}" | cut -c 2-)
+SCRIPT_DIR=$(cd $(dirname $0); pwd)
+source $SCRIPT_DIR/settings.sh
 OS=linux
 PLATFORM=arm64
 OUTPUT_DIR=${OUTPUT_DIR:=src/runtimes/${OS}-${PLATFORM}/}
 
 # build
-docker run --rm -v "$PWD/builder/zstd/core:/builder" -v "$PWD/zstd:/src" ubuntu:22.04 /bin/sh /builder/zstd-builder-linux-arm64.sh
+docker run --rm -v "$SCRIPT_DIR/core:/builder" -v "$PWD/$SRC_DIR:/src" ubuntu:22.04 /bin/sh /builder/builder-linux-arm64.sh
 
 # confirm
-ls zstd/lib/libzstd.a
-ls zstd/lib/libzstd.so*
-ls zstd/programs/zstd
+ls $SRC_DIR/lib/$LIBNAME.a
+ls $SRC_DIR/lib/$LIBNAME.so*
+ls $SRC_DIR/programs/$EXENAME
 
 # copy
 mkdir -p "./${OUTPUT_DIR}/"
-#cp ./zstd/lib/libzstd.a "./${OUTPUT_DIR}/."
-cp "./zstd/lib/libzstd.so.${FILE_ZSTD_VERSION}" "./${OUTPUT_DIR}/libzstd.so"
-#cp ./zstd/programs/zstd "./${OUTPUT_DIR}/."
+#cp ./$SRC_DIR/lib/$LIBNAME.a "./${OUTPUT_DIR}/."
+cp "./$SRC_DIR/lib/$LIBNAME.so.${FILE_VERSION}" "./${OUTPUT_DIR}/$LIBNAME.so"
+#cp ./$SRC_DIR/programs/$EXENAME "./${OUTPUT_DIR}/."

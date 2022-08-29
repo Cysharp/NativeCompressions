@@ -46,6 +46,11 @@ die() {
   printf '%b\n' "${COLOR_RED}💔  $*${COLOR_OFF}" >&2
   exit 1
 }
+run() {
+  # caller should use \"\" instead of "" when you need keep argument double quotes.
+  printf '%b\n' "${COLOR_PURPLE}==>${COLOR_OFF}${COLOR_GREEN}$*${COLOR_OFF}"
+  eval "$*"
+}
 
 __clean() {
   step "clean working space."
@@ -59,17 +64,17 @@ __clean() {
 __install_required_packages() {
   step "Install required packages."
 
-  apt-get update
-  apt-get install -yq --no-install-suggests --no-install-recommends build-essential pkg-config curl libssl-dev zlib1g-dev
-  apt-get install -yq --no-install-suggests --no-install-recommends unzip cmake ccache
+  run apt-get update
+  run apt-get install -yq --no-install-suggests --no-install-recommends build-essential pkg-config curl libssl-dev zlib1g-dev
+  run apt-get install -yq --no-install-suggests --no-install-recommends unzip cmake ccache
 }
 
 __install_android_ndk() {
   step "Install Android NDK."
 
   if [[ ! -d "${ANDROID_NDK_HOME}/build/cmake" ]]; then
-    curl --retry 20 --retry-delay 30 -Lks -o "${TMP_SOURCE_DIR}/${ANDROID_NDK}.zip" "${ANDROID_URL}"
-    unzip -q ${TMP_SOURCE_DIR}/${ANDROID_NDK}.zip -d "/root/"
+    run curl --retry 20 --retry-delay 30 -Lks -o "${TMP_SOURCE_DIR}/${ANDROID_NDK}.zip" "${ANDROID_URL}"
+    run unzip -q ${TMP_SOURCE_DIR}/${ANDROID_NDK}.zip -d "/root/"
   fi
 }
 
@@ -121,6 +126,7 @@ find_build_toolchains() {
     die "this software can only be run on linux."
   fi
 
+  TOOLCHAIN_BIND="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin"
   SYSROOT="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
   SYSTEM_LIBRARY_DIR="${SYSROOT}/usr/lib/${SYSTEM_LIB_ARCH}-linux-${CC_ABI}/${ANDROID_PLATFORM}"
 
@@ -130,12 +136,12 @@ find_build_toolchains() {
 
   CMAKE_TOOLCHAIN="${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake"
 
-  CC="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/${ABI_SHORT}-linux-${CC_ABI}${ANDROID_PLATFORM}-clang"
-  CXX="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/${ABI_SHORT}-linux-${CC_ABI}${ANDROID_PLATFORM}-clang++"
-  CPP="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/${ABI_SHORT}-linux-${CC_ABI}${ANDROID_PLATFORM}-clang -E"
-  AR="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
-  RANLIB="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib"
-  STRIP="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+  CC="${TOOLCHAIN_BIND}/${ABI_SHORT}-linux-${CC_ABI}${ANDROID_PLATFORM}-clang"
+  CXX="${TOOLCHAIN_BIND}/${ABI_SHORT}-linux-${CC_ABI}${ANDROID_PLATFORM}-clang++"
+  CPP="${TOOLCHAIN_BIND}/${ABI_SHORT}-linux-${CC_ABI}${ANDROID_PLATFORM}-clang -E"
+  AR="${TOOLCHAIN_BIND}/llvm-ar"
+  RANLIB="${TOOLCHAIN_BIND}/llvm-ranlib"
+  STRIP="${TOOLCHAIN_BIND}/llvm-strip"
 
   CCFLAGS="--sysroot ${SYSROOT} -Qunused-arguments -fPIC -Wl,--as-needed"
   CPPFLAGS="--sysroot ${SYSROOT} -Qunused-arguments -I${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/${SYSTEM_LIB_ARCH}-linux-${CC_ABI}"
@@ -171,6 +177,7 @@ print_build_toolchains() {
 
            SYSROOT = ${SYSROOT}
 SYSTEM_LIBRARY_DIR = ${SYSTEM_LIBRARY_DIR}
+    TOOLCHAIN_BIND = ${TOOLCHAIN_BIND}
 
    CMAKE_TOOLCHAIN = ${CMAKE_TOOLCHAIN}
                 CC = ${CC}
@@ -214,12 +221,12 @@ __install_lib_zlib() {
   mkdir -p "${ZLIB_INSTALL_DIR}"
 
   # download
-  curl --retry 20 --retry-delay 30 -Lks -o "${TMP_SOURCE_DIR}/zlib.tar.gz" "${ZLIB_URL}"
-  tar xf ${TMP_SOURCE_DIR}/zlib.tar.gz -C "${SRC_DIR}" --strip-components 1
+  run curl --retry 20 --retry-delay 30 -Lks -o "${TMP_SOURCE_DIR}/zlib.tar.gz" "${ZLIB_URL}"
+  run tar xf ${TMP_SOURCE_DIR}/zlib.tar.gz -C "${SRC_DIR}" --strip-components 1
 
   # cmake
   cd ${SRC_DIR}
-  /usr/bin/cmake \
+  run /usr/bin/cmake \
     -DCMAKE_TOOLCHAIN_FILE="${CMAKE_TOOLCHAIN}" \
     -DANDROID_ABI="${ABI}" \
     -DANDROID_PLATFORM="${ANDROID_PLATFORM}" \
@@ -234,8 +241,8 @@ __install_lib_zlib() {
     -DCMAKE_LIBRARY_PATH="${SYSTEM_LIBRARY_DIR}" \
     -DCMAKE_IGNORE_PATH='' \
     -DCMAKE_INSTALL_PREFIX="${ZLIB_INSTALL_DIR}" \
-    -DCMAKE_C_FLAGS="${CCFLAGS} ${CPPFLAGS} ${LDFLAGS}" \
-    -DCMAKE_CXX_FLAGS="${CXXFLAGS} ${CPPFLAGS} ${LDFLAGS}" \
+    -DCMAKE_C_FLAGS=\"${CCFLAGS} ${CPPFLAGS} ${LDFLAGS}\" \
+    -DCMAKE_CXX_FLAGS=\"${CXXFLAGS} ${CPPFLAGS} ${LDFLAGS}\" \
     -DBUILD_SHARED_LIBS=ON \
     -DANDROID_TOOLCHAIN=clang \
     -DANDROID_ARM_NEON=TRUE \
@@ -245,8 +252,8 @@ __install_lib_zlib() {
     -S "${SRC_DIR}" \
     -B "${BUILD_DIR}"
 
-  /usr/bin/cmake --build "${BUILD_DIR}" -- -j8
-  /usr/bin/cmake --install "${BUILD_DIR}"
+  run /usr/bin/cmake --build "${BUILD_DIR}" -- -j8
+  run /usr/bin/cmake --install "${BUILD_DIR}"
 
   # adjust ELF files for zlib
   ${STRIP} "${ZLIB_INSTALL_DIR}/lib/libz.so"
@@ -271,17 +278,17 @@ __install_lib_xz() {
   print_build_toolchains
 
   # create directory
-  mkdir -p "${SRC_DIR}"
-  mkdir -p "${BUILD_DIR}"
-  mkdir -p "${XZ_INSTALL_DIR}"
+  run mkdir -p "${SRC_DIR}"
+  run mkdir -p "${BUILD_DIR}"
+  run mkdir -p "${XZ_INSTALL_DIR}"
 
   # download
-  curl --retry 20 --retry-delay 30 -Lk -o "${TMP_SOURCE_DIR}/xz.tar.gz" "${XZ_URL}"
-  tar xf ${TMP_SOURCE_DIR}/xz.tar.gz -C "${SRC_DIR}" --strip-components 1
+  run curl --retry 20 --retry-delay 30 -Lks -o "${TMP_SOURCE_DIR}/xz.tar.gz" "${XZ_URL}"
+  run tar xf ${TMP_SOURCE_DIR}/xz.tar.gz -C "${SRC_DIR}" --strip-components 1
 
   # cmake
   cd "${BUILD_DIR}"
-  ${SRC_DIR}/configure \
+  run ${SRC_DIR}/configure \
     --host="armv7a-linux-androideabi" \
     --prefix="${XZ_INSTALL_DIR}" \
     --disable-option-checking \
@@ -289,12 +296,12 @@ __install_lib_xz() {
     --disable-nls \
     --enable-largefile \
     CC="${CC}" \
-    CFLAGS="${CCFLAGS}" \
+    CFLAGS=\"${CCFLAGS}\" \
     CXX="${CXX}" \
-    CXXFLAGS="${CXXFLAGS}" \
-    CPP="${CPP}" \
-    CPPFLAGS="${CPPFLAGS}" \
-    LDFLAGS="${LDFLAGS}" \
+    CXXFLAGS=\"${CXXFLAGS}\" \
+    CPP=\"${CPP}\" \
+    CPPFLAGS=\"${CPPFLAGS}\" \
+    LDFLAGS=\"${LDFLAGS}\" \
     AR="${AR}" \
     RANLIB="${RANLIB}" \
     PKG_CONFIG="/usr/bin/pkg-config" \
@@ -309,9 +316,9 @@ __install_lib_xz() {
     --enable-assembler \
     --enable-threads=posix
 
-  /usr/bin/gmake -w -C "${BUILD_DIR}" -j8 clean
-  /usr/bin/gmake -w -C "${BUILD_DIR}" -j8
-  /usr/bin/gmake -w -C "${BUILD_DIR}" -j8 install
+  run /usr/bin/gmake -w -C "${BUILD_DIR}" -j8 clean
+  run /usr/bin/gmake -w -C "${BUILD_DIR}" -j8
+  run /usr/bin/gmake -w -C "${BUILD_DIR}" -j8 install
 
   # cleanup
   unset ROOT_DIR
@@ -332,49 +339,49 @@ __install_zstd() {
   print_build_toolchains
 
   # create directory
-  rm -rf "${BUILD_DIR:=/src/build/cmake/build}"
-  mkdir "${BUILD_DIR}"
+  run rm -rf "${BUILD_DIR:=/src/build/cmake/build}"
+  run mkdir -p "${BUILD_DIR}"
 
   # build
-  cd ${BUILD_DIR}
-  /usr/bin/cmake \
-    -DCMAKE_TOOLCHAIN_FILE="${CMAKE_TOOLCHAIN}" \
-    -DANDROID_ABI="${ABI}" \
-    -DANDROID_PLATFORM=${ANDROID_PLATFORM} \
-    -Wno-dev \
-    -DCMAKE_EXPORT_COMPILE_COMMANDS=OFF \
-    -DBUILD_TESTING=OFF \
-    -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-    -DCMAKE_VERBOSE_MAKEFILE=ON \
-    -DCMAKE_COLOR_MAKEFILE=ON \
-    -DCMAKE_SYSTEM_PROCESSOR="${SYSTEM_PROCESSOR}" \
-    -DCMAKE_FIND_ROOT_PATH="${ZLIB_INSTALL_DIR};${XZ_INSTALL_DIR}" \
-    -DCMAKE_LIBRARY_PATH="${SYSTEM_LIBRARY_DIR}" \
-    -DCMAKE_IGNORE_PATH="${XZ_INSTALL_DIR}/bin" \
-    -DCMAKE_INSTALL_PREFIX="${ZSTD_INSTALL_DIR}" \
-    -DCMAKE_C_FLAGS="${CCFLAGS} ${CPPFLAGS} ${LDFLAGS}" \
-    -DCMAKE_CXX_FLAGS="${CXXFLAGS} ${CPPFLAGS} ${LDFLAGS}" \
-    -DBUILD_SHARED_LIBS=ON \
-    -DANDROID_TOOLCHAIN=clang \
-    -DANDROID_ARM_NEON=TRUE \
-    -DANDROID_STL=c++_shared \
-    -DANDROID_PLATFORM=21 \
-    -DANDROID_USE_LEGACY_TOOLCHAIN_FILE=OFF \
-    -DNDK_CCACHE=/usr/bin/ccache \
-    -S "${CMAKE_DIR}" \
-    -B "${BUILD_DIR}" \
-    -DZSTD_MULTITHREAD_SUPPORT=ON \
-    -DZSTD_BUILD_TESTS=OFF \
-    -DZSTD_BUILD_CONTRIB=OFF \
-    -DZSTD_BUILD_PROGRAMS=ON \
-    -DZSTD_BUILD_STATIC=ON \
-    -DZSTD_BUILD_SHARED=ON \
-    -DZSTD_ZLIB_SUPPORT=ON \
-    -DZSTD_LZMA_SUPPORT=ON \
-    -DZSTD_LZ4_SUPPORT=OFF
+  cd "${BUILD_DIR}"
+    run /usr/bin/cmake \
+      -DCMAKE_TOOLCHAIN_FILE=\"${CMAKE_TOOLCHAIN}\" \
+      -DANDROID_ABI="${ABI}" \
+      -DANDROID_PLATFORM="${ANDROID_PLATFORM}" \
+      -Wno-dev \
+      -DCMAKE_EXPORT_COMPILE_COMMANDS=OFF \
+      -DBUILD_TESTING=OFF \
+      -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+      -DCMAKE_VERBOSE_MAKEFILE=ON \
+      -DCMAKE_COLOR_MAKEFILE=ON \
+      -DCMAKE_SYSTEM_PROCESSOR="${SYSTEM_PROCESSOR}" \
+      -DCMAKE_FIND_ROOT_PATH=\"${ZLIB_INSTALL_DIR}\;${XZ_INSTALL_DIR}\" \
+      -DCMAKE_LIBRARY_PATH=\"${SYSTEM_LIBRARY_DIR}\" \
+      -DCMAKE_IGNORE_PATH=\"${XZ_INSTALL_DIR}/bin\" \
+      -DCMAKE_INSTALL_PREFIX=\"${ZSTD_INSTALL_DIR}\" \
+      -DCMAKE_C_FLAGS=\"${CCFLAGS} ${CPPFLAGS} ${LDFLAGS}\" \
+      -DCMAKE_CXX_FLAGS=\"${CXXFLAGS} ${CPPFLAGS} ${LDFLAGS}\" \
+      -DBUILD_SHARED_LIBS=ON \
+      -DANDROID_TOOLCHAIN=clang \
+      -DANDROID_ARM_NEON=TRUE \
+      -DANDROID_STL=c++_shared \
+      -DANDROID_PLATFORM=21 \
+      -DANDROID_USE_LEGACY_TOOLCHAIN_FILE=OFF \
+      -DNDK_CCACHE=/usr/bin/ccache \
+      -S \"${CMAKE_DIR}\" \
+      -B \"${BUILD_DIR}\" \
+      -DZSTD_MULTITHREAD_SUPPORT=ON \
+      -DZSTD_BUILD_TESTS=OFF \
+      -DZSTD_BUILD_CONTRIB=OFF \
+      -DZSTD_BUILD_PROGRAMS=ON \
+      -DZSTD_BUILD_STATIC=ON \
+      -DZSTD_BUILD_SHARED=ON \
+      -DZSTD_ZLIB_SUPPORT=ON \
+      -DZSTD_LZMA_SUPPORT=ON \
+      -DZSTD_LZ4_SUPPORT=OFF
 
-  /usr/bin/cmake --build "${BUILD_DIR}" -- -j8
-  /usr/bin/cmake --install "${BUILD_DIR}"
+    run /usr/bin/cmake --build "${BUILD_DIR}" -- -j8
+    run /usr/bin/cmake --install "${BUILD_DIR}"
 
   # cleanup
   unset BUILD_DIR
