@@ -17,6 +17,6 @@ ls $SRC_DIR/programs/$EXENAME
 
 # copy
 mkdir -p "./${OUTPUT_DIR}/"
-cp ./$SRC_DIR/lib/$LIBNAME.a "./${OUTPUT_DIR}/."
+#cp ./$SRC_DIR/lib/$LIBNAME.a "./${OUTPUT_DIR}/."
 cp "./$SRC_DIR/lib/$LIBNAME.${FILE_VERSION}.dylib" "./${OUTPUT_DIR}/$LIBNAME.dylib"
-cp ./$SRC_DIR/programs/$EXENAME "./${OUTPUT_DIR}/."
+#cp ./$SRC_DIR/programs/$EXENAME "./${OUTPUT_DIR}/."

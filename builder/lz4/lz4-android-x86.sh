@@ -18,6 +18,6 @@ ls $SRC_DIR/programs/$EXENAME
 
 # copy
 mkdir -p "./${OUTPUT_DIR}/"
-cp ./$SRC_DIR/lib/$LIBNAME.a "./${OUTPUT_DIR}/."
+#cp ./$SRC_DIR/lib/$LIBNAME.a "./${OUTPUT_DIR}/."
 cp ./$SRC_DIR/lib/$LIBNAME.so "./${OUTPUT_DIR}/$LIBNAME.so"
-cp ./$SRC_DIR/programs/$EXENAME "./${OUTPUT_DIR}/."
+#cp ./$SRC_DIR/programs/$EXENAME "./${OUTPUT_DIR}/."
