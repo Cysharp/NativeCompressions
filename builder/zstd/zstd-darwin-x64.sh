@@ -13,7 +13,7 @@ OUTPUT_DIR=${OUTPUT_DIR:=src/runtimes/${OS}-${PLATFORM}/}
 # confirm
 ls $SRC_DIR/lib/$LIBNAME.a
 ls $SRC_DIR/lib/$LIBNAME.*dylib
-ls $SRC_DIR/programs/$EXENAME
+#ls $SRC_DIR/programs/$EXENAME
 
 # copy
 mkdir -p "./${OUTPUT_DIR}/"

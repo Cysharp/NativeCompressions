@@ -2,7 +2,7 @@
 SETLOCAL ENABLEDELAYEDEXPANSION
 
 set SCRIPT_DIR=%~dp0
-call %SCRIPT_DIR%/settings.bat
+call %SCRIPT_DIR%\settings.bat
 set OS=windows
 set ARCH=x64
 set PLATFORM=x64
