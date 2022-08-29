@@ -175,8 +175,8 @@ jobs:
           path: _tmp
       - name: Copy to artifact
         run: |
-          rm -rf ${{ env.ARTIFACT_PATH }}
           mkdir -p ${{ env.ARTIFACT_PATH }}
+          find ${{ env.ARTIFACT_PATH }} -name lib${{ inputs.native }}* -delete
           cp -fR ./_tmp/* ${{ env.ARTIFACT_PATH }}
       - name: Check for modified files
         id: git-check
