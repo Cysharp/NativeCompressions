@@ -6,7 +6,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .header("../../lz4/lib/lz4hc.c")
         .header("../../lz4/lib/lz4frame.c")
         .header("../../lz4/lib/xxhash.c")
-        //.size_t_is_usize(false)
+        .size_t_is_usize(false)
         .generate()
         .unwrap()
         .write_to_file("src/lz4.rs")
