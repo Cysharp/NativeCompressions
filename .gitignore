@@ -125,3 +125,7 @@ _tmp
 
 /target
 /Cargo.lock
+
+src/target/.rustc_info.json
+
+src/target/CACHEDIR.TAG
