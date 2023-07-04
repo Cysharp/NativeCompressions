@@ -1,12 +1,18 @@
 use std::error::Error;
+use std::env::consts::OS;
 
 fn main() -> Result<(), Box<dyn Error>> {
+   let size_t_is_usize = match OS {
+     "android" => false,
+     _ => true,
+   };
+
    bindgen::Builder::default()
         .header("../../lz4/lib/lz4.c")
         .header("../../lz4/lib/lz4hc.c")
         .header("../../lz4/lib/lz4frame.c")
         .header("../../lz4/lib/xxhash.c")
-        .size_t_is_usize(false)
+        .size_t_is_usize(size_t_is_usize)
         .generate()
         .unwrap()
         .write_to_file("src/lz4.rs")
