@@ -61,7 +61,7 @@ jobs:
   #     #     path: ./src/libmagicphysx/target/x86_64-apple-darwin/release/libmagicphysx.dylib
 
   liblz4-android-arm64:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
       run:
