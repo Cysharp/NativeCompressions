@@ -72,7 +72,8 @@ jobs:
           submodules: 'true'
       - run: sudo apt-get install gcc-multilib
       - run: rustup target add aarch64-linux-android
-      - run: cargo build --target aarch64-linux-android --release
+      - run: cargo install cargo-ndk
+      - run: cargo ndk -t aarch64-linux-android build --release
       # - uses: actions/upload-artifact@v3
       #   with:
       #     name: osx-arm64
