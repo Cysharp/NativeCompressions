@@ -16,6 +16,8 @@ jobs:
         working-directory: ./src/liblz4
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
       - run: rustup target add x86_64-apple-ios
       - run: cargo build --target x86_64-apple-ios --release
       # - uses: actions/upload-artifact@v3
@@ -31,6 +33,8 @@ jobs:
         working-directory: ./src/liblz4
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
       - run: rustup target add aarch64-apple-ios
       - run: cargo build --target aarch64-apple-ios --release
       # - uses: actions/upload-artifact@v3
