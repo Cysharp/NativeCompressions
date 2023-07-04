@@ -1,0 +1,16 @@
+[package]
+name = "liblz4"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+csbindgen = "1.7.3"
+
+[build-dependencies]
+cc = "1.0.79"
+bindgen = "0.64.0"
+csbindgen = "1.7.3"

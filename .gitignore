@@ -119,3 +119,9 @@ nuget/*.unitypackage
 
 # native build
 _tmp
+
+
+# Added by cargo
+
+/target
+/Cargo.lock
