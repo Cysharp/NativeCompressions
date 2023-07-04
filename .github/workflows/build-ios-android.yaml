@@ -16,7 +16,7 @@ jobs:
       - run: rustup target add x86_64-apple-ios
       - run: cargo build --target x86_64-apple-ios --release
 
-  liblz4-osx-arm64:
+  liblz4-ios-arm64:
     runs-on: macos-latest
     timeout-minutes: 30
     defaults:
