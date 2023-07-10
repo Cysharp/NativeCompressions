@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [{
+		"type": "cargo",
+		"command": "build",
+		"args": ["-vv"],
+		"problemMatcher": [
+			"$rustc"
+		],
+		"group": {
+			"kind": "build",
+			"isDefault": true,
+		},
+		// "env": {
+		// 	"RUST_BACKTRACE": "full"
+		// },
+		"label": "rust: cargo build",
+	}],
+}

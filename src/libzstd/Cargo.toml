@@ -3,6 +3,14 @@ name = "libzstd"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "zstd"
+crate-type = ["cdylib"]
 
 [dependencies]
+csbindgen = "1.7.3"
+
+[build-dependencies]
+cmake = "0.1.49"
+bindgen = "0.64.0"
+csbindgen = "1.7.3"

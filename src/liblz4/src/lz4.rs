@@ -374,6 +374,7 @@ pub type va_list = *mut ::std::os::raw::c_char;
 extern "C" {
     pub fn __va_start(arg1: *mut *mut ::std::os::raw::c_char, ...);
 }
+pub type size_t = ::std::os::raw::c_ulonglong;
 pub type __vcrt_bool = bool;
 pub type wchar_t = ::std::os::raw::c_ushort;
 extern "C" {
@@ -559,7 +560,7 @@ fn bindgen_test_layout__Mbstatet() {
 }
 pub type mbstate_t = _Mbstatet;
 pub type time_t = __time64_t;
-pub type rsize_t = usize;
+pub type rsize_t = size_t;
 extern "C" {
     pub fn _errno() -> *mut ::std::os::raw::c_int;
 }
@@ -904,7 +905,7 @@ fn bindgen_test_layout_LZ4_stream_u() {
 }
 extern "C" {
     #[doc = " LZ4_initStream() : v1.9.0+\n  An LZ4_stream_t structure must be initialized at least once.\n  This is automatically done when invoking LZ4_createStream(),\n  but it's not when the structure is simply declared on stack (for example).\n\n  Use LZ4_initStream() to properly initialize a newly declared LZ4_stream_t.\n  It can also initialize any arbitrary buffer of sufficient size,\n  and will @return a pointer of proper type upon initialization.\n\n  Note : initialization fails if size and alignment conditions are not respected.\n         In which case, the function will @return NULL.\n  Note2: An LZ4_stream_t structure guarantees correct alignment and size.\n  Note3: Before v1.9.0, use LZ4_resetStream() instead"]
-    pub fn LZ4_initStream(buffer: *mut ::std::os::raw::c_void, size: usize) -> *mut LZ4_stream_t;
+    pub fn LZ4_initStream(buffer: *mut ::std::os::raw::c_void, size: size_t) -> *mut LZ4_stream_t;
 }
 #[doc = " LZ4_streamDecode_t :\n  Never ever use below internal definitions directly !\n  These definitions are not API/ABI safe, and may change in future versions.\n  If you need static allocation, declare or allocate an LZ4_streamDecode_t object."]
 #[repr(C)]
@@ -912,8 +913,8 @@ extern "C" {
 pub struct LZ4_streamDecode_t_internal {
     pub externalDict: *const LZ4_byte,
     pub prefixEnd: *const LZ4_byte,
-    pub extDictSize: usize,
-    pub prefixSize: usize,
+    pub extDictSize: size_t,
+    pub prefixSize: size_t,
 }
 #[test]
 fn bindgen_test_layout_LZ4_streamDecode_t_internal() {
@@ -2137,7 +2138,7 @@ fn bindgen_test_layout___m128() {
     );
 }
 extern "C" {
-    pub fn _calloc_base(_Count: usize, _Size: usize) -> *mut ::std::os::raw::c_void;
+    pub fn _calloc_base(_Count: size_t, _Size: size_t) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
     pub fn calloc(
@@ -2146,12 +2147,12 @@ extern "C" {
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
-    pub fn _callnewh(_Size: usize) -> ::std::os::raw::c_int;
+    pub fn _callnewh(_Size: size_t) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn _expand(
         _Block: *mut ::std::os::raw::c_void,
-        _Size: usize,
+        _Size: size_t,
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
@@ -2161,21 +2162,21 @@ extern "C" {
     pub fn free(_Block: *mut ::std::os::raw::c_void);
 }
 extern "C" {
-    pub fn _malloc_base(_Size: usize) -> *mut ::std::os::raw::c_void;
+    pub fn _malloc_base(_Size: size_t) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
     pub fn malloc(_Size: ::std::os::raw::c_ulonglong) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
-    pub fn _msize_base(_Block: *mut ::std::os::raw::c_void) -> usize;
+    pub fn _msize_base(_Block: *mut ::std::os::raw::c_void) -> size_t;
 }
 extern "C" {
-    pub fn _msize(_Block: *mut ::std::os::raw::c_void) -> usize;
+    pub fn _msize(_Block: *mut ::std::os::raw::c_void) -> size_t;
 }
 extern "C" {
     pub fn _realloc_base(
         _Block: *mut ::std::os::raw::c_void,
-        _Size: usize,
+        _Size: size_t,
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
@@ -2187,74 +2188,74 @@ extern "C" {
 extern "C" {
     pub fn _recalloc_base(
         _Block: *mut ::std::os::raw::c_void,
-        _Count: usize,
-        _Size: usize,
+        _Count: size_t,
+        _Size: size_t,
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
     pub fn _recalloc(
         _Block: *mut ::std::os::raw::c_void,
-        _Count: usize,
-        _Size: usize,
+        _Count: size_t,
+        _Size: size_t,
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
     pub fn _aligned_free(_Block: *mut ::std::os::raw::c_void);
 }
 extern "C" {
-    pub fn _aligned_malloc(_Size: usize, _Alignment: usize) -> *mut ::std::os::raw::c_void;
+    pub fn _aligned_malloc(_Size: size_t, _Alignment: size_t) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
     pub fn _aligned_offset_malloc(
-        _Size: usize,
-        _Alignment: usize,
-        _Offset: usize,
+        _Size: size_t,
+        _Alignment: size_t,
+        _Offset: size_t,
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
     pub fn _aligned_msize(
         _Block: *mut ::std::os::raw::c_void,
-        _Alignment: usize,
-        _Offset: usize,
-    ) -> usize;
+        _Alignment: size_t,
+        _Offset: size_t,
+    ) -> size_t;
 }
 extern "C" {
     pub fn _aligned_offset_realloc(
         _Block: *mut ::std::os::raw::c_void,
-        _Size: usize,
-        _Alignment: usize,
-        _Offset: usize,
+        _Size: size_t,
+        _Alignment: size_t,
+        _Offset: size_t,
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
     pub fn _aligned_offset_recalloc(
         _Block: *mut ::std::os::raw::c_void,
-        _Count: usize,
-        _Size: usize,
-        _Alignment: usize,
-        _Offset: usize,
+        _Count: size_t,
+        _Size: size_t,
+        _Alignment: size_t,
+        _Offset: size_t,
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
     pub fn _aligned_realloc(
         _Block: *mut ::std::os::raw::c_void,
-        _Size: usize,
-        _Alignment: usize,
+        _Size: size_t,
+        _Alignment: size_t,
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
     pub fn _aligned_recalloc(
         _Block: *mut ::std::os::raw::c_void,
-        _Count: usize,
-        _Size: usize,
-        _Alignment: usize,
+        _Count: size_t,
+        _Size: size_t,
+        _Alignment: size_t,
     ) -> *mut ::std::os::raw::c_void;
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _heapinfo {
     pub _pentry: *mut ::std::os::raw::c_int,
-    pub _size: usize,
+    pub _size: size_t,
     pub _useflag: ::std::os::raw::c_int,
 }
 #[test]
@@ -6100,14 +6101,14 @@ extern "C" {
 extern "C" {
     pub fn _bnd_set_ptr_bounds(
         arg1: *const ::std::os::raw::c_void,
-        arg2: usize,
+        arg2: size_t,
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
     pub fn _bnd_narrow_ptr_bounds(
         arg1: *const ::std::os::raw::c_void,
         arg2: *const ::std::os::raw::c_void,
-        arg3: usize,
+        arg3: size_t,
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
@@ -6133,7 +6134,7 @@ extern "C" {
     pub fn _bnd_chk_ptr_ubounds(arg1: *const ::std::os::raw::c_void);
 }
 extern "C" {
-    pub fn _bnd_chk_ptr_bounds(arg1: *const ::std::os::raw::c_void, arg2: usize);
+    pub fn _bnd_chk_ptr_bounds(arg1: *const ::std::os::raw::c_void, arg2: size_t);
 }
 extern "C" {
     pub fn _bnd_load_ptr_bounds(
@@ -6244,19 +6245,20 @@ extern "C" {
     pub fn _mm256_dpwssds_avx_epi32(arg1: __m256i, arg2: __m256i, arg3: __m256i) -> __m256i;
 }
 extern "C" {
-    pub fn _pconfig_u32(arg1: ::std::os::raw::c_int, __data: *mut usize) -> ::std::os::raw::c_uint;
+    pub fn _pconfig_u32(arg1: ::std::os::raw::c_int, __data: *mut size_t)
+        -> ::std::os::raw::c_uint;
 }
 extern "C" {
     pub fn _wbnoinvd();
 }
 extern "C" {
-    pub fn _encls_u32(arg1: ::std::os::raw::c_int, __data: *mut usize) -> ::std::os::raw::c_uint;
+    pub fn _encls_u32(arg1: ::std::os::raw::c_int, __data: *mut size_t) -> ::std::os::raw::c_uint;
 }
 extern "C" {
-    pub fn _enclu_u32(arg1: ::std::os::raw::c_int, __data: *mut usize) -> ::std::os::raw::c_uint;
+    pub fn _enclu_u32(arg1: ::std::os::raw::c_int, __data: *mut size_t) -> ::std::os::raw::c_uint;
 }
 extern "C" {
-    pub fn _enclv_u32(arg1: ::std::os::raw::c_int, __data: *mut usize) -> ::std::os::raw::c_uint;
+    pub fn _enclv_u32(arg1: ::std::os::raw::c_int, __data: *mut size_t) -> ::std::os::raw::c_uint;
 }
 extern "C" {
     pub fn _div128(
@@ -34751,28 +34753,28 @@ extern "C" {
     pub fn __movsb(
         arg1: *mut ::std::os::raw::c_uchar,
         arg2: *const ::std::os::raw::c_uchar,
-        arg3: usize,
+        arg3: size_t,
     );
 }
 extern "C" {
     pub fn __movsd(
         arg1: *mut ::std::os::raw::c_ulong,
         arg2: *const ::std::os::raw::c_ulong,
-        arg3: usize,
+        arg3: size_t,
     );
 }
 extern "C" {
     pub fn __movsq(
         arg1: *mut ::std::os::raw::c_ulonglong,
         arg2: *const ::std::os::raw::c_ulonglong,
-        arg3: usize,
+        arg3: size_t,
     );
 }
 extern "C" {
     pub fn __movsw(
         arg1: *mut ::std::os::raw::c_ushort,
         arg2: *const ::std::os::raw::c_ushort,
-        arg3: usize,
+        arg3: size_t,
     );
 }
 extern "C" {
@@ -34879,20 +34881,20 @@ extern "C" {
     );
 }
 extern "C" {
-    pub fn __stosd(arg1: *mut ::std::os::raw::c_ulong, arg2: ::std::os::raw::c_ulong, arg3: usize);
+    pub fn __stosd(arg1: *mut ::std::os::raw::c_ulong, arg2: ::std::os::raw::c_ulong, arg3: size_t);
 }
 extern "C" {
     pub fn __stosq(
         arg1: *mut ::std::os::raw::c_ulonglong,
         arg2: ::std::os::raw::c_ulonglong,
-        arg3: usize,
+        arg3: size_t,
     );
 }
 extern "C" {
     pub fn __stosw(
         arg1: *mut ::std::os::raw::c_ushort,
         arg2: ::std::os::raw::c_ushort,
-        arg3: usize,
+        arg3: size_t,
     );
 }
 extern "C" {
@@ -34908,13 +34910,13 @@ extern "C" {
     pub fn __svm_stgi();
 }
 extern "C" {
-    pub fn __svm_vmload(arg1: usize);
+    pub fn __svm_vmload(arg1: size_t);
 }
 extern "C" {
-    pub fn __svm_vmrun(arg1: usize);
+    pub fn __svm_vmrun(arg1: size_t);
 }
 extern "C" {
-    pub fn __svm_vmsave(arg1: usize);
+    pub fn __svm_vmsave(arg1: size_t);
 }
 extern "C" {
     pub fn __ud2() -> !;
@@ -34950,13 +34952,13 @@ extern "C" {
     pub fn __vmx_vmptrst(arg1: *mut ::std::os::raw::c_ulonglong);
 }
 extern "C" {
-    pub fn __vmx_vmread(arg1: usize, arg2: *mut usize) -> ::std::os::raw::c_uchar;
+    pub fn __vmx_vmread(arg1: size_t, arg2: *mut size_t) -> ::std::os::raw::c_uchar;
 }
 extern "C" {
     pub fn __vmx_vmresume() -> ::std::os::raw::c_uchar;
 }
 extern "C" {
-    pub fn __vmx_vmwrite(arg1: usize, arg2: usize) -> ::std::os::raw::c_uchar;
+    pub fn __vmx_vmwrite(arg1: size_t, arg2: size_t) -> ::std::os::raw::c_uchar;
 }
 extern "C" {
     pub fn __wbinvd();
@@ -35271,16 +35273,16 @@ extern "C" {
     pub fn bsearch(
         _Key: *const ::std::os::raw::c_void,
         _Base: *const ::std::os::raw::c_void,
-        _NumOfElements: usize,
-        _SizeOfElements: usize,
+        _NumOfElements: size_t,
+        _SizeOfElements: size_t,
         _CompareFunction: _CoreCrtNonSecureSearchSortCompareFunction,
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
     pub fn qsort(
         _Base: *mut ::std::os::raw::c_void,
-        _NumOfElements: usize,
-        _SizeOfElements: usize,
+        _NumOfElements: size_t,
+        _SizeOfElements: size_t,
         _CompareFunction: _CoreCrtNonSecureSearchSortCompareFunction,
     );
 }
@@ -35289,7 +35291,7 @@ extern "C" {
         _Key: *const ::std::os::raw::c_void,
         _Base: *const ::std::os::raw::c_void,
         _NumOfElements: *mut ::std::os::raw::c_uint,
-        _SizeOfElements: usize,
+        _SizeOfElements: size_t,
         _CompareFunction: _CoreCrtSecureSearchSortCompareFunction,
         _Context: *mut ::std::os::raw::c_void,
     ) -> *mut ::std::os::raw::c_void;
@@ -35308,7 +35310,7 @@ extern "C" {
         _Key: *const ::std::os::raw::c_void,
         _Base: *mut ::std::os::raw::c_void,
         _NumOfElements: *mut ::std::os::raw::c_uint,
-        _SizeOfElements: usize,
+        _SizeOfElements: size_t,
         _CompareFunction: _CoreCrtSecureSearchSortCompareFunction,
         _Context: *mut ::std::os::raw::c_void,
     ) -> *mut ::std::os::raw::c_void;
@@ -35344,7 +35346,7 @@ extern "C" {
     pub fn _itow_s(
         _Value: ::std::os::raw::c_int,
         _Buffer: *mut wchar_t,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Radix: ::std::os::raw::c_int,
     ) -> errno_t;
 }
@@ -35359,7 +35361,7 @@ extern "C" {
     pub fn _ltow_s(
         _Value: ::std::os::raw::c_long,
         _Buffer: *mut wchar_t,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Radix: ::std::os::raw::c_int,
     ) -> errno_t;
 }
@@ -35374,7 +35376,7 @@ extern "C" {
     pub fn _ultow_s(
         _Value: ::std::os::raw::c_ulong,
         _Buffer: *mut wchar_t,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Radix: ::std::os::raw::c_int,
     ) -> errno_t;
 }
@@ -35503,7 +35505,7 @@ extern "C" {
     pub fn _i64tow_s(
         _Value: ::std::os::raw::c_longlong,
         _Buffer: *mut wchar_t,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Radix: ::std::os::raw::c_int,
     ) -> errno_t;
 }
@@ -35518,7 +35520,7 @@ extern "C" {
     pub fn _ui64tow_s(
         _Value: ::std::os::raw::c_ulonglong,
         _Buffer: *mut wchar_t,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Radix: ::std::os::raw::c_int,
     ) -> errno_t;
 }
@@ -35569,13 +35571,13 @@ extern "C" {
     pub fn _wfullpath(
         _Buffer: *mut wchar_t,
         _Path: *const wchar_t,
-        _BufferCount: usize,
+        _BufferCount: size_t,
     ) -> *mut wchar_t;
 }
 extern "C" {
     pub fn _wmakepath_s(
         _Buffer: *mut wchar_t,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Drive: *const wchar_t,
         _Dir: *const wchar_t,
         _Filename: *const wchar_t,
@@ -35607,19 +35609,19 @@ extern "C" {
     pub fn _wsplitpath_s(
         _FullPath: *const wchar_t,
         _Drive: *mut wchar_t,
-        _DriveCount: usize,
+        _DriveCount: size_t,
         _Dir: *mut wchar_t,
-        _DirCount: usize,
+        _DirCount: size_t,
         _Filename: *mut wchar_t,
-        _FilenameCount: usize,
+        _FilenameCount: size_t,
         _Ext: *mut wchar_t,
-        _ExtCount: usize,
+        _ExtCount: size_t,
     ) -> errno_t;
 }
 extern "C" {
     pub fn _wdupenv_s(
         _Buffer: *mut *mut wchar_t,
-        _BufferCount: *mut usize,
+        _BufferCount: *mut size_t,
         _VarName: *const wchar_t,
     ) -> errno_t;
 }
@@ -35628,9 +35630,9 @@ extern "C" {
 }
 extern "C" {
     pub fn _wgetenv_s(
-        _RequiredCount: *mut usize,
+        _RequiredCount: *mut size_t,
         _Buffer: *mut wchar_t,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _VarName: *const wchar_t,
     ) -> errno_t;
 }
@@ -35645,7 +35647,7 @@ extern "C" {
         _Filename: *const wchar_t,
         _VarName: *const wchar_t,
         _Buffer: *mut wchar_t,
-        _BufferCount: usize,
+        _BufferCount: size_t,
     ) -> errno_t;
 }
 extern "C" {
@@ -36293,7 +36295,7 @@ extern "C" {
     pub fn _itoa_s(
         _Value: ::std::os::raw::c_int,
         _Buffer: *mut ::std::os::raw::c_char,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Radix: ::std::os::raw::c_int,
     ) -> errno_t;
 }
@@ -36308,7 +36310,7 @@ extern "C" {
     pub fn _ltoa_s(
         _Value: ::std::os::raw::c_long,
         _Buffer: *mut ::std::os::raw::c_char,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Radix: ::std::os::raw::c_int,
     ) -> errno_t;
 }
@@ -36323,7 +36325,7 @@ extern "C" {
     pub fn _ultoa_s(
         _Value: ::std::os::raw::c_ulong,
         _Buffer: *mut ::std::os::raw::c_char,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Radix: ::std::os::raw::c_int,
     ) -> errno_t;
 }
@@ -36338,7 +36340,7 @@ extern "C" {
     pub fn _i64toa_s(
         _Value: ::std::os::raw::c_longlong,
         _Buffer: *mut ::std::os::raw::c_char,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Radix: ::std::os::raw::c_int,
     ) -> errno_t;
 }
@@ -36353,7 +36355,7 @@ extern "C" {
     pub fn _ui64toa_s(
         _Value: ::std::os::raw::c_ulonglong,
         _Buffer: *mut ::std::os::raw::c_char,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Radix: ::std::os::raw::c_int,
     ) -> errno_t;
 }
@@ -36367,7 +36369,7 @@ extern "C" {
 extern "C" {
     pub fn _ecvt_s(
         _Buffer: *mut ::std::os::raw::c_char,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Value: f64,
         _DigitCount: ::std::os::raw::c_int,
         _PtDec: *mut ::std::os::raw::c_int,
@@ -36385,7 +36387,7 @@ extern "C" {
 extern "C" {
     pub fn _fcvt_s(
         _Buffer: *mut ::std::os::raw::c_char,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Value: f64,
         _FractionalDigitCount: ::std::os::raw::c_int,
         _PtDec: *mut ::std::os::raw::c_int,
@@ -36403,7 +36405,7 @@ extern "C" {
 extern "C" {
     pub fn _gcvt_s(
         _Buffer: *mut ::std::os::raw::c_char,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Value: f64,
         _DigitCount: ::std::os::raw::c_int,
     ) -> errno_t;
@@ -36422,69 +36424,69 @@ extern "C" {
     pub fn ___mb_cur_max_l_func(_Locale: _locale_t) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn mblen(_Ch: *const ::std::os::raw::c_char, _MaxCount: usize) -> ::std::os::raw::c_int;
+    pub fn mblen(_Ch: *const ::std::os::raw::c_char, _MaxCount: size_t) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn _mblen_l(
         _Ch: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
+        _MaxCount: size_t,
         _Locale: _locale_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn _mbstrlen(_String: *const ::std::os::raw::c_char) -> usize;
+    pub fn _mbstrlen(_String: *const ::std::os::raw::c_char) -> size_t;
 }
 extern "C" {
-    pub fn _mbstrlen_l(_String: *const ::std::os::raw::c_char, _Locale: _locale_t) -> usize;
+    pub fn _mbstrlen_l(_String: *const ::std::os::raw::c_char, _Locale: _locale_t) -> size_t;
 }
 extern "C" {
-    pub fn _mbstrnlen(_String: *const ::std::os::raw::c_char, _MaxCount: usize) -> usize;
+    pub fn _mbstrnlen(_String: *const ::std::os::raw::c_char, _MaxCount: size_t) -> size_t;
 }
 extern "C" {
     pub fn _mbstrnlen_l(
         _String: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
+        _MaxCount: size_t,
         _Locale: _locale_t,
-    ) -> usize;
+    ) -> size_t;
 }
 extern "C" {
     pub fn mbtowc(
         _DstCh: *mut wchar_t,
         _SrcCh: *const ::std::os::raw::c_char,
-        _SrcSizeInBytes: usize,
+        _SrcSizeInBytes: size_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn _mbtowc_l(
         _DstCh: *mut wchar_t,
         _SrcCh: *const ::std::os::raw::c_char,
-        _SrcSizeInBytes: usize,
+        _SrcSizeInBytes: size_t,
         _Locale: _locale_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn mbstowcs_s(
-        _PtNumOfCharConverted: *mut usize,
+        _PtNumOfCharConverted: *mut size_t,
         _DstBuf: *mut wchar_t,
-        _SizeInWords: usize,
+        _SizeInWords: size_t,
         _SrcBuf: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
+        _MaxCount: size_t,
     ) -> errno_t;
 }
 extern "C" {
     pub fn mbstowcs(
         _Dest: *mut wchar_t,
         _Source: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
-    ) -> usize;
+        _MaxCount: size_t,
+    ) -> size_t;
 }
 extern "C" {
     pub fn _mbstowcs_s_l(
-        _PtNumOfCharConverted: *mut usize,
+        _PtNumOfCharConverted: *mut size_t,
         _DstBuf: *mut wchar_t,
-        _SizeInWords: usize,
+        _SizeInWords: size_t,
         _SrcBuf: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
+        _MaxCount: size_t,
         _Locale: _locale_t,
     ) -> errno_t;
 }
@@ -36492,9 +36494,9 @@ extern "C" {
     pub fn _mbstowcs_l(
         _Dest: *mut wchar_t,
         _Source: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
+        _MaxCount: size_t,
         _Locale: _locale_t,
-    ) -> usize;
+    ) -> size_t;
 }
 extern "C" {
     pub fn wctomb(_MbCh: *mut ::std::os::raw::c_char, _WCh: wchar_t) -> ::std::os::raw::c_int;
@@ -36518,34 +36520,34 @@ extern "C" {
     pub fn _wctomb_s_l(
         _SizeConverted: *mut ::std::os::raw::c_int,
         _MbCh: *mut ::std::os::raw::c_char,
-        _SizeInBytes: usize,
+        _SizeInBytes: size_t,
         _WCh: wchar_t,
         _Locale: _locale_t,
     ) -> errno_t;
 }
 extern "C" {
     pub fn wcstombs_s(
-        _PtNumOfCharConverted: *mut usize,
+        _PtNumOfCharConverted: *mut size_t,
         _Dst: *mut ::std::os::raw::c_char,
-        _DstSizeInBytes: usize,
+        _DstSizeInBytes: size_t,
         _Src: *const wchar_t,
-        _MaxCountInBytes: usize,
+        _MaxCountInBytes: size_t,
     ) -> errno_t;
 }
 extern "C" {
     pub fn wcstombs(
         _Dest: *mut ::std::os::raw::c_char,
         _Source: *const wchar_t,
-        _MaxCount: usize,
-    ) -> usize;
+        _MaxCount: size_t,
+    ) -> size_t;
 }
 extern "C" {
     pub fn _wcstombs_s_l(
-        _PtNumOfCharConverted: *mut usize,
+        _PtNumOfCharConverted: *mut size_t,
         _Dst: *mut ::std::os::raw::c_char,
-        _DstSizeInBytes: usize,
+        _DstSizeInBytes: size_t,
         _Src: *const wchar_t,
-        _MaxCountInBytes: usize,
+        _MaxCountInBytes: size_t,
         _Locale: _locale_t,
     ) -> errno_t;
 }
@@ -36553,21 +36555,21 @@ extern "C" {
     pub fn _wcstombs_l(
         _Dest: *mut ::std::os::raw::c_char,
         _Source: *const wchar_t,
-        _MaxCount: usize,
+        _MaxCount: size_t,
         _Locale: _locale_t,
-    ) -> usize;
+    ) -> size_t;
 }
 extern "C" {
     pub fn _fullpath(
         _Buffer: *mut ::std::os::raw::c_char,
         _Path: *const ::std::os::raw::c_char,
-        _BufferCount: usize,
+        _BufferCount: size_t,
     ) -> *mut ::std::os::raw::c_char;
 }
 extern "C" {
     pub fn _makepath_s(
         _Buffer: *mut ::std::os::raw::c_char,
-        _BufferCount: usize,
+        _BufferCount: size_t,
         _Drive: *const ::std::os::raw::c_char,
         _Dir: *const ::std::os::raw::c_char,
         _Filename: *const ::std::os::raw::c_char,
@@ -36596,18 +36598,18 @@ extern "C" {
     pub fn _splitpath_s(
         _FullPath: *const ::std::os::raw::c_char,
         _Drive: *mut ::std::os::raw::c_char,
-        _DriveCount: usize,
+        _DriveCount: size_t,
         _Dir: *mut ::std::os::raw::c_char,
-        _DirCount: usize,
+        _DirCount: size_t,
         _Filename: *mut ::std::os::raw::c_char,
-        _FilenameCount: usize,
+        _FilenameCount: size_t,
         _Ext: *mut ::std::os::raw::c_char,
-        _ExtCount: usize,
+        _ExtCount: size_t,
     ) -> errno_t;
 }
 extern "C" {
     pub fn getenv_s(
-        _RequiredCount: *mut usize,
+        _RequiredCount: *mut size_t,
         _Buffer: *mut ::std::os::raw::c_char,
         _BufferCount: rsize_t,
         _VarName: *const ::std::os::raw::c_char,
@@ -36634,7 +36636,7 @@ extern "C" {
 extern "C" {
     pub fn _dupenv_s(
         _Buffer: *mut *mut ::std::os::raw::c_char,
-        _BufferCount: *mut usize,
+        _BufferCount: *mut size_t,
         _VarName: *const ::std::os::raw::c_char,
     ) -> errno_t;
 }
@@ -36655,7 +36657,7 @@ extern "C" {
         _Filename: *const ::std::os::raw::c_char,
         _VarName: *const ::std::os::raw::c_char,
         _Buffer: *mut ::std::os::raw::c_char,
-        _BufferCount: usize,
+        _BufferCount: size_t,
     ) -> errno_t;
 }
 extern "C" {
@@ -36800,14 +36802,14 @@ extern "C" {
     pub fn _memicmp(
         _Buf1: *const ::std::os::raw::c_void,
         _Buf2: *const ::std::os::raw::c_void,
-        _Size: usize,
+        _Size: size_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn _memicmp_l(
         _Buf1: *const ::std::os::raw::c_void,
         _Buf2: *const ::std::os::raw::c_void,
-        _Size: usize,
+        _Size: size_t,
         _Locale: _locale_t,
     ) -> ::std::os::raw::c_int;
 }
@@ -36823,7 +36825,7 @@ extern "C" {
     pub fn memicmp(
         _Buf1: *const ::std::os::raw::c_void,
         _Buf2: *const ::std::os::raw::c_void,
-        _Size: usize,
+        _Size: size_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
@@ -36879,19 +36881,19 @@ extern "C" {
     pub fn wcscpy(_Destination: *mut wchar_t, _Source: *const wchar_t) -> *mut wchar_t;
 }
 extern "C" {
-    pub fn wcscspn(_String: *const wchar_t, _Control: *const wchar_t) -> usize;
+    pub fn wcscspn(_String: *const wchar_t, _Control: *const wchar_t) -> size_t;
 }
 extern "C" {
     pub fn wcslen(_String: *const ::std::os::raw::c_ushort) -> ::std::os::raw::c_ulonglong;
 }
 extern "C" {
-    pub fn wcsnlen(_Source: *const wchar_t, _MaxCount: usize) -> usize;
+    pub fn wcsnlen(_Source: *const wchar_t, _MaxCount: size_t) -> size_t;
 }
 extern "C" {
     pub fn wcsncat(
         _Destination: *mut wchar_t,
         _Source: *const wchar_t,
-        _Count: usize,
+        _Count: size_t,
     ) -> *mut wchar_t;
 }
 extern "C" {
@@ -36905,14 +36907,14 @@ extern "C" {
     pub fn wcsncpy(
         _Destination: *mut wchar_t,
         _Source: *const wchar_t,
-        _Count: usize,
+        _Count: size_t,
     ) -> *mut wchar_t;
 }
 extern "C" {
     pub fn wcspbrk(_String: *const wchar_t, _Control: *const wchar_t) -> *mut wchar_t;
 }
 extern "C" {
-    pub fn wcsspn(_String: *const wchar_t, _Control: *const wchar_t) -> usize;
+    pub fn wcsspn(_String: *const wchar_t, _Control: *const wchar_t) -> size_t;
 }
 extern "C" {
     pub fn wcstok(
@@ -36927,7 +36929,7 @@ extern "C" {
 extern "C" {
     pub fn _wcserror_s(
         _Buffer: *mut wchar_t,
-        _SizeInWords: usize,
+        _SizeInWords: size_t,
         _ErrorNumber: ::std::os::raw::c_int,
     ) -> errno_t;
 }
@@ -36937,7 +36939,7 @@ extern "C" {
 extern "C" {
     pub fn __wcserror_s(
         _Buffer: *mut wchar_t,
-        _SizeInWords: usize,
+        _SizeInWords: size_t,
         _ErrorMessage: *const wchar_t,
     ) -> errno_t;
 }
@@ -36955,71 +36957,75 @@ extern "C" {
     pub fn _wcsnicmp(
         _String1: *const wchar_t,
         _String2: *const wchar_t,
-        _MaxCount: usize,
+        _MaxCount: size_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn _wcsnicmp_l(
         _String1: *const wchar_t,
         _String2: *const wchar_t,
-        _MaxCount: usize,
+        _MaxCount: size_t,
         _Locale: _locale_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn _wcsnset_s(
         _Destination: *mut wchar_t,
-        _SizeInWords: usize,
+        _SizeInWords: size_t,
         _Value: wchar_t,
-        _MaxCount: usize,
+        _MaxCount: size_t,
     ) -> errno_t;
 }
 extern "C" {
-    pub fn _wcsnset(_String: *mut wchar_t, _Value: wchar_t, _MaxCount: usize) -> *mut wchar_t;
+    pub fn _wcsnset(_String: *mut wchar_t, _Value: wchar_t, _MaxCount: size_t) -> *mut wchar_t;
 }
 extern "C" {
     pub fn _wcsrev(_String: *mut wchar_t) -> *mut wchar_t;
 }
 extern "C" {
-    pub fn _wcsset_s(_Destination: *mut wchar_t, _SizeInWords: usize, _Value: wchar_t) -> errno_t;
+    pub fn _wcsset_s(_Destination: *mut wchar_t, _SizeInWords: size_t, _Value: wchar_t) -> errno_t;
 }
 extern "C" {
     pub fn _wcsset(_String: *mut wchar_t, _Value: wchar_t) -> *mut wchar_t;
 }
 extern "C" {
-    pub fn _wcslwr_s(_String: *mut wchar_t, _SizeInWords: usize) -> errno_t;
+    pub fn _wcslwr_s(_String: *mut wchar_t, _SizeInWords: size_t) -> errno_t;
 }
 extern "C" {
     pub fn _wcslwr(_String: *mut wchar_t) -> *mut wchar_t;
 }
 extern "C" {
-    pub fn _wcslwr_s_l(_String: *mut wchar_t, _SizeInWords: usize, _Locale: _locale_t) -> errno_t;
+    pub fn _wcslwr_s_l(_String: *mut wchar_t, _SizeInWords: size_t, _Locale: _locale_t) -> errno_t;
 }
 extern "C" {
     pub fn _wcslwr_l(_String: *mut wchar_t, _Locale: _locale_t) -> *mut wchar_t;
 }
 extern "C" {
-    pub fn _wcsupr_s(_String: *mut wchar_t, _Size: usize) -> errno_t;
+    pub fn _wcsupr_s(_String: *mut wchar_t, _Size: size_t) -> errno_t;
 }
 extern "C" {
     pub fn _wcsupr(_String: *mut wchar_t) -> *mut wchar_t;
 }
 extern "C" {
-    pub fn _wcsupr_s_l(_String: *mut wchar_t, _Size: usize, _Locale: _locale_t) -> errno_t;
+    pub fn _wcsupr_s_l(_String: *mut wchar_t, _Size: size_t, _Locale: _locale_t) -> errno_t;
 }
 extern "C" {
     pub fn _wcsupr_l(_String: *mut wchar_t, _Locale: _locale_t) -> *mut wchar_t;
 }
 extern "C" {
-    pub fn wcsxfrm(_Destination: *mut wchar_t, _Source: *const wchar_t, _MaxCount: usize) -> usize;
+    pub fn wcsxfrm(
+        _Destination: *mut wchar_t,
+        _Source: *const wchar_t,
+        _MaxCount: size_t,
+    ) -> size_t;
 }
 extern "C" {
     pub fn _wcsxfrm_l(
         _Destination: *mut wchar_t,
         _Source: *const wchar_t,
-        _MaxCount: usize,
+        _MaxCount: size_t,
         _Locale: _locale_t,
-    ) -> usize;
+    ) -> size_t;
 }
 extern "C" {
     pub fn wcscoll(_String1: *const wchar_t, _String2: *const wchar_t) -> ::std::os::raw::c_int;
@@ -37045,14 +37051,14 @@ extern "C" {
     pub fn _wcsncoll(
         _String1: *const wchar_t,
         _String2: *const wchar_t,
-        _MaxCount: usize,
+        _MaxCount: size_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn _wcsncoll_l(
         _String1: *const wchar_t,
         _String2: *const wchar_t,
-        _MaxCount: usize,
+        _MaxCount: size_t,
         _Locale: _locale_t,
     ) -> ::std::os::raw::c_int;
 }
@@ -37060,14 +37066,14 @@ extern "C" {
     pub fn _wcsnicoll(
         _String1: *const wchar_t,
         _String2: *const wchar_t,
-        _MaxCount: usize,
+        _MaxCount: size_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn _wcsnicoll_l(
         _String1: *const wchar_t,
         _String2: *const wchar_t,
-        _MaxCount: usize,
+        _MaxCount: size_t,
         _Locale: _locale_t,
     ) -> ::std::os::raw::c_int;
 }
@@ -37081,11 +37087,11 @@ extern "C" {
     pub fn wcsnicmp(
         _String1: *const wchar_t,
         _String2: *const wchar_t,
-        _MaxCount: usize,
+        _MaxCount: size_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn wcsnset(_String: *mut wchar_t, _Value: wchar_t, _MaxCount: usize) -> *mut wchar_t;
+    pub fn wcsnset(_String: *mut wchar_t, _Value: wchar_t, _MaxCount: size_t) -> *mut wchar_t;
 }
 extern "C" {
     pub fn wcsrev(_String: *mut wchar_t) -> *mut wchar_t;
@@ -37119,7 +37125,7 @@ extern "C" {
 extern "C" {
     pub fn strerror_s(
         _Buffer: *mut ::std::os::raw::c_char,
-        _SizeInBytes: usize,
+        _SizeInBytes: size_t,
         _ErrorNumber: ::std::os::raw::c_int,
     ) -> errno_t;
 }
@@ -37151,7 +37157,7 @@ extern "C" {
         _Dst: *mut ::std::os::raw::c_void,
         _Src: *const ::std::os::raw::c_void,
         _Val: ::std::os::raw::c_int,
-        _MaxCount: usize,
+        _MaxCount: size_t,
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
@@ -37206,7 +37212,7 @@ extern "C" {
 extern "C" {
     pub fn _strerror_s(
         _Buffer: *mut ::std::os::raw::c_char,
-        _SizeInBytes: usize,
+        _SizeInBytes: size_t,
         _ErrorMessage: *const ::std::os::raw::c_char,
     ) -> errno_t;
 }
@@ -37243,7 +37249,7 @@ extern "C" {
     pub fn strlen(_Str: *const ::std::os::raw::c_char) -> ::std::os::raw::c_ulonglong;
 }
 extern "C" {
-    pub fn _strlwr_s(_String: *mut ::std::os::raw::c_char, _Size: usize) -> errno_t;
+    pub fn _strlwr_s(_String: *mut ::std::os::raw::c_char, _Size: size_t) -> errno_t;
 }
 extern "C" {
     pub fn _strlwr(_String: *mut ::std::os::raw::c_char) -> *mut ::std::os::raw::c_char;
@@ -37251,7 +37257,7 @@ extern "C" {
 extern "C" {
     pub fn _strlwr_s_l(
         _String: *mut ::std::os::raw::c_char,
-        _Size: usize,
+        _Size: size_t,
         _Locale: _locale_t,
     ) -> errno_t;
 }
@@ -37279,14 +37285,14 @@ extern "C" {
     pub fn _strnicmp(
         _String1: *const ::std::os::raw::c_char,
         _String2: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
+        _MaxCount: size_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn _strnicmp_l(
         _String1: *const ::std::os::raw::c_char,
         _String2: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
+        _MaxCount: size_t,
         _Locale: _locale_t,
     ) -> ::std::os::raw::c_int;
 }
@@ -37294,14 +37300,14 @@ extern "C" {
     pub fn _strnicoll(
         _String1: *const ::std::os::raw::c_char,
         _String2: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
+        _MaxCount: size_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn _strnicoll_l(
         _String1: *const ::std::os::raw::c_char,
         _String2: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
+        _MaxCount: size_t,
         _Locale: _locale_t,
     ) -> ::std::os::raw::c_int;
 }
@@ -37309,19 +37315,19 @@ extern "C" {
     pub fn _strncoll(
         _String1: *const ::std::os::raw::c_char,
         _String2: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
+        _MaxCount: size_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn _strncoll_l(
         _String1: *const ::std::os::raw::c_char,
         _String2: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
+        _MaxCount: size_t,
         _Locale: _locale_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn __strncnt(_String: *const ::std::os::raw::c_char, _Count: usize) -> usize;
+    pub fn __strncnt(_String: *const ::std::os::raw::c_char, _Count: size_t) -> size_t;
 }
 extern "C" {
     pub fn strncpy(
@@ -37331,21 +37337,21 @@ extern "C" {
     ) -> *mut ::std::os::raw::c_char;
 }
 extern "C" {
-    pub fn strnlen(_String: *const ::std::os::raw::c_char, _MaxCount: usize) -> usize;
+    pub fn strnlen(_String: *const ::std::os::raw::c_char, _MaxCount: size_t) -> size_t;
 }
 extern "C" {
     pub fn _strnset_s(
         _String: *mut ::std::os::raw::c_char,
-        _SizeInBytes: usize,
+        _SizeInBytes: size_t,
         _Value: ::std::os::raw::c_int,
-        _MaxCount: usize,
+        _MaxCount: size_t,
     ) -> errno_t;
 }
 extern "C" {
     pub fn _strnset(
         _Destination: *mut ::std::os::raw::c_char,
         _Value: ::std::os::raw::c_int,
-        _Count: usize,
+        _Count: size_t,
     ) -> *mut ::std::os::raw::c_char;
 }
 extern "C" {
@@ -37360,7 +37366,7 @@ extern "C" {
 extern "C" {
     pub fn _strset_s(
         _Destination: *mut ::std::os::raw::c_char,
-        _DestinationSize: usize,
+        _DestinationSize: size_t,
         _Value: ::std::os::raw::c_int,
     ) -> errno_t;
 }
@@ -37383,7 +37389,7 @@ extern "C" {
     ) -> *mut ::std::os::raw::c_char;
 }
 extern "C" {
-    pub fn _strupr_s(_String: *mut ::std::os::raw::c_char, _Size: usize) -> errno_t;
+    pub fn _strupr_s(_String: *mut ::std::os::raw::c_char, _Size: size_t) -> errno_t;
 }
 extern "C" {
     pub fn _strupr(_String: *mut ::std::os::raw::c_char) -> *mut ::std::os::raw::c_char;
@@ -37391,7 +37397,7 @@ extern "C" {
 extern "C" {
     pub fn _strupr_s_l(
         _String: *mut ::std::os::raw::c_char,
-        _Size: usize,
+        _Size: size_t,
         _Locale: _locale_t,
     ) -> errno_t;
 }
@@ -37412,9 +37418,9 @@ extern "C" {
     pub fn _strxfrm_l(
         _Destination: *mut ::std::os::raw::c_char,
         _Source: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
+        _MaxCount: size_t,
         _Locale: _locale_t,
-    ) -> usize;
+    ) -> size_t;
 }
 extern "C" {
     pub fn strdup(_String: *const ::std::os::raw::c_char) -> *mut ::std::os::raw::c_char;
@@ -37438,14 +37444,14 @@ extern "C" {
     pub fn strnicmp(
         _String1: *const ::std::os::raw::c_char,
         _String2: *const ::std::os::raw::c_char,
-        _MaxCount: usize,
+        _MaxCount: size_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn strnset(
         _String: *mut ::std::os::raw::c_char,
         _Value: ::std::os::raw::c_int,
-        _MaxCount: usize,
+        _MaxCount: size_t,
     ) -> *mut ::std::os::raw::c_char;
 }
 extern "C" {
@@ -37509,7 +37515,7 @@ extern "C" {
         compressedSize: ::std::os::raw::c_int,
         maxOutputSize: ::std::os::raw::c_int,
         dictStart: *const ::std::os::raw::c_void,
-        dictSize: usize,
+        dictSize: size_t,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
@@ -37520,16 +37526,16 @@ extern "C" {
         targetOutputSize: ::std::os::raw::c_int,
         dstCapacity: ::std::os::raw::c_int,
         dictStart: *const ::std::os::raw::c_void,
-        dictSize: usize,
+        dictSize: size_t,
     ) -> ::std::os::raw::c_int;
 }
 pub const earlyEnd_directive_decode_full_block: earlyEnd_directive = 0;
 pub const earlyEnd_directive_partial_decode: earlyEnd_directive = 1;
 pub type earlyEnd_directive = ::std::os::raw::c_int;
 extern "C" {
-    pub fn read_long_length_no_check(pp: *mut *const BYTE) -> usize;
+    pub fn read_long_length_no_check(pp: *mut *const BYTE) -> size_t;
 }
-pub type Rvl_t = usize;
+pub type Rvl_t = size_t;
 extern "C" {
     pub static rvl_error: Rvl_t;
 }
@@ -37811,7 +37817,7 @@ fn bindgen_test_layout_LZ4_streamHC_u() {
 extern "C" {
     pub fn LZ4_initStreamHC(
         buffer: *mut ::std::os::raw::c_void,
-        size: usize,
+        size: size_t,
     ) -> *mut LZ4_streamHC_t;
 }
 extern "C" {
@@ -38091,7 +38097,7 @@ fn bindgen_test_layout_LZ4HC_match_t() {
         )
     );
 }
-pub type LZ4F_errorCode_t = usize;
+pub type LZ4F_errorCode_t = size_t;
 extern "C" {
     pub fn LZ4F_isError(code: LZ4F_errorCode_t) -> ::std::os::raw::c_uint;
 }
@@ -38294,19 +38300,19 @@ extern "C" {
 extern "C" {
     #[doc = " LZ4F_compressFrameBound() :\n  Returns the maximum possible compressed size with LZ4F_compressFrame() given srcSize and preferences.\n `preferencesPtr` is optional. It can be replaced by NULL, in which case, the function will assume default preferences.\n  Note : this result is only usable with LZ4F_compressFrame().\n         It may also be relevant to LZ4F_compressUpdate() _only if_ no flush() operation is ever performed."]
     pub fn LZ4F_compressFrameBound(
-        srcSize: usize,
+        srcSize: size_t,
         preferencesPtr: *const LZ4F_preferences_t,
-    ) -> usize;
+    ) -> size_t;
 }
 extern "C" {
     #[doc = " LZ4F_compressFrame() :\n  Compress an entire srcBuffer into a valid LZ4 frame.\n  dstCapacity MUST be >= LZ4F_compressFrameBound(srcSize, preferencesPtr).\n  The LZ4F_preferences_t structure is optional : you can provide NULL as argument. All preferences will be set to default.\n @return : number of bytes written into dstBuffer.\n           or an error code if it fails (can be tested using LZ4F_isError())"]
     pub fn LZ4F_compressFrame(
         dstBuffer: *mut ::std::os::raw::c_void,
-        dstCapacity: usize,
+        dstCapacity: size_t,
         srcBuffer: *const ::std::os::raw::c_void,
-        srcSize: usize,
+        srcSize: size_t,
         preferencesPtr: *const LZ4F_preferences_t,
-    ) -> usize;
+    ) -> size_t;
 }
 pub type LZ4F_cctx = LZ4F_cctx_s;
 pub type LZ4F_compressionContext_t = *mut LZ4F_cctx;
@@ -38370,42 +38376,42 @@ extern "C" {
     pub fn LZ4F_compressBegin(
         cctx: *mut LZ4F_cctx,
         dstBuffer: *mut ::std::os::raw::c_void,
-        dstCapacity: usize,
+        dstCapacity: size_t,
         prefsPtr: *const LZ4F_preferences_t,
-    ) -> usize;
+    ) -> size_t;
 }
 extern "C" {
     #[doc = " LZ4F_compressBound() :\n  Provides minimum dstCapacity required to guarantee success of\n  LZ4F_compressUpdate(), given a srcSize and preferences, for a worst case scenario.\n  When srcSize==0, LZ4F_compressBound() provides an upper bound for LZ4F_flush() and LZ4F_compressEnd() instead.\n  Note that the result is only valid for a single invocation of LZ4F_compressUpdate().\n  When invoking LZ4F_compressUpdate() multiple times,\n  if the output buffer is gradually filled up instead of emptied and re-used from its start,\n  one must check if there is enough remaining capacity before each invocation, using LZ4F_compressBound().\n @return is always the same for a srcSize and prefsPtr.\n  prefsPtr is optional : when NULL is provided, preferences will be set to cover worst case scenario.\n  tech details :\n @return if automatic flushing is not enabled, includes the possibility that internal buffer might already be filled by up to (blockSize-1) bytes.\n  It also includes frame footer (ending + checksum), since it might be generated by LZ4F_compressEnd().\n @return doesn't include frame header, as it was already generated by LZ4F_compressBegin()."]
-    pub fn LZ4F_compressBound(srcSize: usize, prefsPtr: *const LZ4F_preferences_t) -> usize;
+    pub fn LZ4F_compressBound(srcSize: size_t, prefsPtr: *const LZ4F_preferences_t) -> size_t;
 }
 extern "C" {
     #[doc = " LZ4F_compressUpdate() :\n  LZ4F_compressUpdate() can be called repetitively to compress as much data as necessary.\n  Important rule: dstCapacity MUST be large enough to ensure operation success even in worst case situations.\n  This value is provided by LZ4F_compressBound().\n  If this condition is not respected, LZ4F_compress() will fail (result is an errorCode).\n  After an error, the state is left in a UB state, and must be re-initialized or freed.\n  If previously an uncompressed block was written, buffered data is flushed\n  before appending compressed data is continued.\n `cOptPtr` is optional : NULL can be provided, in which case all options are set to default.\n @return : number of bytes written into `dstBuffer` (it can be zero, meaning input data was just buffered).\n           or an error code if it fails (which can be tested using LZ4F_isError())"]
     pub fn LZ4F_compressUpdate(
         cctx: *mut LZ4F_cctx,
         dstBuffer: *mut ::std::os::raw::c_void,
-        dstCapacity: usize,
+        dstCapacity: size_t,
         srcBuffer: *const ::std::os::raw::c_void,
-        srcSize: usize,
+        srcSize: size_t,
         cOptPtr: *const LZ4F_compressOptions_t,
-    ) -> usize;
+    ) -> size_t;
 }
 extern "C" {
     #[doc = " LZ4F_flush() :\n  When data must be generated and sent immediately, without waiting for a block to be completely filled,\n  it's possible to call LZ4_flush(). It will immediately compress any data buffered within cctx.\n `dstCapacity` must be large enough to ensure the operation will be successful.\n `cOptPtr` is optional : it's possible to provide NULL, all options will be set to default.\n @return : nb of bytes written into dstBuffer (can be zero, when there is no data stored within cctx)\n           or an error code if it fails (which can be tested using LZ4F_isError())\n  Note : LZ4F_flush() is guaranteed to be successful when dstCapacity >= LZ4F_compressBound(0, prefsPtr)."]
     pub fn LZ4F_flush(
         cctx: *mut LZ4F_cctx,
         dstBuffer: *mut ::std::os::raw::c_void,
-        dstCapacity: usize,
+        dstCapacity: size_t,
         cOptPtr: *const LZ4F_compressOptions_t,
-    ) -> usize;
+    ) -> size_t;
 }
 extern "C" {
     #[doc = " LZ4F_compressEnd() :\n  To properly finish an LZ4 frame, invoke LZ4F_compressEnd().\n  It will flush whatever data remained within `cctx` (like LZ4_flush())\n  and properly finalize the frame, with an endMark and a checksum.\n `cOptPtr` is optional : NULL can be provided, in which case all options will be set to default.\n @return : nb of bytes written into dstBuffer, necessarily >= 4 (endMark),\n           or an error code if it fails (which can be tested using LZ4F_isError())\n  Note : LZ4F_compressEnd() is guaranteed to be successful when dstCapacity >= LZ4F_compressBound(0, prefsPtr).\n  A successful call to LZ4F_compressEnd() makes `cctx` available again for another compression task."]
     pub fn LZ4F_compressEnd(
         cctx: *mut LZ4F_cctx,
         dstBuffer: *mut ::std::os::raw::c_void,
-        dstCapacity: usize,
+        dstCapacity: size_t,
         cOptPtr: *const LZ4F_compressOptions_t,
-    ) -> usize;
+    ) -> size_t;
 }
 pub type LZ4F_dctx = LZ4F_dctx_s;
 pub type LZ4F_decompressionContext_t = *mut LZ4F_dctx;
@@ -38485,7 +38491,7 @@ extern "C" {
 }
 extern "C" {
     #[doc = " LZ4F_headerSize() : v1.9.0+\n  Provide the header size of a frame starting at `src`.\n `srcSize` must be >= LZ4F_MIN_SIZE_TO_KNOW_HEADER_LENGTH,\n  which is enough to decode the header length.\n @return : size of frame header\n           or an error code, which can be tested using LZ4F_isError()\n  note : Frame header size is variable, but is guaranteed to be\n         >= LZ4F_HEADER_SIZE_MIN bytes, and <= LZ4F_HEADER_SIZE_MAX bytes."]
-    pub fn LZ4F_headerSize(src: *const ::std::os::raw::c_void, srcSize: usize) -> usize;
+    pub fn LZ4F_headerSize(src: *const ::std::os::raw::c_void, srcSize: size_t) -> size_t;
 }
 extern "C" {
     #[doc = " LZ4F_getFrameInfo() :\n  This function extracts frame parameters (max blockSize, dictID, etc.).\n  Its usage is optional: user can also invoke LZ4F_decompress() directly.\n\n  Extracted information will fill an existing LZ4F_frameInfo_t structure.\n  This can be useful for allocation and dictionary identification purposes.\n\n  LZ4F_getFrameInfo() can work in the following situations :\n\n  1) At the beginning of a new frame, before any invocation of LZ4F_decompress().\n     It will decode header from `srcBuffer`,\n     consuming the header and starting the decoding process.\n\n     Input size must be large enough to contain the full frame header.\n     Frame header size can be known beforehand by LZ4F_headerSize().\n     Frame header size is variable, but is guaranteed to be >= LZ4F_HEADER_SIZE_MIN bytes,\n     and not more than <= LZ4F_HEADER_SIZE_MAX bytes.\n     Hence, blindly providing LZ4F_HEADER_SIZE_MAX bytes or more will always work.\n     It's allowed to provide more input data than the header size,\n     LZ4F_getFrameInfo() will only consume the header.\n\n     If input size is not large enough,\n     aka if it's smaller than header size,\n     function will fail and return an error code.\n\n  2) After decoding has been started,\n     it's possible to invoke LZ4F_getFrameInfo() anytime\n     to extract already decoded frame parameters stored within dctx.\n\n     Note that, if decoding has barely started,\n     and not yet read enough information to decode the header,\n     LZ4F_getFrameInfo() will fail.\n\n  The number of bytes consumed from srcBuffer will be updated in *srcSizePtr (necessarily <= original value).\n  LZ4F_getFrameInfo() only consumes bytes when decoding has not yet started,\n  and when decoding the header has been successful.\n  Decompression must then resume from (srcBuffer + *srcSizePtr).\n\n @return : a hint about how many srcSize bytes LZ4F_decompress() expects for next call,\n           or an error code which can be tested using LZ4F_isError().\n  note 1 : in case of error, dctx is not modified. Decoding operation can resume from beginning safely.\n  note 2 : frame parameters are *copied into* an already allocated LZ4F_frameInfo_t structure."]
@@ -38493,19 +38499,19 @@ extern "C" {
         dctx: *mut LZ4F_dctx,
         frameInfoPtr: *mut LZ4F_frameInfo_t,
         srcBuffer: *const ::std::os::raw::c_void,
-        srcSizePtr: *mut usize,
-    ) -> usize;
+        srcSizePtr: *mut size_t,
+    ) -> size_t;
 }
 extern "C" {
     #[doc = " LZ4F_decompress() :\n  Call this function repetitively to regenerate data compressed in `srcBuffer`.\n\n  The function requires a valid dctx state.\n  It will read up to *srcSizePtr bytes from srcBuffer,\n  and decompress data into dstBuffer, of capacity *dstSizePtr.\n\n  The nb of bytes consumed from srcBuffer will be written into *srcSizePtr (necessarily <= original value).\n  The nb of bytes decompressed into dstBuffer will be written into *dstSizePtr (necessarily <= original value).\n\n  The function does not necessarily read all input bytes, so always check value in *srcSizePtr.\n  Unconsumed source data must be presented again in subsequent invocations.\n\n `dstBuffer` can freely change between each consecutive function invocation.\n `dstBuffer` content will be overwritten.\n\n @return : an hint of how many `srcSize` bytes LZ4F_decompress() expects for next call.\n  Schematically, it's the size of the current (or remaining) compressed block + header of next block.\n  Respecting the hint provides some small speed benefit, because it skips intermediate buffers.\n  This is just a hint though, it's always possible to provide any srcSize.\n\n  When a frame is fully decoded, @return will be 0 (no more data expected).\n  When provided with more bytes than necessary to decode a frame,\n  LZ4F_decompress() will stop reading exactly at end of current frame, and @return 0.\n\n  If decompression failed, @return is an error code, which can be tested using LZ4F_isError().\n  After a decompression error, the `dctx` context is not resumable.\n  Use LZ4F_resetDecompressionContext() to return to clean state.\n\n  After a frame is fully decoded, dctx can be used again to decompress another frame."]
     pub fn LZ4F_decompress(
         dctx: *mut LZ4F_dctx,
         dstBuffer: *mut ::std::os::raw::c_void,
-        dstSizePtr: *mut usize,
+        dstSizePtr: *mut size_t,
         srcBuffer: *const ::std::os::raw::c_void,
-        srcSizePtr: *mut usize,
+        srcSizePtr: *mut size_t,
         dOptPtr: *const LZ4F_decompressOptions_t,
-    ) -> usize;
+    ) -> size_t;
 }
 extern "C" {
     #[doc = " LZ4F_resetDecompressionContext() : added in v1.8.0\n  In case of an error, the context is left in \"undefined\" state.\n  In which case, it's necessary to reset it, before re-using it.\n  This method can also be used to abruptly stop any unfinished decompression,\n  and start a new one using same context resources."]
@@ -38537,22 +38543,22 @@ pub const LZ4F_errorCodes_LZ4F_ERROR_maxCode: LZ4F_errorCodes = 22;
 pub const LZ4F_errorCodes__LZ4F_dummy_error_enum_for_c89_never_used: LZ4F_errorCodes = 23;
 pub type LZ4F_errorCodes = ::std::os::raw::c_int;
 extern "C" {
-    pub fn LZ4F_getErrorCode(functionResult: usize) -> LZ4F_errorCodes;
+    pub fn LZ4F_getErrorCode(functionResult: size_t) -> LZ4F_errorCodes;
 }
 extern "C" {
     #[doc = " LZ4F_getBlockSize() :\n  Return, in scalar format (size_t),\n  the maximum block size associated with blockSizeID."]
-    pub fn LZ4F_getBlockSize(blockSizeID: LZ4F_blockSizeID_t) -> usize;
+    pub fn LZ4F_getBlockSize(blockSizeID: LZ4F_blockSizeID_t) -> size_t;
 }
 extern "C" {
     #[doc = " LZ4F_uncompressedUpdate() :\n  LZ4F_uncompressedUpdate() can be called repetitively to add as much data uncompressed data as necessary.\n  Important rule: dstCapacity MUST be large enough to store the entire source buffer as\n  no compression is done for this operation\n  If this condition is not respected, LZ4F_uncompressedUpdate() will fail (result is an errorCode).\n  After an error, the state is left in a UB state, and must be re-initialized or freed.\n  If previously a compressed block was written, buffered data is flushed\n  before appending uncompressed data is continued.\n  This is only supported when LZ4F_blockIndependent is used\n `cOptPtr` is optional : NULL can be provided, in which case all options are set to default.\n @return : number of bytes written into `dstBuffer` (it can be zero, meaning input data was just buffered).\n           or an error code if it fails (which can be tested using LZ4F_isError())"]
     pub fn LZ4F_uncompressedUpdate(
         cctx: *mut LZ4F_cctx,
         dstBuffer: *mut ::std::os::raw::c_void,
-        dstCapacity: usize,
+        dstCapacity: size_t,
         srcBuffer: *const ::std::os::raw::c_void,
-        srcSize: usize,
+        srcSize: size_t,
         cOptPtr: *const LZ4F_compressOptions_t,
-    ) -> usize;
+    ) -> size_t;
 }
 #[doc = "  Bulk processing dictionary API"]
 pub type LZ4F_CDict = LZ4F_CDict_s;
@@ -38560,7 +38566,7 @@ extern "C" {
     #[doc = " LZ4_createCDict() :\n  When compressing multiple messages / blocks using the same dictionary, it's recommended to load it just once.\n  LZ4_createCDict() will create a digested dictionary, ready to start future compression operations without startup delay.\n  LZ4_CDict can be created once and shared by multiple threads concurrently, since its usage is read-only.\n `dictBuffer` can be released after LZ4_CDict creation, since its content is copied within CDict"]
     pub fn LZ4F_createCDict(
         dictBuffer: *const ::std::os::raw::c_void,
-        dictSize: usize,
+        dictSize: size_t,
     ) -> *mut LZ4F_CDict;
 }
 extern "C" {
@@ -38571,47 +38577,47 @@ extern "C" {
     pub fn LZ4F_compressFrame_usingCDict(
         cctx: *mut LZ4F_cctx,
         dst: *mut ::std::os::raw::c_void,
-        dstCapacity: usize,
+        dstCapacity: size_t,
         src: *const ::std::os::raw::c_void,
-        srcSize: usize,
+        srcSize: size_t,
         cdict: *const LZ4F_CDict,
         preferencesPtr: *const LZ4F_preferences_t,
-    ) -> usize;
+    ) -> size_t;
 }
 extern "C" {
     #[doc = " LZ4F_compressBegin_usingCDict() :\n  Inits streaming dictionary compression, and writes the frame header into dstBuffer.\n  dstCapacity must be >= LZ4F_HEADER_SIZE_MAX bytes.\n `prefsPtr` is optional : you may provide NULL as argument,\n  however, it's the only way to provide dictID in the frame header.\n @return : number of bytes written into dstBuffer for the header,\n           or an error code (which can be tested using LZ4F_isError())"]
     pub fn LZ4F_compressBegin_usingCDict(
         cctx: *mut LZ4F_cctx,
         dstBuffer: *mut ::std::os::raw::c_void,
-        dstCapacity: usize,
+        dstCapacity: size_t,
         cdict: *const LZ4F_CDict,
         prefsPtr: *const LZ4F_preferences_t,
-    ) -> usize;
+    ) -> size_t;
 }
 extern "C" {
     #[doc = " LZ4F_decompress_usingDict() :\n  Same as LZ4F_decompress(), using a predefined dictionary.\n  Dictionary is used \"in place\", without any preprocessing.\n  It must remain accessible throughout the entire frame decoding."]
     pub fn LZ4F_decompress_usingDict(
         dctxPtr: *mut LZ4F_dctx,
         dstBuffer: *mut ::std::os::raw::c_void,
-        dstSizePtr: *mut usize,
+        dstSizePtr: *mut size_t,
         srcBuffer: *const ::std::os::raw::c_void,
-        srcSizePtr: *mut usize,
+        srcSizePtr: *mut size_t,
         dict: *const ::std::os::raw::c_void,
-        dictSize: usize,
+        dictSize: size_t,
         decompressOptionsPtr: *const LZ4F_decompressOptions_t,
-    ) -> usize;
+    ) -> size_t;
 }
 #[doc = " Custom memory allocation :\n  These prototypes make it possible to pass custom allocation/free functions.\n  LZ4F_customMem is provided at state creation time, using LZ4F_create*_advanced() listed below.\n  All allocation/free operations will be completed using these custom variants instead of regular <stdlib.h> ones."]
 pub type LZ4F_AllocFunction = ::std::option::Option<
     unsafe extern "C" fn(
         opaqueState: *mut ::std::os::raw::c_void,
-        size: usize,
+        size: size_t,
     ) -> *mut ::std::os::raw::c_void,
 >;
 pub type LZ4F_CallocFunction = ::std::option::Option<
     unsafe extern "C" fn(
         opaqueState: *mut ::std::os::raw::c_void,
-        size: usize,
+        size: size_t,
     ) -> *mut ::std::os::raw::c_void,
 >;
 pub type LZ4F_FreeFunction = ::std::option::Option<
@@ -38703,7 +38709,7 @@ extern "C" {
     pub fn LZ4F_createCDict_advanced(
         customMem: LZ4F_CustomMem,
         dictBuffer: *const ::std::os::raw::c_void,
-        dictSize: usize,
+        dictSize: size_t,
     ) -> *mut LZ4F_CDict;
 }
 pub const XXH_errorcode_XXH_OK: XXH_errorcode = 0;
@@ -38717,7 +38723,7 @@ extern "C" {
     #[doc = " XXH32() :\nCalculate the 32-bit hash of sequence \"length\" bytes stored at memory address \"input\".\nThe memory between input & input+length must be valid (allocated and read-accessible).\n\"seed\" can be used to alter the result predictably.\nSpeed on Core 2 Duo @ 3 GHz (single thread, SMHasher benchmark) : 5.4 GB/s"]
     pub fn XXH32(
         input: *const ::std::os::raw::c_void,
-        length: usize,
+        length: size_t,
         seed: ::std::os::raw::c_uint,
     ) -> XXH32_hash_t;
 }
@@ -38739,7 +38745,7 @@ extern "C" {
     pub fn XXH32_update(
         statePtr: *mut XXH32_state_t,
         input: *const ::std::os::raw::c_void,
-        length: usize,
+        length: size_t,
     ) -> XXH_errorcode;
 }
 extern "C" {
@@ -38787,7 +38793,7 @@ extern "C" {
     #[doc = " XXH64() :\nCalculate the 64-bit hash of sequence of length \"len\" stored at memory address \"input\".\n\"seed\" can be used to alter the result predictably.\nThis function runs faster on 64-bit systems, but slower on 32-bit systems (see benchmark)."]
     pub fn XXH64(
         input: *const ::std::os::raw::c_void,
-        length: usize,
+        length: size_t,
         seed: ::std::os::raw::c_ulonglong,
     ) -> XXH64_hash_t;
 }
@@ -38811,7 +38817,7 @@ extern "C" {
     pub fn XXH64_update(
         statePtr: *mut XXH64_state_t,
         input: *const ::std::os::raw::c_void,
-        length: usize,
+        length: size_t,
     ) -> XXH_errorcode;
 }
 extern "C" {
@@ -39078,10 +39084,10 @@ fn bindgen_test_layout_XXH64_state_s() {
         )
     );
 }
-pub const minFHSize: usize = 7;
-pub const maxFHSize: usize = 19;
-pub const BHSize: usize = 4;
-pub const BFSize: usize = 4;
+pub const minFHSize: size_t = 7;
+pub const maxFHSize: size_t = 19;
+pub const BHSize: size_t = 4;
+pub const BFSize: size_t = 4;
 pub const LZ4F_blockCompression_t_LZ4B_COMPRESSED: LZ4F_blockCompression_t = 0;
 pub const LZ4F_blockCompression_t_LZ4B_UNCOMPRESSED: LZ4F_blockCompression_t = 1;
 pub type LZ4F_blockCompression_t = ::std::os::raw::c_int;
@@ -39093,11 +39099,11 @@ pub struct LZ4F_cctx_s {
     pub version: U32,
     pub cStage: U32,
     pub cdict: *const LZ4F_CDict,
-    pub maxBlockSize: usize,
-    pub maxBufferSize: usize,
+    pub maxBlockSize: size_t,
+    pub maxBufferSize: size_t,
     pub tmpBuff: *mut BYTE,
     pub tmpIn: *mut BYTE,
-    pub tmpInSize: usize,
+    pub tmpInSize: size_t,
     pub totalInSize: U64,
     pub xxh: XXH32_state_t,
     pub lz4CtxPtr: *mut ::std::os::raw::c_void,
@@ -39389,17 +39395,17 @@ pub struct LZ4F_dctx_s {
     pub version: U32,
     pub dStage: dStage_t,
     pub frameRemainingSize: U64,
-    pub maxBlockSize: usize,
-    pub maxBufferSize: usize,
+    pub maxBlockSize: size_t,
+    pub maxBufferSize: size_t,
     pub tmpIn: *mut BYTE,
-    pub tmpInSize: usize,
-    pub tmpInTarget: usize,
+    pub tmpInSize: size_t,
+    pub tmpInTarget: size_t,
     pub tmpOutBuffer: *mut BYTE,
     pub dict: *const BYTE,
-    pub dictSize: usize,
+    pub dictSize: size_t,
     pub tmpOut: *mut BYTE,
-    pub tmpOutSize: usize,
-    pub tmpOutStart: usize,
+    pub tmpOutSize: size_t,
+    pub tmpOutStart: size_t,
     pub xxh: XXH32_state_t,
     pub blockChecksum: XXH32_state_t,
     pub skipChecksum: ::std::os::raw::c_int,

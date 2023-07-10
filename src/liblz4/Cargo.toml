@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
+name = "lz4"
 crate-type = ["cdylib"]
-path = "src/lib.rs"
 
 [dependencies]
 csbindgen = "1.7.3"

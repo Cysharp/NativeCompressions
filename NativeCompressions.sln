@@ -3,13 +3,19 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NativeCompressions.ZStandard", "src\NativeCompressions.ZStandard\NativeCompressions.ZStandard.csproj", "{318D5256-9BA3-43FE-9064-21C0079A9FB3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NativeCompressions.ZStandard", "src\NativeCompressions.ZStandard\NativeCompressions.ZStandard.csproj", "{318D5256-9BA3-43FE-9064-21C0079A9FB3}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{D2E583E9-79D4-48F1-8D3A-84DD7F64BB11}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "sandbox", "sandbox", "{3E35D47E-89FF-4063-A322-4C4971817BF6}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NativeCompressions.Sandbox.ConsoleApp", "sandbox\NativeCompressions.Sandbox.ConsoleApp\NativeCompressions.Sandbox.ConsoleApp.csproj", "{50AE63F3-AE52-4B6A-B5A2-3613E7989F13}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NativeCompressions.Lz4", "src\NativeCompressions.Lz4\NativeCompressions.Lz4.csproj", "{966BE555-D6BF-44CA-8059-FD03099369BE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{A663EE20-8279-4671-914C-D45F68F24F58}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NativeCompressions.Tests", "tests\NativeCompressions.Tests\NativeCompressions.Tests.csproj", "{24B01B27-FE27-4161-98AB-588ACCA06D42}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -25,6 +31,14 @@ Global
 		{50AE63F3-AE52-4B6A-B5A2-3613E7989F13}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{50AE63F3-AE52-4B6A-B5A2-3613E7989F13}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{50AE63F3-AE52-4B6A-B5A2-3613E7989F13}.Release|Any CPU.Build.0 = Release|Any CPU
+		{966BE555-D6BF-44CA-8059-FD03099369BE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{966BE555-D6BF-44CA-8059-FD03099369BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{966BE555-D6BF-44CA-8059-FD03099369BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{966BE555-D6BF-44CA-8059-FD03099369BE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{24B01B27-FE27-4161-98AB-588ACCA06D42}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{24B01B27-FE27-4161-98AB-588ACCA06D42}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{24B01B27-FE27-4161-98AB-588ACCA06D42}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{24B01B27-FE27-4161-98AB-588ACCA06D42}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -32,6 +46,8 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{318D5256-9BA3-43FE-9064-21C0079A9FB3} = {D2E583E9-79D4-48F1-8D3A-84DD7F64BB11}
 		{50AE63F3-AE52-4B6A-B5A2-3613E7989F13} = {3E35D47E-89FF-4063-A322-4C4971817BF6}
+		{966BE555-D6BF-44CA-8059-FD03099369BE} = {D2E583E9-79D4-48F1-8D3A-84DD7F64BB11}
+		{24B01B27-FE27-4161-98AB-588ACCA06D42} = {A663EE20-8279-4671-914C-D45F68F24F58}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {FE1051F2-C78B-44CC-B982-7F87759C8405}
