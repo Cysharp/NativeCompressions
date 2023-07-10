@@ -367,7 +367,7 @@ pub unsafe extern "C" fn nativecompressions_LZ4_attach_dictionary(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_LZ4_initStream(
     buffer: *mut c_void,
-    size: lz4::size_t    
+    size: usize    
 ) -> *mut lz4::LZ4_stream_t
 {
     lz4::LZ4_initStream(
@@ -657,7 +657,7 @@ pub unsafe extern "C" fn nativecompressions_LZ4_decompress_safe_forceExtDict(
     compressedSize: c_int,
     maxOutputSize: c_int,
     dictStart: *const c_void,
-    dictSize: lz4::size_t    
+    dictSize: usize    
 ) -> c_int
 {
     lz4::LZ4_decompress_safe_forceExtDict(
@@ -678,7 +678,7 @@ pub unsafe extern "C" fn nativecompressions_LZ4_decompress_safe_partial_forceExt
     targetOutputSize: c_int,
     dstCapacity: c_int,
     dictStart: *const c_void,
-    dictSize: lz4::size_t    
+    dictSize: usize    
 ) -> c_int
 {
     lz4::LZ4_decompress_safe_partial_forceExtDict(
@@ -859,7 +859,7 @@ pub unsafe extern "C" fn nativecompressions_LZ4_saveDictHC(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_LZ4_initStreamHC(
     buffer: *mut c_void,
-    size: lz4::size_t    
+    size: usize    
 ) -> *mut lz4::LZ4_streamHC_t
 {
     lz4::LZ4_initStreamHC(
@@ -1228,9 +1228,9 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_compressionLevel_max(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_LZ4F_compressFrameBound(
-    srcSize: lz4::size_t,
+    srcSize: usize,
     preferencesPtr: *const lz4::LZ4F_preferences_t    
-) -> lz4::size_t
+) -> usize
 {
     lz4::LZ4F_compressFrameBound(
         srcSize,
@@ -1241,11 +1241,11 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_compressFrameBound(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_LZ4F_compressFrame(
     dstBuffer: *mut c_void,
-    dstCapacity: lz4::size_t,
+    dstCapacity: usize,
     srcBuffer: *const c_void,
-    srcSize: lz4::size_t,
+    srcSize: usize,
     preferencesPtr: *const lz4::LZ4F_preferences_t    
-) -> lz4::size_t
+) -> usize
 {
     lz4::LZ4F_compressFrame(
         dstBuffer,
@@ -1292,9 +1292,9 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_freeCompressionContext(
 pub unsafe extern "C" fn nativecompressions_LZ4F_compressBegin(
     cctx: *mut lz4::LZ4F_cctx,
     dstBuffer: *mut c_void,
-    dstCapacity: lz4::size_t,
+    dstCapacity: usize,
     prefsPtr: *const lz4::LZ4F_preferences_t    
-) -> lz4::size_t
+) -> usize
 {
     lz4::LZ4F_compressBegin(
         cctx,
@@ -1306,9 +1306,9 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_compressBegin(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_LZ4F_compressBound(
-    srcSize: lz4::size_t,
+    srcSize: usize,
     prefsPtr: *const lz4::LZ4F_preferences_t    
-) -> lz4::size_t
+) -> usize
 {
     lz4::LZ4F_compressBound(
         srcSize,
@@ -1320,11 +1320,11 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_compressBound(
 pub unsafe extern "C" fn nativecompressions_LZ4F_compressUpdate(
     cctx: *mut lz4::LZ4F_cctx,
     dstBuffer: *mut c_void,
-    dstCapacity: lz4::size_t,
+    dstCapacity: usize,
     srcBuffer: *const c_void,
-    srcSize: lz4::size_t,
+    srcSize: usize,
     cOptPtr: *const lz4::LZ4F_compressOptions_t    
-) -> lz4::size_t
+) -> usize
 {
     lz4::LZ4F_compressUpdate(
         cctx,
@@ -1340,9 +1340,9 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_compressUpdate(
 pub unsafe extern "C" fn nativecompressions_LZ4F_flush(
     cctx: *mut lz4::LZ4F_cctx,
     dstBuffer: *mut c_void,
-    dstCapacity: lz4::size_t,
+    dstCapacity: usize,
     cOptPtr: *const lz4::LZ4F_compressOptions_t    
-) -> lz4::size_t
+) -> usize
 {
     lz4::LZ4F_flush(
         cctx,
@@ -1356,9 +1356,9 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_flush(
 pub unsafe extern "C" fn nativecompressions_LZ4F_compressEnd(
     cctx: *mut lz4::LZ4F_cctx,
     dstBuffer: *mut c_void,
-    dstCapacity: lz4::size_t,
+    dstCapacity: usize,
     cOptPtr: *const lz4::LZ4F_compressOptions_t    
-) -> lz4::size_t
+) -> usize
 {
     lz4::LZ4F_compressEnd(
         cctx,
@@ -1393,8 +1393,8 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_freeDecompressionContext(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_LZ4F_headerSize(
     src: *const c_void,
-    srcSize: lz4::size_t    
-) -> lz4::size_t
+    srcSize: usize    
+) -> usize
 {
     lz4::LZ4F_headerSize(
         src,
@@ -1407,8 +1407,8 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_getFrameInfo(
     dctx: *mut lz4::LZ4F_dctx,
     frameInfoPtr: *mut lz4::LZ4F_frameInfo_t,
     srcBuffer: *const c_void,
-    srcSizePtr: *mut lz4::size_t    
-) -> lz4::size_t
+    srcSizePtr: *mut usize    
+) -> usize
 {
     lz4::LZ4F_getFrameInfo(
         dctx,
@@ -1422,11 +1422,11 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_getFrameInfo(
 pub unsafe extern "C" fn nativecompressions_LZ4F_decompress(
     dctx: *mut lz4::LZ4F_dctx,
     dstBuffer: *mut c_void,
-    dstSizePtr: *mut lz4::size_t,
+    dstSizePtr: *mut usize,
     srcBuffer: *const c_void,
-    srcSizePtr: *mut lz4::size_t,
+    srcSizePtr: *mut usize,
     dOptPtr: *const lz4::LZ4F_decompressOptions_t    
-) -> lz4::size_t
+) -> usize
 {
     lz4::LZ4F_decompress(
         dctx,
@@ -1450,7 +1450,7 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_resetDecompressionContext(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_LZ4F_getErrorCode(
-    functionResult: lz4::size_t    
+    functionResult: usize    
 ) -> lz4::LZ4F_errorCodes
 {
     lz4::LZ4F_getErrorCode(
@@ -1461,7 +1461,7 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_getErrorCode(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_LZ4F_getBlockSize(
     blockSizeID: lz4::LZ4F_blockSizeID_t    
-) -> lz4::size_t
+) -> usize
 {
     lz4::LZ4F_getBlockSize(
         blockSizeID
@@ -1472,11 +1472,11 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_getBlockSize(
 pub unsafe extern "C" fn nativecompressions_LZ4F_uncompressedUpdate(
     cctx: *mut lz4::LZ4F_cctx,
     dstBuffer: *mut c_void,
-    dstCapacity: lz4::size_t,
+    dstCapacity: usize,
     srcBuffer: *const c_void,
-    srcSize: lz4::size_t,
+    srcSize: usize,
     cOptPtr: *const lz4::LZ4F_compressOptions_t    
-) -> lz4::size_t
+) -> usize
 {
     lz4::LZ4F_uncompressedUpdate(
         cctx,
@@ -1491,7 +1491,7 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_uncompressedUpdate(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_LZ4F_createCDict(
     dictBuffer: *const c_void,
-    dictSize: lz4::size_t    
+    dictSize: usize    
 ) -> *mut lz4::LZ4F_CDict
 {
     lz4::LZ4F_createCDict(
@@ -1514,12 +1514,12 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_freeCDict(
 pub unsafe extern "C" fn nativecompressions_LZ4F_compressFrame_usingCDict(
     cctx: *mut lz4::LZ4F_cctx,
     dst: *mut c_void,
-    dstCapacity: lz4::size_t,
+    dstCapacity: usize,
     src: *const c_void,
-    srcSize: lz4::size_t,
+    srcSize: usize,
     cdict: *const lz4::LZ4F_CDict,
     preferencesPtr: *const lz4::LZ4F_preferences_t    
-) -> lz4::size_t
+) -> usize
 {
     lz4::LZ4F_compressFrame_usingCDict(
         cctx,
@@ -1536,10 +1536,10 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_compressFrame_usingCDict(
 pub unsafe extern "C" fn nativecompressions_LZ4F_compressBegin_usingCDict(
     cctx: *mut lz4::LZ4F_cctx,
     dstBuffer: *mut c_void,
-    dstCapacity: lz4::size_t,
+    dstCapacity: usize,
     cdict: *const lz4::LZ4F_CDict,
     prefsPtr: *const lz4::LZ4F_preferences_t    
-) -> lz4::size_t
+) -> usize
 {
     lz4::LZ4F_compressBegin_usingCDict(
         cctx,
@@ -1554,13 +1554,13 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_compressBegin_usingCDict(
 pub unsafe extern "C" fn nativecompressions_LZ4F_decompress_usingDict(
     dctxPtr: *mut lz4::LZ4F_dctx,
     dstBuffer: *mut c_void,
-    dstSizePtr: *mut lz4::size_t,
+    dstSizePtr: *mut usize,
     srcBuffer: *const c_void,
-    srcSizePtr: *mut lz4::size_t,
+    srcSizePtr: *mut usize,
     dict: *const c_void,
-    dictSize: lz4::size_t,
+    dictSize: usize,
     decompressOptionsPtr: *const lz4::LZ4F_decompressOptions_t    
-) -> lz4::size_t
+) -> usize
 {
     lz4::LZ4F_decompress_usingDict(
         dctxPtr,
@@ -1602,7 +1602,7 @@ pub unsafe extern "C" fn nativecompressions_LZ4F_createDecompressionContext_adva
 pub unsafe extern "C" fn nativecompressions_LZ4F_createCDict_advanced(
     customMem: lz4::LZ4F_CustomMem,
     dictBuffer: *const c_void,
-    dictSize: lz4::size_t    
+    dictSize: usize    
 ) -> *mut lz4::LZ4F_CDict
 {
     lz4::LZ4F_createCDict_advanced(

@@ -112,7 +112,7 @@ namespace NativeCompressions.Lz4
 
         /// <summary>LZ4_initStream() : v1.9.0+  An LZ4_stream_t structure must be initialized at least once.  This is automatically done when invoking LZ4_createStream(),  but it's not when the structure is simply declared on stack (for example).  Use LZ4_initStream() to properly initialize a newly declared LZ4_stream_t.  It can also initialize any arbitrary buffer of sufficient size,  and will @return a pointer of proper type upon initialization.  Note : initialization fails if size and alignment conditions are not respected.         In which case, the function will @return NULL.  Note2: An LZ4_stream_t structure guarantees correct alignment and size.  Note3: Before v1.9.0, use LZ4_resetStream() instead</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4_initStream", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern LZ4_stream_u* LZ4_initStream(void* buffer, ulong size);
+        public static extern LZ4_stream_u* LZ4_initStream(void* buffer, nuint size);
 
         /// <summary>Obsolete compression functions (since v1.7.3)</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4_compress", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -177,10 +177,10 @@ namespace NativeCompressions.Lz4
         public static extern int LZ4_compress_forceExtDict(LZ4_stream_u* LZ4_dict, byte* source, byte* dest, int srcSize);
 
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4_decompress_safe_forceExtDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern int LZ4_decompress_safe_forceExtDict(byte* source, byte* dest, int compressedSize, int maxOutputSize, void* dictStart, ulong dictSize);
+        public static extern int LZ4_decompress_safe_forceExtDict(byte* source, byte* dest, int compressedSize, int maxOutputSize, void* dictStart, nuint dictSize);
 
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4_decompress_safe_partial_forceExtDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern int LZ4_decompress_safe_partial_forceExtDict(byte* source, byte* dest, int compressedSize, int targetOutputSize, int dstCapacity, void* dictStart, ulong dictSize);
+        public static extern int LZ4_decompress_safe_partial_forceExtDict(byte* source, byte* dest, int compressedSize, int targetOutputSize, int dstCapacity, void* dictStart, nuint dictSize);
 
         /// <summary>LZ4_compress_HC() :  Compress data from `src` into `dst`, using the powerful but slower \"HC\" algorithm. `dst` must be already allocated.  Compression is guaranteed to succeed if `dstCapacity &gt;= LZ4_compressBound(srcSize)` (see \"lz4.h\")  Max supported `srcSize` value is LZ4_MAX_INPUT_SIZE (see \"lz4.h\") `compressionLevel` : any value between 1 and LZ4HC_CLEVEL_MAX will work.                      Values &gt; LZ4HC_CLEVEL_MAX behave the same as LZ4HC_CLEVEL_MAX. @return : the number of bytes written into 'dst'           or 0 if compression fails.</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4_compress_HC", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -222,7 +222,7 @@ namespace NativeCompressions.Lz4
         public static extern int LZ4_saveDictHC(LZ4_streamHC_u* streamHCPtr, byte* safeBuffer, int maxDictSize);
 
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4_initStreamHC", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern LZ4_streamHC_u* LZ4_initStreamHC(void* buffer, ulong size);
+        public static extern LZ4_streamHC_u* LZ4_initStreamHC(void* buffer, nuint size);
 
         /// <summary>Deprecated Functions</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4_compressHC", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -296,104 +296,104 @@ namespace NativeCompressions.Lz4
         public static extern void LZ4_attach_HC_dictionary(LZ4_streamHC_u* working_stream, LZ4_streamHC_u* dictionary_stream);
 
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_isError", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern uint LZ4F_isError(ulong code);
+        public static extern uint LZ4F_isError(nuint code);
 
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_getErrorName", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern byte* LZ4F_getErrorName(ulong code);
+        public static extern byte* LZ4F_getErrorName(nuint code);
 
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_compressionLevel_max", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern int LZ4F_compressionLevel_max();
 
         /// <summary>LZ4F_compressFrameBound() :  Returns the maximum possible compressed size with LZ4F_compressFrame() given srcSize and preferences. `preferencesPtr` is optional. It can be replaced by NULL, in which case, the function will assume default preferences.  Note : this result is only usable with LZ4F_compressFrame().         It may also be relevant to LZ4F_compressUpdate() _only if_ no flush() operation is ever performed.</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_compressFrameBound", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_compressFrameBound(ulong srcSize, LZ4F_preferences_t* preferencesPtr);
+        public static extern nuint LZ4F_compressFrameBound(nuint srcSize, LZ4F_preferences_t* preferencesPtr);
 
         /// <summary>LZ4F_compressFrame() :  Compress an entire srcBuffer into a valid LZ4 frame.  dstCapacity MUST be &gt;= LZ4F_compressFrameBound(srcSize, preferencesPtr).  The LZ4F_preferences_t structure is optional : you can provide NULL as argument. All preferences will be set to default. @return : number of bytes written into dstBuffer.           or an error code if it fails (can be tested using LZ4F_isError())</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_compressFrame", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_compressFrame(void* dstBuffer, ulong dstCapacity, void* srcBuffer, ulong srcSize, LZ4F_preferences_t* preferencesPtr);
+        public static extern nuint LZ4F_compressFrame(void* dstBuffer, nuint dstCapacity, void* srcBuffer, nuint srcSize, LZ4F_preferences_t* preferencesPtr);
 
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_getVersion", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern uint LZ4F_getVersion();
 
         /// <summary>LZ4F_createCompressionContext() :  The first thing to do is to create a compressionContext object,  which will keep track of operation state during streaming compression.  This is achieved using LZ4F_createCompressionContext(), which takes as argument a version,  and a pointer to LZ4F_cctx*, to write the resulting pointer into.  @version provided MUST be LZ4F_VERSION. It is intended to track potential version mismatch, notably when using DLL.  The function provides a pointer to a fully allocated LZ4F_cctx object.  @cctxPtr MUST be != NULL.  If @return != zero, context creation failed.  A created compression context can be employed multiple times for consecutive streaming operations.  Once all streaming compression jobs are completed,  the state object can be released using LZ4F_freeCompressionContext().  Note1 : LZ4F_freeCompressionContext() is always successful. Its return value can be ignored.  Note2 : LZ4F_freeCompressionContext() works fine with NULL input pointers (do nothing).</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_createCompressionContext", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_createCompressionContext(LZ4F_cctx_s** cctxPtr, uint version);
+        public static extern nuint LZ4F_createCompressionContext(LZ4F_cctx_s** cctxPtr, uint version);
 
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_freeCompressionContext", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_freeCompressionContext(LZ4F_cctx_s* cctx);
+        public static extern nuint LZ4F_freeCompressionContext(LZ4F_cctx_s* cctx);
 
         /// <summary>LZ4F_compressBegin() :  will write the frame header into dstBuffer.  dstCapacity must be &gt;= LZ4F_HEADER_SIZE_MAX bytes. `prefsPtr` is optional : you can provide NULL as argument, all preferences will then be set to default. @return : number of bytes written into dstBuffer for the header           or an error code (which can be tested using LZ4F_isError())</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_compressBegin", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_compressBegin(LZ4F_cctx_s* cctx, void* dstBuffer, ulong dstCapacity, LZ4F_preferences_t* prefsPtr);
+        public static extern nuint LZ4F_compressBegin(LZ4F_cctx_s* cctx, void* dstBuffer, nuint dstCapacity, LZ4F_preferences_t* prefsPtr);
 
         /// <summary>LZ4F_compressBound() :  Provides minimum dstCapacity required to guarantee success of  LZ4F_compressUpdate(), given a srcSize and preferences, for a worst case scenario.  When srcSize==0, LZ4F_compressBound() provides an upper bound for LZ4F_flush() and LZ4F_compressEnd() instead.  Note that the result is only valid for a single invocation of LZ4F_compressUpdate().  When invoking LZ4F_compressUpdate() multiple times,  if the output buffer is gradually filled up instead of emptied and re-used from its start,  one must check if there is enough remaining capacity before each invocation, using LZ4F_compressBound(). @return is always the same for a srcSize and prefsPtr.  prefsPtr is optional : when NULL is provided, preferences will be set to cover worst case scenario.  tech details : @return if automatic flushing is not enabled, includes the possibility that internal buffer might already be filled by up to (blockSize-1) bytes.  It also includes frame footer (ending + checksum), since it might be generated by LZ4F_compressEnd(). @return doesn't include frame header, as it was already generated by LZ4F_compressBegin().</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_compressBound", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_compressBound(ulong srcSize, LZ4F_preferences_t* prefsPtr);
+        public static extern nuint LZ4F_compressBound(nuint srcSize, LZ4F_preferences_t* prefsPtr);
 
         /// <summary>LZ4F_compressUpdate() :  LZ4F_compressUpdate() can be called repetitively to compress as much data as necessary.  Important rule: dstCapacity MUST be large enough to ensure operation success even in worst case situations.  This value is provided by LZ4F_compressBound().  If this condition is not respected, LZ4F_compress() will fail (result is an errorCode).  After an error, the state is left in a UB state, and must be re-initialized or freed.  If previously an uncompressed block was written, buffered data is flushed  before appending compressed data is continued. `cOptPtr` is optional : NULL can be provided, in which case all options are set to default. @return : number of bytes written into `dstBuffer` (it can be zero, meaning input data was just buffered).           or an error code if it fails (which can be tested using LZ4F_isError())</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_compressUpdate", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_compressUpdate(LZ4F_cctx_s* cctx, void* dstBuffer, ulong dstCapacity, void* srcBuffer, ulong srcSize, LZ4F_compressOptions_t* cOptPtr);
+        public static extern nuint LZ4F_compressUpdate(LZ4F_cctx_s* cctx, void* dstBuffer, nuint dstCapacity, void* srcBuffer, nuint srcSize, LZ4F_compressOptions_t* cOptPtr);
 
         /// <summary>LZ4F_flush() :  When data must be generated and sent immediately, without waiting for a block to be completely filled,  it's possible to call LZ4_flush(). It will immediately compress any data buffered within cctx. `dstCapacity` must be large enough to ensure the operation will be successful. `cOptPtr` is optional : it's possible to provide NULL, all options will be set to default. @return : nb of bytes written into dstBuffer (can be zero, when there is no data stored within cctx)           or an error code if it fails (which can be tested using LZ4F_isError())  Note : LZ4F_flush() is guaranteed to be successful when dstCapacity &gt;= LZ4F_compressBound(0, prefsPtr).</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_flush", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_flush(LZ4F_cctx_s* cctx, void* dstBuffer, ulong dstCapacity, LZ4F_compressOptions_t* cOptPtr);
+        public static extern nuint LZ4F_flush(LZ4F_cctx_s* cctx, void* dstBuffer, nuint dstCapacity, LZ4F_compressOptions_t* cOptPtr);
 
         /// <summary>LZ4F_compressEnd() :  To properly finish an LZ4 frame, invoke LZ4F_compressEnd().  It will flush whatever data remained within `cctx` (like LZ4_flush())  and properly finalize the frame, with an endMark and a checksum. `cOptPtr` is optional : NULL can be provided, in which case all options will be set to default. @return : nb of bytes written into dstBuffer, necessarily &gt;= 4 (endMark),           or an error code if it fails (which can be tested using LZ4F_isError())  Note : LZ4F_compressEnd() is guaranteed to be successful when dstCapacity &gt;= LZ4F_compressBound(0, prefsPtr).  A successful call to LZ4F_compressEnd() makes `cctx` available again for another compression task.</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_compressEnd", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_compressEnd(LZ4F_cctx_s* cctx, void* dstBuffer, ulong dstCapacity, LZ4F_compressOptions_t* cOptPtr);
+        public static extern nuint LZ4F_compressEnd(LZ4F_cctx_s* cctx, void* dstBuffer, nuint dstCapacity, LZ4F_compressOptions_t* cOptPtr);
 
         /// <summary>LZ4F_createDecompressionContext() :  Create an LZ4F_dctx object, to track all decompression operations.  @version provided MUST be LZ4F_VERSION.  @dctxPtr MUST be valid.  The function fills @dctxPtr with the value of a pointer to an allocated and initialized LZ4F_dctx object.  The @return is an errorCode, which can be tested using LZ4F_isError().  dctx memory can be released using LZ4F_freeDecompressionContext();  Result of LZ4F_freeDecompressionContext() indicates current state of decompressionContext when being released.  That is, it should be == 0 if decompression has been completed fully and correctly.</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_createDecompressionContext", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_createDecompressionContext(LZ4F_dctx_s** dctxPtr, uint version);
+        public static extern nuint LZ4F_createDecompressionContext(LZ4F_dctx_s** dctxPtr, uint version);
 
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_freeDecompressionContext", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_freeDecompressionContext(LZ4F_dctx_s* dctx);
+        public static extern nuint LZ4F_freeDecompressionContext(LZ4F_dctx_s* dctx);
 
         /// <summary>LZ4F_headerSize() : v1.9.0+  Provide the header size of a frame starting at `src`. `srcSize` must be &gt;= LZ4F_MIN_SIZE_TO_KNOW_HEADER_LENGTH,  which is enough to decode the header length. @return : size of frame header           or an error code, which can be tested using LZ4F_isError()  note : Frame header size is variable, but is guaranteed to be         &gt;= LZ4F_HEADER_SIZE_MIN bytes, and &lt;= LZ4F_HEADER_SIZE_MAX bytes.</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_headerSize", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_headerSize(void* src, ulong srcSize);
+        public static extern nuint LZ4F_headerSize(void* src, nuint srcSize);
 
         /// <summary>LZ4F_getFrameInfo() :  This function extracts frame parameters (max blockSize, dictID, etc.).  Its usage is optional: user can also invoke LZ4F_decompress() directly.  Extracted information will fill an existing LZ4F_frameInfo_t structure.  This can be useful for allocation and dictionary identification purposes.  LZ4F_getFrameInfo() can work in the following situations :  1) At the beginning of a new frame, before any invocation of LZ4F_decompress().     It will decode header from `srcBuffer`,     consuming the header and starting the decoding process.     Input size must be large enough to contain the full frame header.     Frame header size can be known beforehand by LZ4F_headerSize().     Frame header size is variable, but is guaranteed to be &gt;= LZ4F_HEADER_SIZE_MIN bytes,     and not more than &lt;= LZ4F_HEADER_SIZE_MAX bytes.     Hence, blindly providing LZ4F_HEADER_SIZE_MAX bytes or more will always work.     It's allowed to provide more input data than the header size,     LZ4F_getFrameInfo() will only consume the header.     If input size is not large enough,     aka if it's smaller than header size,     function will fail and return an error code.  2) After decoding has been started,     it's possible to invoke LZ4F_getFrameInfo() anytime     to extract already decoded frame parameters stored within dctx.     Note that, if decoding has barely started,     and not yet read enough information to decode the header,     LZ4F_getFrameInfo() will fail.  The number of bytes consumed from srcBuffer will be updated in *srcSizePtr (necessarily &lt;= original value).  LZ4F_getFrameInfo() only consumes bytes when decoding has not yet started,  and when decoding the header has been successful.  Decompression must then resume from (srcBuffer + *srcSizePtr). @return : a hint about how many srcSize bytes LZ4F_decompress() expects for next call,           or an error code which can be tested using LZ4F_isError().  note 1 : in case of error, dctx is not modified. Decoding operation can resume from beginning safely.  note 2 : frame parameters are *copied into* an already allocated LZ4F_frameInfo_t structure.</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_getFrameInfo", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_getFrameInfo(LZ4F_dctx_s* dctx, LZ4F_frameInfo_t* frameInfoPtr, void* srcBuffer, ulong* srcSizePtr);
+        public static extern nuint LZ4F_getFrameInfo(LZ4F_dctx_s* dctx, LZ4F_frameInfo_t* frameInfoPtr, void* srcBuffer, nuint* srcSizePtr);
 
         /// <summary>LZ4F_decompress() :  Call this function repetitively to regenerate data compressed in `srcBuffer`.  The function requires a valid dctx state.  It will read up to *srcSizePtr bytes from srcBuffer,  and decompress data into dstBuffer, of capacity *dstSizePtr.  The nb of bytes consumed from srcBuffer will be written into *srcSizePtr (necessarily &lt;= original value).  The nb of bytes decompressed into dstBuffer will be written into *dstSizePtr (necessarily &lt;= original value).  The function does not necessarily read all input bytes, so always check value in *srcSizePtr.  Unconsumed source data must be presented again in subsequent invocations. `dstBuffer` can freely change between each consecutive function invocation. `dstBuffer` content will be overwritten. @return : an hint of how many `srcSize` bytes LZ4F_decompress() expects for next call.  Schematically, it's the size of the current (or remaining) compressed block + header of next block.  Respecting the hint provides some small speed benefit, because it skips intermediate buffers.  This is just a hint though, it's always possible to provide any srcSize.  When a frame is fully decoded, @return will be 0 (no more data expected).  When provided with more bytes than necessary to decode a frame,  LZ4F_decompress() will stop reading exactly at end of current frame, and @return 0.  If decompression failed, @return is an error code, which can be tested using LZ4F_isError().  After a decompression error, the `dctx` context is not resumable.  Use LZ4F_resetDecompressionContext() to return to clean state.  After a frame is fully decoded, dctx can be used again to decompress another frame.</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_decompress", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_decompress(LZ4F_dctx_s* dctx, void* dstBuffer, ulong* dstSizePtr, void* srcBuffer, ulong* srcSizePtr, LZ4F_decompressOptions_t* dOptPtr);
+        public static extern nuint LZ4F_decompress(LZ4F_dctx_s* dctx, void* dstBuffer, nuint* dstSizePtr, void* srcBuffer, nuint* srcSizePtr, LZ4F_decompressOptions_t* dOptPtr);
 
         /// <summary>LZ4F_resetDecompressionContext() : added in v1.8.0  In case of an error, the context is left in \"undefined\" state.  In which case, it's necessary to reset it, before re-using it.  This method can also be used to abruptly stop any unfinished decompression,  and start a new one using same context resources.</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_resetDecompressionContext", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern void LZ4F_resetDecompressionContext(LZ4F_dctx_s* dctx);
 
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_getErrorCode", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern int LZ4F_getErrorCode(ulong functionResult);
+        public static extern int LZ4F_getErrorCode(nuint functionResult);
 
         /// <summary>LZ4F_getBlockSize() :  Return, in scalar format (size_t),  the maximum block size associated with blockSizeID.</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_getBlockSize", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_getBlockSize(int blockSizeID);
+        public static extern nuint LZ4F_getBlockSize(int blockSizeID);
 
         /// <summary>LZ4F_uncompressedUpdate() :  LZ4F_uncompressedUpdate() can be called repetitively to add as much data uncompressed data as necessary.  Important rule: dstCapacity MUST be large enough to store the entire source buffer as  no compression is done for this operation  If this condition is not respected, LZ4F_uncompressedUpdate() will fail (result is an errorCode).  After an error, the state is left in a UB state, and must be re-initialized or freed.  If previously a compressed block was written, buffered data is flushed  before appending uncompressed data is continued.  This is only supported when LZ4F_blockIndependent is used `cOptPtr` is optional : NULL can be provided, in which case all options are set to default. @return : number of bytes written into `dstBuffer` (it can be zero, meaning input data was just buffered).           or an error code if it fails (which can be tested using LZ4F_isError())</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_uncompressedUpdate", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_uncompressedUpdate(LZ4F_cctx_s* cctx, void* dstBuffer, ulong dstCapacity, void* srcBuffer, ulong srcSize, LZ4F_compressOptions_t* cOptPtr);
+        public static extern nuint LZ4F_uncompressedUpdate(LZ4F_cctx_s* cctx, void* dstBuffer, nuint dstCapacity, void* srcBuffer, nuint srcSize, LZ4F_compressOptions_t* cOptPtr);
 
         /// <summary>LZ4_createCDict() :  When compressing multiple messages / blocks using the same dictionary, it's recommended to load it just once.  LZ4_createCDict() will create a digested dictionary, ready to start future compression operations without startup delay.  LZ4_CDict can be created once and shared by multiple threads concurrently, since its usage is read-only. `dictBuffer` can be released after LZ4_CDict creation, since its content is copied within CDict</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_createCDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern LZ4F_CDict_s* LZ4F_createCDict(void* dictBuffer, ulong dictSize);
+        public static extern LZ4F_CDict_s* LZ4F_createCDict(void* dictBuffer, nuint dictSize);
 
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_freeCDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern void LZ4F_freeCDict(LZ4F_CDict_s* CDict);
 
         /// <summary>LZ4_compressFrame_usingCDict() :  Compress an entire srcBuffer into a valid LZ4 frame using a digested Dictionary.  cctx must point to a context created by LZ4F_createCompressionContext().  If cdict==NULL, compress without a dictionary.  dstBuffer MUST be &gt;= LZ4F_compressFrameBound(srcSize, preferencesPtr).  If this condition is not respected, function will fail (@return an errorCode).  The LZ4F_preferences_t structure is optional : you may provide NULL as argument,  but it's not recommended, as it's the only way to provide dictID in the frame header. @return : number of bytes written into dstBuffer.           or an error code if it fails (can be tested using LZ4F_isError())</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_compressFrame_usingCDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_compressFrame_usingCDict(LZ4F_cctx_s* cctx, void* dst, ulong dstCapacity, void* src, ulong srcSize, LZ4F_CDict_s* cdict, LZ4F_preferences_t* preferencesPtr);
+        public static extern nuint LZ4F_compressFrame_usingCDict(LZ4F_cctx_s* cctx, void* dst, nuint dstCapacity, void* src, nuint srcSize, LZ4F_CDict_s* cdict, LZ4F_preferences_t* preferencesPtr);
 
         /// <summary>LZ4F_compressBegin_usingCDict() :  Inits streaming dictionary compression, and writes the frame header into dstBuffer.  dstCapacity must be &gt;= LZ4F_HEADER_SIZE_MAX bytes. `prefsPtr` is optional : you may provide NULL as argument,  however, it's the only way to provide dictID in the frame header. @return : number of bytes written into dstBuffer for the header,           or an error code (which can be tested using LZ4F_isError())</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_compressBegin_usingCDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_compressBegin_usingCDict(LZ4F_cctx_s* cctx, void* dstBuffer, ulong dstCapacity, LZ4F_CDict_s* cdict, LZ4F_preferences_t* prefsPtr);
+        public static extern nuint LZ4F_compressBegin_usingCDict(LZ4F_cctx_s* cctx, void* dstBuffer, nuint dstCapacity, LZ4F_CDict_s* cdict, LZ4F_preferences_t* prefsPtr);
 
         /// <summary>LZ4F_decompress_usingDict() :  Same as LZ4F_decompress(), using a predefined dictionary.  Dictionary is used \"in place\", without any preprocessing.  It must remain accessible throughout the entire frame decoding.</summary>
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_decompress_usingDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ulong LZ4F_decompress_usingDict(LZ4F_dctx_s* dctxPtr, void* dstBuffer, ulong* dstSizePtr, void* srcBuffer, ulong* srcSizePtr, void* dict, ulong dictSize, LZ4F_decompressOptions_t* decompressOptionsPtr);
+        public static extern nuint LZ4F_decompress_usingDict(LZ4F_dctx_s* dctxPtr, void* dstBuffer, nuint* dstSizePtr, void* srcBuffer, nuint* srcSizePtr, void* dict, nuint dictSize, LZ4F_decompressOptions_t* decompressOptionsPtr);
 
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_createCompressionContext_advanced", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern LZ4F_cctx_s* LZ4F_createCompressionContext_advanced(LZ4F_CustomMem customMem, uint version);
@@ -402,7 +402,7 @@ namespace NativeCompressions.Lz4
         public static extern LZ4F_dctx_s* LZ4F_createDecompressionContext_advanced(LZ4F_CustomMem customMem, uint version);
 
         [DllImport(__DllName, EntryPoint = "nativecompressions_LZ4F_createCDict_advanced", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern LZ4F_CDict_s* LZ4F_createCDict_advanced(LZ4F_CustomMem customMem, void* dictBuffer, ulong dictSize);
+        public static extern LZ4F_CDict_s* LZ4F_createCDict_advanced(LZ4F_CustomMem customMem, void* dictBuffer, nuint dictSize);
 
 
     }
@@ -432,8 +432,8 @@ namespace NativeCompressions.Lz4
     {
         public byte* externalDict;
         public byte* prefixEnd;
-        public ulong extDictSize;
-        public ulong prefixSize;
+        public nuint extDictSize;
+        public nuint prefixSize;
     }
 
     [StructLayout(LayoutKind.Explicit)]
@@ -512,8 +512,8 @@ namespace NativeCompressions.Lz4
     [StructLayout(LayoutKind.Sequential)]
     public unsafe partial struct LZ4F_CustomMem
     {
-        public delegate* unmanaged[Cdecl]<void*, ulong, void*> customAlloc;
-        public delegate* unmanaged[Cdecl]<void*, ulong, void*> customCalloc;
+        public delegate* unmanaged[Cdecl]<void*, nuint, void*> customAlloc;
+        public delegate* unmanaged[Cdecl]<void*, nuint, void*> customCalloc;
         public delegate* unmanaged[Cdecl]<void*, void*, void> customFree;
         public void* opaqueState;
     }
@@ -540,11 +540,11 @@ namespace NativeCompressions.Lz4
         public uint version;
         public uint cStage;
         public LZ4F_CDict_s* cdict;
-        public ulong maxBlockSize;
-        public ulong maxBufferSize;
+        public nuint maxBlockSize;
+        public nuint maxBufferSize;
         public byte* tmpBuff;
         public byte* tmpIn;
-        public ulong tmpInSize;
+        public nuint tmpInSize;
         public ulong totalInSize;
         public XXH32_state_s xxh;
         public void* lz4CtxPtr;
@@ -570,17 +570,17 @@ namespace NativeCompressions.Lz4
         public uint version;
         public int dStage;
         public ulong frameRemainingSize;
-        public ulong maxBlockSize;
-        public ulong maxBufferSize;
+        public nuint maxBlockSize;
+        public nuint maxBufferSize;
         public byte* tmpIn;
-        public ulong tmpInSize;
-        public ulong tmpInTarget;
+        public nuint tmpInSize;
+        public nuint tmpInTarget;
         public byte* tmpOutBuffer;
         public byte* dict;
-        public ulong dictSize;
+        public nuint dictSize;
         public byte* tmpOut;
-        public ulong tmpOutSize;
-        public ulong tmpOutStart;
+        public nuint tmpOutSize;
+        public nuint tmpOutStart;
         public XXH32_state_s xxh;
         public XXH32_state_s blockChecksum;
         public int skipChecksum;
