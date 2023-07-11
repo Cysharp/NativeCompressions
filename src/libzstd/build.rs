@@ -37,10 +37,11 @@ fn compile_zstd() {
     config.define("ZSTD_MULTITHREAD_SUPPORT_DEFAULT", "OFF");
     config.define("ZSTD_BUILD_PROGRAMS", "OFF");
     config.define("ZSTD_BUILD_CONTRIB", "OFF");
+    // config.define("ZSTD_BUILD_STATIC", "ON");
     let dst = config.build();
 
     println!("dst display: {}", dst.display());
 
-    println!("cargo:rustc-link-search=native={}\\lib", dst.display());
-    println!("cargo:rustc-link-lib=static=zstd_static");
+    println!("cargo:rustc-link-search={}/lib", dst.display());
+    println!("cargo:rustc-link-lib=static=zstd");
 }
