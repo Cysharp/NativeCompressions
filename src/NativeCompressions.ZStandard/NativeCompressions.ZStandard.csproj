@@ -10,12 +10,12 @@
 
 
 	<!-- for debug perpose, if exists in debug, copy it -->
-	<ItemGroup Condition="'$(Configuration)' == 'Debug' and Exists('../target/debug/zstd.dll')">
-		<None Include="../target/debug/zstd.dll">
+	<ItemGroup Condition="'$(Configuration)' == 'Debug' and Exists('../../target/debug/zstd.dll')">
+		<None Include="../../target/debug/zstd.dll">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 			<Link>libzstd.dll</Link>
 		</None>
-		<None Include="../target/debug/zstd.pdb">
+		<None Include="../../target/debug/zstd.pdb">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 			<Link>libzstd.pdb</Link>
 		</None>

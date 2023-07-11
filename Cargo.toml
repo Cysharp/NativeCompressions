@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "src/liblz4",
+    "src/libzstd",
+]

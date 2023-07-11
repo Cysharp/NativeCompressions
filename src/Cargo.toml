@@ -1,5 +1,0 @@
-[workspace]
-members = [
-    "liblz4",
-    "libzstd",
-]
