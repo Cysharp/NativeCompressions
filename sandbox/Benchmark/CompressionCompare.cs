@@ -124,6 +124,46 @@ public class CompressionCompare
         return bytesWritten;
     }
 
+
+    [Benchmark]
+    public unsafe int GZip_Fastest()
+    {
+        using (var destStream = new MemoryStream(dest))
+        using (var gzipStream = new GZipStream(destStream, CompressionLevel.Fastest, leaveOpen: true))
+        {
+            gzipStream.Write(src);
+            gzipStream.Flush();
+            gzipStream.Dispose();
+            return (int)destStream.Position;
+        }
+    }
+
+    [Benchmark]
+    public unsafe int GZip_Optimal()
+    {
+        using (var destStream = new MemoryStream(dest))
+        using (var gzipStream = new GZipStream(destStream, CompressionLevel.Optimal, leaveOpen: true))
+        {
+            gzipStream.Write(src);
+            gzipStream.Flush();
+            gzipStream.Dispose();
+            return (int)destStream.Position;
+        }
+    }
+
+    [Benchmark]
+    public unsafe int GZip_SmallestSize()
+    {
+        using (var destStream = new MemoryStream(dest))
+        using (var gzipStream = new GZipStream(destStream, CompressionLevel.SmallestSize, leaveOpen: true))
+        {
+            gzipStream.Write(src);
+            gzipStream.Flush();
+            gzipStream.Dispose();
+            return (int)destStream.Position;
+        }
+    }
+
     internal static partial class BrotliUtils
     {
         public const int WindowBits_Min = 10;
