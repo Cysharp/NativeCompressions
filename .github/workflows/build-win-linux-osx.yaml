@@ -3,7 +3,7 @@ name: Build-Win-Linux-OSX
 on: workflow_dispatch
 
 jobs:
-  win-x64:
+  win-x64-lz4:
     runs-on: windows-2019
     timeout-minutes: 30
     defaults:
@@ -15,8 +15,21 @@ jobs:
           submodules: 'true'
       - run: rustup target add x86_64-pc-windows-msvc
       - run: cargo build --target x86_64-pc-windows-msvc --release
-
-  linux-x64:
+      
+  win-x64-zstd:
+    runs-on: windows-2019
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ./src/libzstd
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+      - run: rustup target add x86_64-pc-windows-msvc
+      - run: cargo build --target x86_64-pc-windows-msvc --release
+      
+  linux-x64-lz4:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -29,7 +42,20 @@ jobs:
       - run: rustup target add x86_64-unknown-linux-gnu
       - run: cargo build --target x86_64-unknown-linux-gnu --release
 
-  linux-arm64:
+  linux-x64-zstd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ./src/libzstd
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+      - run: rustup target add x86_64-unknown-linux-gnu
+      - run: cargo build --target x86_64-unknown-linux-gnu --release
+      
+  linux-arm64-lz4:
     runs-on: ubuntu-latest
     container: ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge
     timeout-minutes: 30
@@ -46,8 +72,26 @@ jobs:
         with:
           target: aarch64-unknown-linux-gnu
       - run: cargo build --target aarch64-unknown-linux-gnu --release
-
-  osx-x64:
+      
+  linux-arm64-zstd:
+    runs-on: ubuntu-latest
+    container: ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge
+    timeout-minutes: 30
+    env:
+      TARGET_CXX: g++
+    defaults:
+      run:
+        working-directory: ./src/libzstd
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          target: aarch64-unknown-linux-gnu
+      - run: cargo build --target aarch64-unknown-linux-gnu --release
+      
+  osx-x64-lz4:
     runs-on: macos-latest
     timeout-minutes: 30
     defaults:
@@ -60,12 +104,38 @@ jobs:
       - run: rustup target add x86_64-apple-darwin
       - run: cargo build --target x86_64-apple-darwin --release
 
-  osx-arm64:
+  osx-x64-zstd:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ./src/libzstd
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+      - run: rustup target add x86_64-apple-darwin
+      - run: cargo build --target x86_64-apple-darwin --release
+      
+  osx-arm64-lz4:
     runs-on: macos-latest
     timeout-minutes: 30
     defaults:
       run:
         working-directory: ./src/liblz4
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+      - run: rustup target add aarch64-apple-darwin
+      - run: cargo build --target aarch64-apple-darwin --release
+      
+  osx-arm64-zstd:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ./src/libzstd
     steps:
       - uses: actions/checkout@v3
         with:
