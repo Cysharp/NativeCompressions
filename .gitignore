@@ -125,3 +125,7 @@ _tmp
 
 /target
 /Cargo.lock
+
+# include target
+!src/NativeCompressions.Lz4/runtimes/**
+!src/NativeCompressions.ZStandard/runtimes/**

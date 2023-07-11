@@ -8,6 +8,11 @@
 		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
 	</PropertyGroup>
 
+	<ItemGroup>
+		<None Include="runtimes\win-x64\native\libzstd.dll">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
 
 	<!-- for debug perpose, if exists in debug, copy it -->
 	<ItemGroup Condition="'$(Configuration)' == 'Debug' and Exists('../../target/debug/zstd.dll')">

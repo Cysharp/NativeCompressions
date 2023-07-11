@@ -1,4 +1,5 @@
 ﻿using NativeCompressions.ZStandard;
+using System.IO.Compression;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
@@ -16,6 +17,17 @@ unsafe
     var version = new string(p);
     Console.WriteLine("ZSTD: " + version);
 }
+
+
+// Struct/BrotliEncoder
+// BrotliEncoder
+
+
+// BrotliEncoder.GetMaxCompressedLength
+
+// BrotliEncoder.TryCompress
+// BrotliDecoder.TryDecompress()
+
 
 //Console.WriteLine(ZStandard.Version);
 

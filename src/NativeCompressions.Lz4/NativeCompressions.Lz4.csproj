@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net6.0</TargetFramework>
@@ -8,7 +8,12 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 
-
+	<ItemGroup>
+		<None Include="runtimes\win-x64\native\liblz4.dll">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+	
 	<!-- for debug perpose, if exists in debug, copy it -->
 	<ItemGroup Condition="'$(Configuration)' == 'Debug' and Exists('../../target/debug/lz4.dll')">
 		<None Include="../../target/debug/lz4.dll">
