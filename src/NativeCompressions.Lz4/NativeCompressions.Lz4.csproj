@@ -12,6 +12,18 @@
 		<None Include="runtimes\win-x64\native\liblz4.dll">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
+		<None Include="runtimes\linux-arm64\native\liblz4.so">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Include="runtimes\linux-x64\native\liblz4.so">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Include="runtimes\osx-arm64\native\liblz4.dylib">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Include="runtimes\osx-x64\native\liblz4.dylib">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
 	</ItemGroup>
 	
 	<!-- for debug perpose, if exists in debug, copy it -->
