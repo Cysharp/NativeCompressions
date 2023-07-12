@@ -41,6 +41,6 @@ fn compile_zstd() {
 
     println!("dst display: {}", dst.display());
 
-    println!("cargo:rustc-link-search=native={}\\lib", dst.display());
-    println!("cargo:rustc-link-lib=static=zstd_static");
+    println!("cargo:rustc-link-search={}/lib", dst.display());
+    println!("cargo:rustc-link-lib=static=zstd");
 }
