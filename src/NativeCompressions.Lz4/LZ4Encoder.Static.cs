@@ -10,6 +10,7 @@ namespace NativeCompressions.Lz4
     public partial struct LZ4Encoder
     {
         static string? version;
+        static uint? versionNumber;
 
         public static string Version
         {
@@ -24,6 +25,21 @@ namespace NativeCompressions.Lz4
                     }
                 }
                 return version;
+            }
+        }
+
+        public static uint VersionNumber
+        {
+            get
+            {
+                if (versionNumber == null)
+                {
+                    unsafe
+                    {
+                        versionNumber = (uint)LZ4_versionNumber();
+                    }
+                }
+                return versionNumber.Value;
             }
         }
 
