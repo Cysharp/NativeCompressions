@@ -1,4 +1,5 @@
 use std::{error::Error};
+use std::env::consts::OS;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // TODO:bindgen, zdict.h
@@ -41,6 +42,11 @@ fn compile_zstd() {
 
     println!("dst display: {}", dst.display());
 
-    println!("cargo:rustc-link-search={}/lib", dst.display());
-    println!("cargo:rustc-link-lib=static=zstd");
+    if std::env::consts::OS == "windows" {
+        println!("cargo:rustc-link-search=native={}/lib", dst.display());
+        println!("cargo:rustc-link-lib=static=zstd_static");
+    } else {
+        println!("cargo:rustc-link-search={}/lib", dst.display());
+        println!("cargo:rustc-link-lib=static=zstd");
+    }
 }
