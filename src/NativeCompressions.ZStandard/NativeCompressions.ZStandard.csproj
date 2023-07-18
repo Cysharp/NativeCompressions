@@ -8,6 +8,23 @@
 		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
 	</PropertyGroup>
 
+	<ItemGroup>
+		<None Include="runtimes\win-x64\native\libzstd.dll">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Include="runtimes\linux-arm64\native\libzstd.so">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Include="runtimes\linux-x64\native\libzstd.so">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Include="runtimes\osx-arm64\native\libzstd.dylib">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Include="runtimes\osx-x64\native\libzstd.dylib">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
 
 	<!-- for debug perpose, if exists in debug, copy it -->
 	<ItemGroup Condition="'$(Configuration)' == 'Debug' and Exists('../../target/debug/zstd.dll')">
