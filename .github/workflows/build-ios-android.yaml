@@ -1,11 +1,6 @@
 name: Build-iOS-Android
 
-# on: workflow_dispatch
-# for testing
-on:
-  push:
-    branches:
-      - feature/zstd-ios-android-build
+on: workflow_dispatch
 
 jobs:
   liblz4-ios-x64:
