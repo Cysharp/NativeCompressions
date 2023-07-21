@@ -78,15 +78,16 @@ jobs:
   libzstd-android-arm64:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      RUST_BACKTRACE: 1
+
     defaults:
       run:
         working-directory: ./src/libzstd
+    env:
+      ANDROID_API_LEVEL: 21
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: 'true'
       - run: rustup target add aarch64-linux-android
-      # - run: cargo install cargo-ndk
-      - run: cargo build --target aarch64-linux-android --release
+      - run: cargo install cargo-ndk
+      - run: cargo ndk --platform ${{ env.ANDROID_API_LEVEL }} --target arm64-v8a --bindgen build --release
