@@ -12,6 +12,9 @@ namespace NativeCompressions.Lz4
         static string? version;
         static uint? versionNumber;
 
+        static bool initFrameVersion;
+        static uint frameVersion;
+
         public static string Version
         {
             get
@@ -43,8 +46,28 @@ namespace NativeCompressions.Lz4
             }
         }
 
+        public static uint FrameVersion
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                if (!initFrameVersion)
+                {
+                    SetFrameversion();
+                }
+
+                return frameVersion;
+
+                static void SetFrameversion()
+                {
+                    frameVersion = LZ4F_getVersion();
+                    initFrameVersion = true;
+                }
+            }
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int GetMaxCompressedLength(int inputSize)
+        public static int GetMaxBlockCompressedLength(int inputSize)
         {
             // C# inlined for performance reason.
 
@@ -60,7 +83,7 @@ namespace NativeCompressions.Lz4
         /// </summary>
         public static byte[] Compress(ReadOnlySpan<byte> source)
         {
-            var destSize = GetMaxCompressedLength(source.Length);
+            var destSize = GetMaxBlockCompressedLength(source.Length);
 
             if (destSize < 512)
             {
@@ -122,7 +145,7 @@ namespace NativeCompressions.Lz4
         /// <param name="acceleration">1 is the same as regular compress, Max is 65537.</param>
         public static byte[] CompressWithAcceleration(ReadOnlySpan<byte> source, int acceleration)
         {
-            var destSize = GetMaxCompressedLength(source.Length);
+            var destSize = GetMaxBlockCompressedLength(source.Length);
 
             if (destSize < 512)
             {
@@ -186,7 +209,7 @@ namespace NativeCompressions.Lz4
         /// </summary>
         public static byte[] CompressHC(ReadOnlySpan<byte> source, LZ4HCCompressionLevel compressionLevel)
         {
-            var destSize = GetMaxCompressedLength(source.Length);
+            var destSize = GetMaxBlockCompressedLength(source.Length);
 
             if (destSize < 512)
             {
@@ -293,13 +316,149 @@ namespace NativeCompressions.Lz4
             }
         }
 
-        // Stream API?
+        // Frame Format
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetMaxFrameCompressedLength(int inputSize)
+        {
+            unsafe
+            {
+                return (int)LZ4F_compressBound((uint)inputSize, null);
+            }
+        }
+
+
+        public static byte[] CompressFrame(ReadOnlySpan<byte> source)
+        {
+            var destSize = GetMaxFrameCompressedLength(source.Length);
+
+            if (destSize < 512)
+            {
+                Span<byte> dest = stackalloc byte[destSize];
+                if (!TryCompressFrame(source, dest, out var bytesWritten))
+                {
+                    Throw();
+                }
+                return dest.FastToArray(bytesWritten);
+            }
+            else
+            {
+                var dest = ArrayPool<byte>.Shared.Rent(destSize);
+                try
+                {
+                    if (!TryCompressFrame(source, dest, out var bytesWritten))
+                    {
+                        Throw();
+                    }
+                    return dest.FastToArray(bytesWritten);
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(dest);
+                }
+            }
+        }
+
+        public static bool TryCompressFrame(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten)
+        {
+            unsafe
+            {
+                fixed (void* src = &MemoryMarshal.GetReference(source))
+                fixed (void* dest = &MemoryMarshal.GetReference(destination))
+                {
+                    //var prefs = new LZ4F_preferences_t
+                    //{
+                    //    frameInfo = new LZ4F_frameInfo_t
+                    //    {
+                    //        contentSize = (ulong)source.Length
+                    //    },
+                    //};
+
+                    var sizeOrCode = LZ4F_compressFrame(dest, (nuint)destination.Length, src, (nuint)source.Length, null);
+
+                    if (LZ4F_isError(sizeOrCode) != 0)
+                    {
+                        var error = GetErrorName(sizeOrCode);
+                        throw new Exception(error); // TODO: throw;
+                    }
+
+                    bytesWritten = (int)sizeOrCode;
+                    return true;
+                }
+            }
+        }
+
+        public static unsafe bool TryDecompressFrame(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten)
+        {
+            LZ4F_dctx_s* context = default;
+
+            // TODO: check code
+            var code = LZ4F_createDecompressionContext(&context, FrameVersion);
+            
+            try
+            {
+                fixed (byte* src = &MemoryMarshal.GetReference(source))
+                fixed (byte* dest = &MemoryMarshal.GetReference(destination))
+                {
+                    var srcLen = (nuint)source.Length;
+                    var destLen = (nuint)destination.Length;
+
+                    //var headerSize = LZ4F_headerSize(src, (nuint)source.Length);
+
+                    ////LZ4F_frameInfo_t
+
+                    //LZ4F_frameInfo_t frameInfo = default;
+                    //var frameSize = LZ4F_getFrameInfo(context, &frameInfo, src, &srcLen);
+
+                    //// TODO: ???
+                    //// frameInfo.contentSize
+                    //var destSize = frameInfo.contentSize;
+
+                    ////var src2 = src + headerSize;
+                    ////srcLen = srcLen - headerSize;
+
+                    //var src2 = src + frameSize;
+                    //srcLen = srcLen - frameSize;
+                    
+                    //// new LZ4F_decompressOptions_t { skipChecksums
+
+                    var sizeOrCode = LZ4F_decompress(context, dest, &destLen, src, &srcLen, null);
+
+
+                    
+
+
+                    if (LZ4F_isError(sizeOrCode) != 0)
+                    {
+                        var error = GetErrorName(sizeOrCode);
+                        throw new Exception(error); // TODO: throw;
+                    }
+
+                    bytesWritten = (int)sizeOrCode;
+                    return true;
+                }
+
+
+
+            }
+            finally
+            {
+                // TODO: check code
+                LZ4F_freeDecompressionContext(context);
+            }
+        }
 
         [DoesNotReturn]
         static void Throw()
         {
             // TODO:
             throw new Exception();
+        }
+
+        static unsafe string GetErrorName(nuint code)
+        {
+            var name = (sbyte*)LZ4F_getErrorName(code);
+            return new string(name);
         }
     }
 }

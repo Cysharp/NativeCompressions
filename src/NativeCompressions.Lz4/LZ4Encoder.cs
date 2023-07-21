@@ -16,18 +16,43 @@ namespace NativeCompressions.Lz4
     public unsafe partial struct LZ4Encoder : IDisposable
     {
         bool disposed;
+
         LZ4F_cctx_s* context;
 
         public LZ4Encoder()
         {
             // @cctxPtr MUST be != NULL.  If @return != zero, context creation failed
+            LZ4F_cctx_s* ptr = default;
+            var code = LZ4F_createCompressionContext(&ptr, FrameVersion);
+            if (code != 0)
+            {
+                Throw();
+            }
 
-            var ctx = new LZ4F_cctx_s();
-            var ptr = &ctx;
-            var ptrptr = &ptr;
-            var foo = LZ4F_createCompressionContext(ptrptr, VersionNumber);
-            context = *ptrptr;
+            this.context = ptr;
         }
+
+        public void Compress(ReadOnlySpan<byte> source, Span<byte> destination)
+        {
+
+            // Begin
+
+            // LZ4F_compressBegin()
+
+            // Update->Update->Update
+
+            // End?
+
+
+        }
+
+        public void Flush()
+        {
+
+        }
+
+
+
         // TODO: trydecompress???
         //public int Compress(ReadOnlySpan<byte> source, Span<byte> destination, int acceleration = 1)
         //{

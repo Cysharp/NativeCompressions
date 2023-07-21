@@ -18,7 +18,7 @@ public class Lz4Simple
         var jsonString = JsonSerializer.Serialize(target);
         src = Encoding.UTF8.GetBytes(jsonString);
 
-        var maxSize = NativeCompressions.Lz4.LZ4Encoder.GetMaxCompressedLength(src.Length);
+        var maxSize = NativeCompressions.Lz4.LZ4Encoder.GetMaxBlockCompressedLength(src.Length);
         dest = new byte[maxSize];
     }
 

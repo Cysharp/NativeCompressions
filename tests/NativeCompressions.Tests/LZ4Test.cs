@@ -55,6 +55,18 @@ public class LZ4Test
         str.Should().Be("あいうえおあいうえおあいうえお");
     }
 
+
+    [Fact]
+    public void SimpleFrameCompress()
+    {
+        var bin = LZ4Encoder.CompressFrame(EncodeUtf8("あいうえおあいうえおあいうえお"));
+        var dest = new byte[1024];
+        LZ4Encoder.TryDecompressFrame(bin, dest, out var bytesWritten);
+
+        var str = Encoding.UTF8.GetString(dest.AsSpan(0, bytesWritten));
+        str.Should().Be("あいうえおあいうえおあいうえお");
+    }
+
     byte[] EncodeUtf8(string value)
     {
         return Encoding.UTF8.GetBytes(value);

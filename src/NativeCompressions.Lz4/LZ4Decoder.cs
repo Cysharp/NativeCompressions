@@ -27,6 +27,10 @@ namespace NativeCompressions.Lz4
             fixed (byte* src = &MemoryMarshal.GetReference(source))
             fixed (byte* dest = &MemoryMarshal.GetReference(destination))
             {
+
+                
+
+
                 var ret = LZ4_decompress_safe_usingDict(src, dest, source.Length, destination.Length, dict, MaxDictSize);
 
                 // var ret = LZ4_decompress_safe_continue(stream, src, dest, source.Length, destination.Length);
