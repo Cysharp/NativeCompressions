@@ -1,4 +1,6 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.IO.Compression;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using static NativeCompressions.Lz4.Lz4NativeMethods;
 
 namespace NativeCompressions.Lz4
@@ -15,65 +17,131 @@ namespace NativeCompressions.Lz4
     // https://htmlpreview.github.io/?https://github.com/lz4/lz4/blob/master/doc/lz4frame_manual.html
     public unsafe partial struct LZ4Encoder : IDisposable
     {
-        bool disposed;
-
         LZ4F_cctx_s* context;
+        bool writeBegin;
+        bool writeEnd;
+        bool disposed;
 
         public LZ4Encoder()
         {
-            // @cctxPtr MUST be != NULL.  If @return != zero, context creation failed
             LZ4F_cctx_s* ptr = default;
             var code = LZ4F_createCompressionContext(&ptr, FrameVersion);
-            if (code != 0)
-            {
-                Throw();
-            }
-
+            HandleError(code);
             this.context = ptr;
         }
 
-        public void Compress(ReadOnlySpan<byte> source, Span<byte> destination)
+        public unsafe int WriteHeader(Span<byte> destination, LZ4FrameHeader? header = null)
         {
+            ValidateDisposed();
+            ValidateFlushed();
 
-            // Begin
+            fixed (byte* dest = &MemoryMarshal.GetReference(destination))
+            {
+                LZ4F_preferences_t preference;
+                LZ4F_preferences_t* preferencePtr = null;
+                if (header != null)
+                {
+                    var v = header.Value;
+                    preference = Unsafe.As<LZ4FrameHeader, LZ4F_preferences_t>(ref v);
+                    preferencePtr = &preference;
+                }
 
-            // LZ4F_compressBegin()
+                var writtenOrErrorCode = LZ4F_compressBegin(context, dest, (nuint)destination.Length, preferencePtr);
+                HandleError(writtenOrErrorCode);
 
-            // Update->Update->Update
-
-            // End?
-
-
+                writeBegin = true;
+                return (int)writtenOrErrorCode;
+            }
         }
 
-        public void Flush()
+        // TODO:
+        // public OperationStatus Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock);
+        public unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination)
         {
+            ValidateDisposed();
+            ValidateFlushed();
 
+            fixed (byte* src = &MemoryMarshal.GetReference(source))
+            fixed (byte* destPtr = &MemoryMarshal.GetReference(destination))
+            {
+                var dest = destPtr;
+                int writtenSize = 0;
+                // Write header
+                if (!writeBegin)
+                {
+                    var code = LZ4F_compressBegin(context, dest, (nuint)destination.Length, null);
+                    HandleError(code);
+                    writeBegin = true;
+
+                    writtenSize += (int)code;
+                    dest += writtenSize;
+                    destination = destination.Slice(writtenSize);
+                }
+
+                // Write block
+
+                // bytes consumed, bytes written
+
+                var writtenOrErrorCode = LZ4F_compressUpdate(context, dest, (nuint)destination.Length, src, (nuint)source.Length, null);
+                // TODO: handle zero.
+                HandleError(writtenOrErrorCode);
+
+                writtenSize += (int)writtenOrErrorCode;
+                return writtenSize;
+            }
+        }
+
+        public unsafe int Flush(Span<byte> destination)
+        {
+            ValidateDisposed();
+            ValidateFlushed();
+
+            fixed (byte* destPtr = &MemoryMarshal.GetReference(destination))
+            {
+                var dest = destPtr;
+                int writtenSize = 0;
+
+                if (!writeBegin)
+                {
+                    var code = LZ4F_compressBegin(context, dest, (nuint)destination.Length, null);
+                    HandleError(code);
+                    writeBegin = true;
+
+                    writtenSize += (int)code;
+                    dest += writtenSize;
+                    destination = destination.Slice(writtenSize);
+                }
+
+                // @return : nb of bytes written into dstBuffer, necessarily >= 4 (endMark), or an error code if it fails (which can be tested using LZ4F_isError())
+                var writtenOrErrorCode = LZ4F_compressEnd(context, dest, (nuint)destination.Length, null);
+                HandleError(writtenOrErrorCode);
+                writtenSize += (int)writtenOrErrorCode;
+
+                writeEnd = true;
+                return writtenSize;
+            }
+        }
+
+        void HandleError(nuint code)
+        {
+            if (LZ4F_isError(code) != 0)
+            {
+                // -11 == "ERROR_dstMaxSize_tooSmall"
+                var error = GetErrorName(code);
+                throw new InvalidOperationException(error);
+            }
+        }
+
+        void ValidateFlushed()
+        {
+            if (writeEnd)
+            {
+                throw new InvalidOperationException("Frame is already flushed.");
+            }
         }
 
 
-
-        // TODO: trydecompress???
-        //public int Compress(ReadOnlySpan<byte> source, Span<byte> destination, int acceleration = 1)
-        //{
-        //    ThrowIfDisposed();
-
-        //    LZ4F_preferences_t
-
-        //    fixed (byte* src = &MemoryMarshal.GetReference(source))
-        //    fixed (byte* dest = &MemoryMarshal.GetReference(destination))
-        //    {
-        //        var size = LZ4_compress_fast_continue(stream, src, dest, source.Length, destination.Length, acceleration: acceleration);
-        //        if (size < 0)
-        //        {
-        //            Throw();
-        //        }
-
-        //        return size;
-        //    }
-        //}
-
-        void ThrowIfDisposed()
+        void ValidateDisposed()
         {
             if (disposed)
             {
@@ -83,13 +151,12 @@ namespace NativeCompressions.Lz4
 
         public void Dispose()
         {
-            //if (stream != null)
-            //{
-            //    LZ4_freeStream(stream);
-            //    NativeMemory.Free(dict);
-            //    stream = null;
-            //    disposed = true;
-            //}
+            if (context != null)
+            {
+                var code = LZ4F_freeCompressionContext(context);
+                HandleError(code);
+                disposed = true;
+            }
         }
     }
 }
