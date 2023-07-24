@@ -12,6 +12,9 @@ namespace NativeCompressions.Lz4
         static string? version;
         static uint? versionNumber;
 
+        static bool initFrameVersion;
+        static uint frameVersion;
+
         public static string Version
         {
             get
@@ -43,8 +46,28 @@ namespace NativeCompressions.Lz4
             }
         }
 
+        public static uint FrameVersion
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                if (!initFrameVersion)
+                {
+                    SetFrameversion();
+                }
+
+                return frameVersion;
+
+                static void SetFrameversion()
+                {
+                    frameVersion = LZ4F_getVersion();
+                    initFrameVersion = true;
+                }
+            }
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int GetMaxCompressedLength(int inputSize)
+        public static int GetMaxBlockCompressedLength(int inputSize)
         {
             // C# inlined for performance reason.
 
@@ -60,7 +83,7 @@ namespace NativeCompressions.Lz4
         /// </summary>
         public static byte[] Compress(ReadOnlySpan<byte> source)
         {
-            var destSize = GetMaxCompressedLength(source.Length);
+            var destSize = GetMaxBlockCompressedLength(source.Length);
 
             if (destSize < 512)
             {
@@ -122,7 +145,7 @@ namespace NativeCompressions.Lz4
         /// <param name="acceleration">1 is the same as regular compress, Max is 65537.</param>
         public static byte[] CompressWithAcceleration(ReadOnlySpan<byte> source, int acceleration)
         {
-            var destSize = GetMaxCompressedLength(source.Length);
+            var destSize = GetMaxBlockCompressedLength(source.Length);
 
             if (destSize < 512)
             {
@@ -186,7 +209,7 @@ namespace NativeCompressions.Lz4
         /// </summary>
         public static byte[] CompressHC(ReadOnlySpan<byte> source, LZ4HCCompressionLevel compressionLevel)
         {
-            var destSize = GetMaxCompressedLength(source.Length);
+            var destSize = GetMaxBlockCompressedLength(source.Length);
 
             if (destSize < 512)
             {
@@ -237,69 +260,102 @@ namespace NativeCompressions.Lz4
             }
         }
 
-        // Decompress
+        // Frame Format
 
-        /// <summary>
-        /// <para>Invoke LZ4_decompress_safe().</para>
-        /// If destination buffer is not large enough, decoding will stop and output an error code (negative value).
-        /// If the source stream is detected malformed, the function will stop decoding and return a negative result. 
-        /// <para>Note 1 : This function is protected against malicious data packets : it will never writes outside 'dst' buffer, nor read outside 'source' buffer,
-        /// even if the compressed block is maliciously modified to order the decoder to do these actions.
-        /// In such case, the decoder stops immediately, and considers the compressed block malformed.</para>
-        /// <para>Note 2 : compressedSize and dstCapacity must be provided to the function, the compressed block does not contain them.          The implementation is free to send / store / derive this information in whichever way is most beneficial.          If there is a need for a different format which bundles together both compressed data and its metadata, consider looking at lz4frame.h instead.</para>
-        /// </summary>
-        public static unsafe bool TryDecompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetMaxFrameCompressedLength(int inputSize, bool withHeader = true)
         {
-            fixed (byte* src = &MemoryMarshal.GetReference(source))
-            fixed (byte* dest = &MemoryMarshal.GetReference(destination))
+            // TODO: LZ4F_preferences_t
+            // TODO: require footer?
+            unsafe
             {
-                bytesWritten = LZ4_decompress_safe(src, dest, source.Length, destination.Length);
-                if (bytesWritten < 0)
+                if (withHeader)
                 {
-                    return false;
+                    return (int)LZ4F_compressBound((uint)inputSize, null) + MaxFrameHeaderLength;
                 }
-                return true;
+                else
+                {
+                    return (int)LZ4F_compressBound((uint)inputSize, null);
+                }
             }
         }
 
-        /// <summary>
-        /// <para>Invoke LZ4_decompress_safe_partial()</para>
-        /// Decompress an LZ4 compressed block into destination buffer.
-        /// Up to 'targetOutputSize' bytes will be decoded. 
-        /// The function stops decoding on reaching this objective.
-        /// This can be useful to boost performance  whenever only the beginning of a block is required.
-        /// If source stream is detected malformed, function returns a negative result.
-        /// <para>Note 1 : @return can be &lt; targetOutputSize, if compressed block contains less data.</para>
-        /// <para>Note 2 : targetOutputSize must be &lt;= dstCapacity</para>
-        /// <para>Note 3 : this function effectively stops decoding on reaching targetOutputSize, so dstCapacity is kind of redundant. This is because in older versions of this function, decoding operation would still write complete sequences.
-        /// Therefore, there was no guarantee that it would stop writing at exactly targetOutputSize, it could write more bytes, though only up to dstCapacity.
-        /// Some \"margin\" used to be required for this operation to work properly.
-        /// Thankfully, this is no longer necessary.
-        /// The function nonetheless keeps the same signature, in an effort to preserve API compatibility.</para>
-        /// <para>Note 4 : If srcSize is the exact size of the block, then targetOutputSize can be any value, including larger than the block's decompressed size. The function will, at most, generate block's decompressed size.</para>
-        /// <para>Note 5 : If srcSize is _larger_ than block's compressed size, then targetOutputSize **MUST** be &lt;= block's decompressed size. Otherwise, *silent corruption will occur*.</para>
-        /// </summary>
-        public static unsafe bool TryDecompressPartial(ReadOnlySpan<byte> source, Span<byte> destination, int targetOutputSize, out int bytesWritten)
+        // #define LZ4F_HEADER_SIZE_MIN  7   /* LZ4 Frame header size can vary, depending on selected parameters */
+        // #define LZ4F_HEADER_SIZE_MAX 19
+        public const int MaxFrameHeaderLength = 19;
+
+        public static byte[] CompressFrame(ReadOnlySpan<byte> source)
         {
-            fixed (byte* src = &MemoryMarshal.GetReference(source))
-            fixed (byte* dest = &MemoryMarshal.GetReference(destination))
+            var destSize = GetMaxFrameCompressedLength(source.Length);
+
+            if (destSize < 512)
             {
-                bytesWritten = LZ4_decompress_safe_partial(src, dest, source.Length, targetOutputSize, destination.Length);
-                if (bytesWritten < 0)
+                Span<byte> dest = stackalloc byte[destSize];
+                if (!TryCompressFrame(source, dest, out var bytesWritten))
                 {
-                    return false;
+                    Throw();
                 }
-                return true;
+                return dest.FastToArray(bytesWritten);
+            }
+            else
+            {
+                var dest = ArrayPool<byte>.Shared.Rent(destSize);
+                try
+                {
+                    if (!TryCompressFrame(source, dest, out var bytesWritten))
+                    {
+                        Throw();
+                    }
+                    return dest.FastToArray(bytesWritten);
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(dest);
+                }
             }
         }
 
-        // Stream API?
+        public static bool TryCompressFrame(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten)
+        {
+            unsafe
+            {
+                fixed (void* src = &MemoryMarshal.GetReference(source))
+                fixed (void* dest = &MemoryMarshal.GetReference(destination))
+                {
+                    //var prefs = new LZ4F_preferences_t
+                    //{
+                    //    frameInfo = new LZ4F_frameInfo_t
+                    //    {
+                    //        contentSize = (ulong)source.Length
+                    //    },
+                    //};
+
+                    var sizeOrCode = LZ4F_compressFrame(dest, (nuint)destination.Length, src, (nuint)source.Length, null);
+
+                    if (LZ4F_isError(sizeOrCode) != 0)
+                    {
+                        var error = GetErrorName(sizeOrCode);
+                        throw new Exception(error); // TODO: throw;
+                    }
+
+                    bytesWritten = (int)sizeOrCode;
+                    return true;
+                }
+            }
+        }
+
 
         [DoesNotReturn]
         static void Throw()
         {
             // TODO:
             throw new Exception();
+        }
+
+        static unsafe string GetErrorName(nuint code)
+        {
+            var name = (sbyte*)LZ4F_getErrorName(code);
+            return new string(name);
         }
     }
 }
