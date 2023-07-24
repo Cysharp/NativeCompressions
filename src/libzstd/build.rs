@@ -33,11 +33,13 @@ fn compile_zstd() {
     let mut config = cmake::Config::new("../../zstd/build/cmake/");
     config.always_configure(true);
     // config.profile(profile);
-    
+
     config.define("ZSTD_LEGACY_SUPPORT", "OFF");
     config.define("ZSTD_MULTITHREAD_SUPPORT_DEFAULT", "OFF");
     config.define("ZSTD_BUILD_PROGRAMS", "OFF");
     config.define("ZSTD_BUILD_CONTRIB", "OFF");
+    config.define("ZSTD_BUILD_SHARED", "OFF"); // DO NOT BUILD SHARED. Including SHARED build cause macos .dylib rpath problem.
+
     let dst = config.build();
 
     println!("dst display: {}", dst.display());
