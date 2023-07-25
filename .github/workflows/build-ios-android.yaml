@@ -18,7 +18,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: ios-x86_64-lz4
-          path: ./target/x86_64-apple-ios/release/liblz4.dylib
+          path: ./target/x86_64-apple-ios/release/liblz4.a
 
   liblz4-ios-arm64:
     runs-on: macos-latest
@@ -35,7 +35,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: ios-arm64-lz4
-          path: ./target/aarch64-apple-ios/release/liblz4.dylib
+          path: ./target/aarch64-apple-ios/release/liblz4.a
 
   liblz4-android-arm64:
     runs-on: ubuntu-latest
@@ -71,7 +71,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: ios-arm64-zstd
-          path: ./target/aarch64-apple-ios/release/libzstd.dylib
+          path: ./target/aarch64-apple-ios/release/libzstd.a
 
   libzstd-android-arm64:
     runs-on: ubuntu-latest
