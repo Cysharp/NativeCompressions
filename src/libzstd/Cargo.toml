@@ -5,7 +5,7 @@ edition = "2021"
 
 [lib]
 name = "zstd"
-crate-type = ["cdylib"]
+crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
 csbindgen = "1.7.3"
