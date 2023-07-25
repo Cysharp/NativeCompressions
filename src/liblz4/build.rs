@@ -1,9 +1,8 @@
 use std::error::Error;
-use std::env::consts::OS;
 
 fn main() -> Result<(), Box<dyn Error>> {
-   let size_t_is_usize = match OS {
-     "android" => false,
+   let size_t_is_usize = match std::env::var("TARGET").unwrap().as_str() {
+     "aarch64-linux-android" => false,
      _ => true,
    };
 
