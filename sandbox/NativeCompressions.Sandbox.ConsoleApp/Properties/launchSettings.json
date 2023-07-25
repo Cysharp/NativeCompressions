@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "NativeCompressions.Sandbox.ConsoleApp": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    }
+  }
+}
