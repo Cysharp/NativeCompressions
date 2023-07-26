@@ -1,5 +1,4 @@
-﻿using System.IO.Compression;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using static NativeCompressions.Lz4.Lz4NativeMethods;
 
@@ -18,19 +17,30 @@ namespace NativeCompressions.Lz4
     public unsafe partial struct LZ4Encoder : IDisposable
     {
         LZ4F_cctx_s* context;
+        LZ4FrameHeader? header;
         bool writeBegin;
         bool writeEnd;
         bool disposed;
 
+        public LZ4FrameHeader? FrameHader => header;
+        public bool IsWrittenHeader => writeBegin;
+        public bool IsWrittenFooter => writeEnd;
+
         public LZ4Encoder()
+            : this(null)
+        {
+        }
+
+        public LZ4Encoder(LZ4FrameHeader? header)
         {
             LZ4F_cctx_s* ptr = default;
             var code = LZ4F_createCompressionContext(&ptr, FrameVersion);
             HandleError(code);
             this.context = ptr;
+            this.header = header;
         }
 
-        public unsafe int WriteHeader(Span<byte> destination, LZ4FrameHeader? header = null)
+        public unsafe int WriteHeader(Span<byte> destination)
         {
             ValidateDisposed();
             ValidateFlushed();
@@ -61,29 +71,26 @@ namespace NativeCompressions.Lz4
             ValidateDisposed();
             ValidateFlushed();
 
-            fixed (byte* src = &MemoryMarshal.GetReference(source))
-            fixed (byte* destPtr = &MemoryMarshal.GetReference(destination))
-            {
-                var dest = destPtr;
-                int writtenSize = 0;
-                // Write header
-                if (!writeBegin)
-                {
-                    var code = LZ4F_compressBegin(context, dest, (nuint)destination.Length, null);
-                    HandleError(code);
-                    writeBegin = true;
+            var writtenSize = 0;
 
-                    writtenSize += (int)code;
-                    dest += writtenSize;
-                    destination = destination.Slice(writtenSize);
-                }
+            // Write header
+            if (!writeBegin)
+            {
+                var size = WriteHeader(destination);
+                destination = destination.Slice(size);
+                writtenSize += size;
+            }
+
+            fixed (byte* src = &MemoryMarshal.GetReference(source))
+            fixed (byte* dest = &MemoryMarshal.GetReference(destination))
+            {
+
+
+
+
 
                 // Write block
-
-                // bytes consumed, bytes written
-
                 var writtenOrErrorCode = LZ4F_compressUpdate(context, dest, (nuint)destination.Length, src, (nuint)source.Length, null);
-                // TODO: handle zero.
                 HandleError(writtenOrErrorCode);
 
                 writtenSize += (int)writtenOrErrorCode;
@@ -96,22 +103,18 @@ namespace NativeCompressions.Lz4
             ValidateDisposed();
             ValidateFlushed();
 
-            fixed (byte* destPtr = &MemoryMarshal.GetReference(destination))
+            var writtenSize = 0;
+
+            // Write header
+            if (!writeBegin)
             {
-                var dest = destPtr;
-                int writtenSize = 0;
+                var size = WriteHeader(destination);
+                destination = destination.Slice(size);
+                writtenSize += size;
+            }
 
-                if (!writeBegin)
-                {
-                    var code = LZ4F_compressBegin(context, dest, (nuint)destination.Length, null);
-                    HandleError(code);
-                    writeBegin = true;
-
-                    writtenSize += (int)code;
-                    dest += writtenSize;
-                    destination = destination.Slice(writtenSize);
-                }
-
+            fixed (byte* dest = &MemoryMarshal.GetReference(destination))
+            {
                 // @return : nb of bytes written into dstBuffer, necessarily >= 4 (endMark), or an error code if it fails (which can be tested using LZ4F_isError())
                 var writtenOrErrorCode = LZ4F_compressEnd(context, dest, (nuint)destination.Length, null);
                 HandleError(writtenOrErrorCode);
@@ -126,7 +129,6 @@ namespace NativeCompressions.Lz4
         {
             if (LZ4F_isError(code) != 0)
             {
-                // -11 == "ERROR_dstMaxSize_tooSmall"
                 var error = GetErrorName(code);
                 throw new InvalidOperationException(error);
             }

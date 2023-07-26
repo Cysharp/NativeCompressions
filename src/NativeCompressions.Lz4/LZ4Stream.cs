@@ -1,4 +1,6 @@
-﻿using System.IO.Compression;
+﻿using System;
+using System.Buffers;
+using System.IO.Compression;
 
 namespace NativeCompressions.Lz4
 {
@@ -10,22 +12,35 @@ namespace NativeCompressions.Lz4
 
         Stream stream;
         bool leaveOpen;
+        byte[] buffer;
+        int bufferWritten;
 
         public LZ4Stream(Stream stream, CompressionMode mode, bool leaveOpen = false)
         {
             this.mode = mode;
             this.stream = stream;
             this.leaveOpen = leaveOpen;
+            this.buffer = ArrayPool<byte>.Shared.Rent(LZ4Encoder.GetMaxFrameCompressedLength(0, withHeader: false));
 
             if (mode == CompressionMode.Decompress)
             {
-                this.encoder = new LZ4Encoder();
+                this.decoder = new LZ4Decoder();
             }
             else
             {
-                this.decoder = new LZ4Decoder();
+                this.encoder = new LZ4Encoder(null);
             }
         }
+
+        public LZ4Stream(Stream stream, LZ4FrameHeader compressFrameHeader, bool leaveOpen = false)
+        {
+            this.mode = CompressionMode.Compress;
+            this.stream = stream;
+            this.leaveOpen = leaveOpen;
+            this.buffer = ArrayPool<byte>.Shared.Rent(LZ4Encoder.GetMaxFrameCompressedLength(0, withHeader: false, frameHeader: compressFrameHeader));
+            this.encoder = new LZ4Encoder(compressFrameHeader);
+        }
+
         public override bool CanRead => mode == CompressionMode.Decompress && stream != null && stream.CanRead;
         public override bool CanWrite => mode == CompressionMode.Compress && stream != null && stream.CanWrite;
         public override bool CanSeek => false;
@@ -38,48 +53,111 @@ namespace NativeCompressions.Lz4
 
         public override void Write(byte[] buffer, int offset, int count)
         {
-            throw new NotImplementedException();
+            WriteCore(new ReadOnlySpan<byte>(buffer, offset, count));
         }
 
         public override void Write(ReadOnlySpan<byte> buffer)
         {
-            throw new NotImplementedException();
+            WriteCore(buffer);
         }
 
         public override void WriteByte(byte value)
         {
-            throw new NotImplementedException();
+            Span<byte> span = stackalloc byte[value];
+            WriteCore(span);
         }
 
         public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback? callback, object? state)
         {
-            return base.BeginWrite(buffer, offset, count, callback, state);
+            throw new NotImplementedException();
+            // return TaskToAsyncResult.Begin(WriteAsync(buffer, offset, count, CancellationToken.None), callback, state);
         }
 
         public override void EndWrite(IAsyncResult asyncResult)
         {
+            // TODO:
             base.EndWrite(asyncResult);
         }
 
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            return base.WriteAsync(buffer, offset, count, cancellationToken);
+            return WriteAsync(new ReadOnlyMemory<byte>(buffer, offset, count), cancellationToken).AsTask();
         }
-
 
         public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            return base.WriteAsync(buffer, cancellationToken);
+            return cancellationToken.IsCancellationRequested
+                ? ValueTask.FromCanceled(cancellationToken)
+                : WriteCoreAsync(buffer, cancellationToken);
         }
 
         public override void Flush()
         {
-            throw new NotImplementedException();
+            if (mode != CompressionMode.Compress)
+            {
+                throw new InvalidOperationException("Write operation must be Compress mode.");
+            }
+
+            if (!encoder.IsWrittenHeader)
+            {
+                WriteHeaderCore();
+            }
+
+            if (bufferWritten != 0)
+            {
+                stream.Write(buffer, 0, bufferWritten);
+                bufferWritten = 0;
+            }
+
+            var written = encoder.Flush(buffer);
+            stream.Write(buffer, 0, written);
         }
 
         public override Task FlushAsync(CancellationToken cancellationToken)
         {
+            // TODO:
             return base.FlushAsync(cancellationToken);
+        }
+
+        void WriteHeaderCore()
+        {
+            Span<byte> headDest = stackalloc byte[LZ4Encoder.MaxFrameHeaderLength];
+            var written = encoder.WriteHeader(headDest);
+
+            stream.Write(headDest.Slice(0, written));
+        }
+
+        void WriteCore(ReadOnlySpan<byte> source)
+        {
+            if (mode != CompressionMode.Compress)
+            {
+                throw new InvalidOperationException("Write operation must be Compress mode.");
+            }
+
+            if (!encoder.IsWrittenHeader)
+            {
+                WriteHeaderCore();
+            }
+
+            var dest = buffer.AsSpan(bufferWritten);
+            var maxDest = LZ4Encoder.GetMaxFrameCompressedLength(source.Length, withHeader: false, frameHeader: encoder.FrameHader);
+
+            if (dest.Length < maxDest)
+            {
+                stream.Write(buffer, 0, bufferWritten);
+
+                bufferWritten = 0;
+                RentBuffer(maxDest);
+                dest = buffer.AsSpan();
+            }
+
+            var size = encoder.Compress(source, dest);
+            bufferWritten += size;
+        }
+
+        ValueTask WriteCoreAsync(ReadOnlyMemory<byte> source, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
         }
 
         #endregion
@@ -123,17 +201,25 @@ namespace NativeCompressions.Lz4
 
         #endregion
 
+        void RentBuffer(int rentSize)
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+            buffer = ArrayPool<byte>.Shared.Rent(rentSize);
+        }
+
         protected override void Dispose(bool disposing)
         {
             try
             {
-                if (mode == CompressionMode.Decompress)
+                if (mode == CompressionMode.Compress)
                 {
-                    // TODO: Flush?
+                    if (!encoder.IsWrittenFooter)
+                    {
+                        Flush();
+                    }
                 }
-                else
-                {
-                }
+
+                ArrayPool<byte>.Shared.Return(buffer);
             }
             finally
             {
@@ -145,6 +231,7 @@ namespace NativeCompressions.Lz4
 
         public override ValueTask DisposeAsync()
         {
+            // TODO:
             return base.DisposeAsync();
         }
     }

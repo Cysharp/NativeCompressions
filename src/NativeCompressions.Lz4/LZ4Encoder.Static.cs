@@ -263,19 +263,26 @@ namespace NativeCompressions.Lz4
         // Frame Format
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int GetMaxFrameCompressedLength(int inputSize, bool withHeader = true)
+        public static int GetMaxFrameCompressedLength(int inputSize, bool withHeader = true, LZ4FrameHeader? frameHeader = null)
         {
-            // TODO: LZ4F_preferences_t
-            // TODO: require footer?
             unsafe
             {
+                LZ4F_preferences_t preference;
+                LZ4F_preferences_t* preferencePtr = null;
+                if (frameHeader != null)
+                {
+                    var v = frameHeader.Value;
+                    preference = Unsafe.As<LZ4FrameHeader, LZ4F_preferences_t>(ref v);
+                    preferencePtr = &preference;
+                }
+
                 if (withHeader)
                 {
-                    return (int)LZ4F_compressBound((uint)inputSize, null) + MaxFrameHeaderLength;
+                    return (int)LZ4F_compressBound((uint)inputSize, preferencePtr) + MaxFrameHeaderLength;
                 }
                 else
                 {
-                    return (int)LZ4F_compressBound((uint)inputSize, null);
+                    return (int)LZ4F_compressBound((uint)inputSize, preferencePtr);
                 }
             }
         }
