@@ -20,6 +20,7 @@ jobs:
         with:
           name: win-x64-lz4
           path: ./target/x86_64-pc-windows-msvc/release/lz4.dll
+          retention-days: 1
 
   win-x64-zstd:
     runs-on: windows-2019
@@ -37,6 +38,7 @@ jobs:
         with:
           name: win-x64-zstd
           path: ./target/x86_64-pc-windows-msvc/release/zstd.dll
+          retention-days: 1
 
   # linux-x64
   linux-x64-lz4:
@@ -55,6 +57,7 @@ jobs:
         with:
           name: linux-x64-lz4
           path: ./target/x86_64-unknown-linux-gnu/release/liblz4.so
+          retention-days: 1
 
   linux-x64-zstd:
     runs-on: ubuntu-latest
@@ -71,7 +74,8 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: linux-x64-zstd
-          path: ./target/x86_64-unknown-linux-gnu/release/libzstd.so     
+          path: ./target/x86_64-unknown-linux-gnu/release/libzstd.so
+          retention-days: 1
 
   # linux-arm64
   linux-arm64-lz4:
@@ -95,6 +99,7 @@ jobs:
         with:
           name: linux-arm64-lz4
           path: ./target/aarch64-unknown-linux-gnu/release/liblz4.so
+          retention-days: 1
 
   linux-arm64-zstd:
     runs-on: ubuntu-latest
@@ -116,7 +121,8 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: linux-arm64-zstd
-          path: ./target/aarch64-unknown-linux-gnu/release/libzstd.so     
+          path: ./target/aarch64-unknown-linux-gnu/release/libzstd.so
+          retention-days: 1
 
   # osx-x64
   osx-x64-lz4:
@@ -135,6 +141,7 @@ jobs:
         with:
           name: osx-x64-lz4
           path: ./target/x86_64-apple-darwin/release/liblz4.dylib
+          retention-days: 1
 
   osx-x64-zstd:
     runs-on: macos-latest
@@ -152,6 +159,7 @@ jobs:
         with:
           name: osx-x64-zstd
           path: ./target/x86_64-apple-darwin/release/libzstd.dylib
+          retention-days: 1
 
   # osx-arm64
   osx-arm64-lz4:
@@ -170,6 +178,7 @@ jobs:
         with:
           name: osx-arm64-lz4
           path: ./target/aarch64-apple-darwin/release/liblz4.dylib
+          retention-days: 1
 
   osx-arm64-zstd:
     runs-on: macos-latest
@@ -187,7 +196,8 @@ jobs:
         with:
           name: osx-arm64-zstd
           path: ./target/aarch64-apple-darwin/release/libzstd.dylib
-    
+          retention-days: 1
+
   # download binary and git push
 
   git-push:
@@ -208,7 +218,7 @@ jobs:
           name: win-x64-zstd
           path: src/NativeCompressions.ZStandard/runtimes/win-x64/native/
       - run: mv ./src/NativeCompressions.ZStandard/runtimes/win-x64/native/zstd.dll ./src/NativeCompressions.ZStandard/runtimes/win-x64/native/libzstd.dll
-    
+
       # linux-x64
       - uses: actions/download-artifact@v3
         with:
