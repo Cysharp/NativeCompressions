@@ -11,9 +11,11 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 
-
 var ms = new MemoryStream();
 var lz4 = new LZ4Stream(ms, CompressionMode.Compress);
+
+
+
 
 
 var bytes1 = Encoding.UTF8.GetBytes("あいうえおかきくけこ");
@@ -30,6 +32,10 @@ lz4.Flush();
 
 var xss = ms.ToArray();
 
+
+var lz42 = new LZ4Stream(ms, CompressionMode.Decompress);
+
+//lz42.Read(
 
 
 Console.WriteLine(xss.Length);
