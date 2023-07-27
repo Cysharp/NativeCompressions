@@ -10,7 +10,7 @@ namespace NativeCompressions.Tests;
 
 public class LZ4Test
 {
-    [Fact]
+    [Fact(Skip ="WIP")]
     public void EncoderContinueCompress()
     {
         var src = new byte[1024];

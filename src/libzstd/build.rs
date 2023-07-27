@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::{error::Error};
 use std::env::consts::OS;
 
@@ -33,11 +34,36 @@ fn compile_zstd() {
     let mut config = cmake::Config::new("../../zstd/build/cmake/");
     config.always_configure(true);
     // config.profile(profile);
-    
+
     config.define("ZSTD_LEGACY_SUPPORT", "OFF");
     config.define("ZSTD_MULTITHREAD_SUPPORT_DEFAULT", "OFF");
     config.define("ZSTD_BUILD_PROGRAMS", "OFF");
     config.define("ZSTD_BUILD_CONTRIB", "OFF");
+    config.define("ZSTD_BUILD_SHARED", "OFF"); // DO NOT BUILD SHARED. Including SHARED build cause macos .dylib rpath problem.
+
+    let target = std::env::var("TARGET").unwrap();
+    if target == "aarch64-linux-android" {
+        let arch = match std::env::consts::OS {
+            "macos" => "darwin-x86_64",
+            "linux" => "linux-x86_64",
+            "windows" => "windows-x86_64",
+            _ => panic!("not support"),
+        };
+
+        let ndk_home =  PathBuf::from(std::env::var_os("ANDROID_NDK_HOME").unwrap());
+        let api_version = match std::env::var_os("ANDROID_API_LEVEL") {
+            Some(var) => format!("{:?}", var),
+            None => "21".to_string(),
+        };
+        let sysroot = ndk_home.join(sysroot_suffix(arch));
+        let nkd_lib = ndk_home.join(ndk_lib_suffix(arch, target.as_str(), api_version.as_str()));
+
+        config.define("CMAKE_ANDROID_NDK", ndk_home.as_path());
+        config.define("CMAKE_SYSROOT", sysroot.as_path());
+        config.define("CMAKE_C_FLAGS", format!("-L {:?}", nkd_lib));
+        config.define("CMAKE_CXX_FLAGS", format!("-L {:?}", nkd_lib));
+    }
+
     let dst = config.build();
 
     println!("dst display: {}", dst.display());
@@ -49,4 +75,16 @@ fn compile_zstd() {
         println!("cargo:rustc-link-search={}/lib", dst.display());
         println!("cargo:rustc-link-lib=static=zstd");
     }
+}
+
+fn sysroot_suffix(arch: &str) -> PathBuf {
+    ["toolchains", "llvm", "prebuilt", arch, "sysroot"]
+        .iter()
+        .collect()
+}
+
+fn ndk_lib_suffix(arch: &str, target: &str, api_version: &str) -> PathBuf {
+    ["toolchains", "llvm", "prebuilt", arch, "usr", "lib", target, api_version]
+        .iter()
+        .collect()
 }
