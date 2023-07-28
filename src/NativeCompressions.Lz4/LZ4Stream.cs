@@ -1,8 +1,7 @@
-﻿using System;
-using System.Buffers;
+﻿using System.Buffers;
 using System.Diagnostics;
 using System.IO.Compression;
-using System.Text;
+using System.Runtime.InteropServices;
 
 namespace NativeCompressions.Lz4
 {
@@ -14,8 +13,9 @@ namespace NativeCompressions.Lz4
 
         Stream stream;
         bool leaveOpen;
-        byte[] buffer;
-        int bufferCount;
+        byte[] buffer; // both compress and decompress
+        int bufferOffset;
+        int bufferCount; // use only decompress
 
         public LZ4Stream(Stream stream, CompressionMode mode, bool leaveOpen = false)
         {
@@ -23,6 +23,8 @@ namespace NativeCompressions.Lz4
             this.stream = stream;
             this.leaveOpen = leaveOpen;
             this.buffer = ArrayPool<byte>.Shared.Rent(LZ4Encoder.GetMaxFrameCompressedLength(0, withHeader: false));
+            this.bufferOffset = 0;
+            this.bufferCount = 0;
 
             if (mode == CompressionMode.Decompress)
             {
@@ -40,6 +42,8 @@ namespace NativeCompressions.Lz4
             this.stream = stream;
             this.leaveOpen = leaveOpen;
             this.buffer = ArrayPool<byte>.Shared.Rent(LZ4Encoder.GetMaxFrameCompressedLength(0, withHeader: false, frameHeader: compressFrameHeader));
+            this.bufferOffset = 0;
+            this.bufferCount = 0;
             this.encoder = new LZ4Encoder(compressFrameHeader);
         }
 
@@ -103,10 +107,10 @@ namespace NativeCompressions.Lz4
                 WriteHeaderCore();
             }
 
-            if (bufferCount != 0)
+            if (bufferOffset != 0)
             {
-                stream.Write(buffer, 0, bufferCount);
-                bufferCount = 0;
+                stream.Write(buffer, 0, bufferOffset);
+                bufferOffset = 0;
             }
 
             var written = encoder.Flush(buffer);
@@ -125,10 +129,10 @@ namespace NativeCompressions.Lz4
                 await WriteHeaderCoreAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            if (bufferCount != 0)
+            if (bufferOffset != 0)
             {
-                await stream.WriteAsync(buffer.AsMemory(0, bufferCount), cancellationToken).ConfigureAwait(false);
-                bufferCount = 0;
+                await stream.WriteAsync(buffer.AsMemory(0, bufferOffset), cancellationToken).ConfigureAwait(false);
+                bufferOffset = 0;
             }
 
             var written = encoder.Flush(buffer);
@@ -168,20 +172,20 @@ namespace NativeCompressions.Lz4
                 WriteHeaderCore();
             }
 
-            var dest = buffer.AsSpan(bufferCount);
+            var dest = buffer.AsSpan(bufferOffset);
             var maxDest = LZ4Encoder.GetMaxFrameCompressedLength(source.Length, withHeader: false, frameHeader: encoder.FrameHader);
 
             if (dest.Length < maxDest)
             {
-                stream.Write(buffer, 0, bufferCount);
+                stream.Write(buffer, 0, bufferOffset);
 
-                bufferCount = 0;
+                bufferOffset = 0;
                 RentBuffer(maxDest);
                 dest = buffer.AsSpan();
             }
 
             var size = encoder.Compress(source, dest);
-            bufferCount += size;
+            bufferOffset += size;
         }
 
         async ValueTask WriteCoreAsync(ReadOnlyMemory<byte> source, CancellationToken cancellationToken)
@@ -196,20 +200,20 @@ namespace NativeCompressions.Lz4
                 WriteHeaderCore();
             }
 
-            var dest = buffer.AsMemory(bufferCount);
+            var dest = buffer.AsMemory(bufferOffset);
             var maxDest = LZ4Encoder.GetMaxFrameCompressedLength(source.Length, withHeader: false, frameHeader: encoder.FrameHader);
 
             if (dest.Length < maxDest)
             {
-                await stream.WriteAsync(buffer.AsMemory(0, bufferCount), cancellationToken).ConfigureAwait(false);
+                await stream.WriteAsync(buffer.AsMemory(0, bufferOffset), cancellationToken).ConfigureAwait(false);
 
-                bufferCount = 0;
+                bufferOffset = 0;
                 RentBuffer(maxDest);
                 dest = buffer.AsMemory();
             }
 
             var size = encoder.Compress(source.Span, dest.Span);
-            bufferCount += size;
+            bufferOffset += size;
         }
 
         #endregion
@@ -218,57 +222,122 @@ namespace NativeCompressions.Lz4
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            throw new NotImplementedException();
+            return ReadCore(new Span<byte>(buffer, offset, count));
         }
 
         public override int ReadByte()
         {
-            return base.ReadByte();
+            byte b = default;
+            var read = Read(MemoryMarshal.CreateSpan(ref b, 1));
+            return read != 0 ? b : -1;
         }
 
         public override int Read(Span<byte> buffer)
         {
-            return base.Read(buffer);
+            return ReadCore(buffer);
         }
 
         public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback? callback, object? state)
         {
-            return base.BeginRead(buffer, offset, count, callback, state);
+            return TaskToAsyncResultShim.Begin(ReadAsync(buffer, offset, count, CancellationToken.None), callback, state);
         }
 
         public override int EndRead(IAsyncResult asyncResult)
         {
-            return base.EndRead(asyncResult);
+            return TaskToAsyncResultShim.End<int>(asyncResult);
         }
 
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            return base.ReadAsync(buffer, offset, count, cancellationToken);
+            return ReadCoreAsync(new Memory<byte>(buffer, offset, count), cancellationToken).AsTask();
         }
 
         public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            return base.ReadAsync(buffer, cancellationToken);
+            return ReadCoreAsync(buffer, cancellationToken);
         }
 
         int ReadCore(Span<byte> dest)
         {
-            // TODO: full consume???
-
-            if (bufferCount == 0)
+            int bytesWritten;
+            while (!TryDecompress(dest, out bytesWritten))
             {
-                bufferCount = stream.Read(buffer.AsSpan());
+                int bytesRead = stream.Read(buffer, bufferCount, buffer.Length - bufferCount);
+                if (bytesRead <= 0)
+                {
+                    break;
+                }
+
+                bufferCount += bytesRead;
+
+                if (bufferCount > buffer.Length)
+                {
+                    throw new InvalidDataException("Invalid data.");
+                }
             }
 
+            return bytesWritten;
+        }
 
-            var status = decoder.Decompress(buffer, dest, out var consumed, out var written);
+        async ValueTask<int> ReadCoreAsync(Memory<byte> dest, CancellationToken cancellationToken)
+        {
+            int bytesWritten;
+            while (!TryDecompress(dest.Span, out bytesWritten))
+            {
+                int bytesRead = await stream.ReadAsync(buffer.AsMemory(bufferCount, buffer.Length - bufferCount), cancellationToken).ConfigureAwait(false);
+                if (bytesRead <= 0)
+                {
+                    break;
+                }
 
-            bufferCount += consumed;
-            throw new NotImplementedException();
+                bufferCount += bytesRead;
+
+                if (bufferCount > buffer.Length)
+                {
+                    throw new InvalidDataException("Invalid data.");
+                }
+            }
+
+            return bytesWritten;
         }
 
 
+        bool TryDecompress(Span<byte> destination, out int bytesWritten)
+        {
+            OperationStatus lastResult = decoder.Decompress(new ReadOnlySpan<byte>(buffer, bufferOffset, bufferCount), destination, out int bytesConsumed, out bytesWritten);
+            if (lastResult == OperationStatus.InvalidData)
+            {
+                throw new InvalidOperationException("Decompress failed, Invalid data.");
+            }
 
+            if (bytesConsumed != 0)
+            {
+                bufferOffset += bytesConsumed;
+                bufferCount -= bytesConsumed;
+            }
+
+            if (bytesWritten != 0 || lastResult == OperationStatus.Done)
+            {
+                return true;
+            }
+
+            if (destination.IsEmpty)
+            {
+                if (bufferCount != 0)
+                {
+                    Debug.Assert(bytesWritten == 0);
+                    return true;
+                }
+            }
+
+            if (bufferCount != 0 && bufferOffset != 0)
+            {
+                new ReadOnlySpan<byte>(buffer, bufferOffset, bufferCount).CopyTo(buffer);
+            }
+            bufferOffset = 0;
+
+            return false;
+        }
 
 
         #endregion

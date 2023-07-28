@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 
+
 var ms = new MemoryStream();
 var lz4 = new LZ4Stream(ms, CompressionMode.Compress);
 
@@ -33,20 +34,25 @@ lz4.Flush();
 var xss = ms.ToArray();
 
 
+ms.Position = 0;
 var lz42 = new LZ4Stream(ms, CompressionMode.Decompress);
 
 //lz42.Read(
 
 
-Console.WriteLine(xss.Length);
+
+
+
+
+
 
 
 var dest = new byte[1024];
-if (!LZ4Decoder.TryDecompressFrame(xss, dest, out var written))
-{
-    Console.WriteLine("error");
-}
-else
-{
-    Console.WriteLine(Encoding.UTF8.GetString(dest, 0, written));
-}
+
+
+var written = lz42.Read(dest);
+ 
+
+
+
+Console.WriteLine(Encoding.UTF8.GetString(dest, 0, written));
