@@ -1,34 +1,52 @@
-﻿using K4os.Compression.LZ4.Streams;
+﻿//using K4os.Compression.LZ4.Streams;
 using NativeCompressions.Lz4;
 using NativeCompressions.ZStandard;
+using System;
 using System.Buffers;
 using System.Diagnostics;
+using System.IO;
 using System.IO.Compression;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 
-unsafe
+
+var ms = new MemoryStream();
+var lz4 = new LZ4Stream(ms, CompressionMode.Compress);
+
+
+
+
+
+var bytes1 = Encoding.UTF8.GetBytes("あいうえおかきくけこ");
+lz4.Write(bytes1);
+lz4.Write(bytes1);
+lz4.Write(bytes1);
+lz4.Write(bytes1);
+lz4.Write(bytes1);
+
+
+lz4.Flush();
+
+
+
+var xss = ms.ToArray();
+
+
+var lz42 = new LZ4Stream(ms, CompressionMode.Decompress);
+
+//lz42.Read(
+
+
+Console.WriteLine(xss.Length);
+
+
+var dest = new byte[1024];
+if (!LZ4Decoder.TryDecompressFrame(xss, dest, out var written))
 {
-
-
-    Console.WriteLine(LZ4Encoder.GetMaxFrameCompressedLength(0));
-
-    using var encoder = new LZ4Encoder();
-
-    var dest = new byte[3]; // dest too small
-    encoder.Compress(EncodeUtf8("あいうえおあいうえおあいうえお"), dest);
-
-
-
-
-
-
-
+    Console.WriteLine("error");
 }
-
-[DebuggerStepThrough]
-byte[] EncodeUtf8(string value)
+else
 {
-    return Encoding.UTF8.GetBytes(value);
+    Console.WriteLine(Encoding.UTF8.GetString(dest, 0, written));
 }
