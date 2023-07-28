@@ -99,7 +99,7 @@ public class LZ4Test
         var dest2 = new byte[foo];
         LZ4Decoder.TryDecompressFrame(bin, dest2, out var bytesWritten);
 
-        var str = Encoding.UTF8.GetString(dest.AsSpan(0, bytesWritten));
+        var str = Encoding.UTF8.GetString(dest2.AsSpan(0, bytesWritten));
         str.Should().Be("あいうえおあいうえおあいうえおかきくけこかきくけこかきくけこ");
     }
 
