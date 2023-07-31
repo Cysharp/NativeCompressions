@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "NativeCompressions.AspNetCoreCompressionProvider": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:50130;http://localhost:50131"
+    }
+  }
+}
