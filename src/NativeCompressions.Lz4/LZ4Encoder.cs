@@ -158,6 +158,7 @@ namespace NativeCompressions.Lz4
                 var code = LZ4F_freeCompressionContext(context);
                 HandleError(code);
                 disposed = true;
+                context = null;
             }
         }
     }
