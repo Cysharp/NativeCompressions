@@ -197,7 +197,7 @@ namespace NativeCompressions.Lz4
 
             if (!encoder.IsWrittenHeader)
             {
-                WriteHeaderCore();
+                await WriteHeaderCoreAsync(cancellationToken);
             }
 
             var dest = buffer.AsMemory(bufferOffset);

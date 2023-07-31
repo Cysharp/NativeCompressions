@@ -27,6 +27,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NativeCompressions.ZStandar
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NativeCompressions.Lz4.AspNetCoreCompressionProvider.Tests", "tests\NativeCompressions.Lz4.AspNetCoreCompressionProvider.Tests\NativeCompressions.Lz4.AspNetCoreCompressionProvider.Tests.csproj", "{060A312D-D89B-41BD-A468-DA4055BA5F48}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NativeCompressions.Sandbox.WebApi", "sandbox\NativeCompressions.Sandbox.WebApi\NativeCompressions.Sandbox.WebApi.csproj", "{B9DFF9F6-B6FE-4042-99DD-ACEFEC34038F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,10 @@ Global
 		{060A312D-D89B-41BD-A468-DA4055BA5F48}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{060A312D-D89B-41BD-A468-DA4055BA5F48}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{060A312D-D89B-41BD-A468-DA4055BA5F48}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B9DFF9F6-B6FE-4042-99DD-ACEFEC34038F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B9DFF9F6-B6FE-4042-99DD-ACEFEC34038F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B9DFF9F6-B6FE-4042-99DD-ACEFEC34038F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B9DFF9F6-B6FE-4042-99DD-ACEFEC34038F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -83,6 +89,7 @@ Global
 		{F0CD83D0-8043-4572-982A-2D0979C3ABAE} = {D2E583E9-79D4-48F1-8D3A-84DD7F64BB11}
 		{C737D57B-E5D1-4317-AE0C-3C7A24F245CF} = {A663EE20-8279-4671-914C-D45F68F24F58}
 		{060A312D-D89B-41BD-A468-DA4055BA5F48} = {A663EE20-8279-4671-914C-D45F68F24F58}
+		{B9DFF9F6-B6FE-4042-99DD-ACEFEC34038F} = {3E35D47E-89FF-4063-A322-4C4971817BF6}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {FE1051F2-C78B-44CC-B982-7F87759C8405}
