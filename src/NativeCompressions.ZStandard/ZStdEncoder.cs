@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
@@ -44,6 +45,16 @@ namespace NativeCompressions.ZStandard
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetMaxCompressedLength(int inputSize)
+        {
+            // C# inlined for performance reason.
+
+            // #define ZSTD_COMPRESSBOUND(srcSize)   ((srcSize) + ((srcSize)>>8) + (((srcSize) < (128<<10)) ? (((128<<10) - (srcSize)) >> 11) /* margin, from 64 to 0 */ : 0))
+            // /* this formula ensures that bound(A) + bound(B) <= bound(A+B) as long as A and B >= 128 KB */
+            return inputSize + ((inputSize) >> 8) + ((inputSize < (128 << 10)) ? (((128 << 10) - inputSize) >> 11) : 0);
+        }
+
         // TODO: compression level
         public static bool TryCompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten, int compressionLevel = 1)
         {
@@ -59,6 +70,7 @@ namespace NativeCompressions.ZStandard
                     var codeOrWritten = ZSTD_compress(dest, (nuint)destination.Length, src, (nuint)source.Length, compressionLevel);
                     if (IsError(codeOrWritten))
                     {
+                        // TODO: GetErrorName(codeOrWritten);
                         bytesWritten = 0;
                         return false;
                     }

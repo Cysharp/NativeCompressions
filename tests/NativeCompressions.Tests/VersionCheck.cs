@@ -3,7 +3,9 @@ using NativeCompressions.ZStandard;
 
 namespace NativeCompressions.Tests
 {
-    public unsafe class LibraryLoad
+    // Library loading and version check test.
+
+    public unsafe class VersionCheck
     {
         [Fact]
         public void LZ4Version()
