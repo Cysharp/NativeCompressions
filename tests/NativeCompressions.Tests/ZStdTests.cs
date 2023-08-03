@@ -5,12 +5,22 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace NativeCompressions.Tests;
 
 public class ZStdTests
 {
+    [Fact]
+    public void MaxCompressedLengthTest()
+    {
+        for (int i = 0; i < 10000; i++)
+        {
+            var cs = ZStdEncoder.GetMaxCompressedLength(i);
+            var original = (int)ZStdNativeMethods.ZSTD_compressBound((nuint)i);
+            cs.Should().Be(original);
+        }
+    }
+
     [Fact]
     public void SimpleCompress()
     {
