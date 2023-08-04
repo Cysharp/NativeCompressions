@@ -9,116 +9,74 @@ using static NativeCompressions.ZStandard.ZStdNativeMethods;
 
 namespace NativeCompressions.ZStandard
 {
+    // zstd manual: https://raw.githack.com/facebook/zstd/release/doc/zstd_manual.html
+
+    //typedef enum {
+    //    ZSTD_e_continue = 0, /* collect more data, encoder decides when to output compressed result, for optimal compression ratio */
+    //    ZSTD_e_flush = 1,    /* flush any data provided so far,
+    //                    * it creates (at least) one new block, that can be decoded immediately on reception;
+    //                    * frame will continue: any future data can still reference previously compressed data, improving compression.
+    //                    * note : multithreaded compression will block to flush as much output as possible. */
+    //    ZSTD_e_end = 2       /* flush any remaining data _and_ close current frame.
+    //                    * note that frame is only closed after compressed data is fully flushed (return value == 0).
+    //                    * After that point, any additional data starts a new frame.
+    //                    * note : each frame is independent (does not reference any content from previous frame).
+    //                    : note : multithreaded compression will block to flush as much output as possible. */
+    //} ZSTD_EndDirective;
+        
+
     public unsafe partial struct ZStdEncoder
     {
-        static string? version;
-        static uint? versionNumber;
-
-        public static string Version
+        public ZStdEncoder()
         {
-            get
-            {
-                if (version == null)
-                {
-                    unsafe
-                    {
-                        // null-terminated
-                        version = new string((sbyte*)ZSTD_versionString());
-                    }
-                }
-                return version;
-            }
+            //and ZSTD_freeCStream
+            var b = ZSTD_createCStream();
+
+            // ZSTD_CStreamInSize();
+            // ZSTD_compressStream2
+            //ZSTD_compressStream(
+        }
+    }
+
+    // using ZSTD_compressCCtx, ZSTD_freeCCtx is best for performance?
+    public unsafe class ZStdCompressionContext : IDisposable
+    {
+        private bool disposedValue;
+
+        public ZStdCompressionContext()
+        {
+
+            // using ZSTD_compressCCtx, ZSTD_freeCCtx is best for performance?
+            var a = ZSTD_createCCtx();
         }
 
-        public static uint VersionNumber
+        protected virtual void Dispose(bool disposing)
         {
-            get
+            if (!disposedValue)
             {
-                if (versionNumber == null)
+                if (disposing)
                 {
-                    unsafe
-                    {
-                        versionNumber = (uint)ZSTD_versionNumber();
-                    }
-                }
-                return versionNumber.Value;
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int GetMaxCompressedLength(int inputSize)
-        {
-            // C# inlined for performance reason.
-
-            // #define ZSTD_COMPRESSBOUND(srcSize)   ((srcSize) + ((srcSize)>>8) + (((srcSize) < (128<<10)) ? (((128<<10) - (srcSize)) >> 11) /* margin, from 64 to 0 */ : 0))
-            // /* this formula ensures that bound(A) + bound(B) <= bound(A+B) as long as A and B >= 128 KB */
-            return inputSize + ((inputSize) >> 8) + ((inputSize < (128 << 10)) ? (((128 << 10) - inputSize) >> 11) : 0);
-        }
-
-        // TODO: compression level
-        public static bool TryCompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten, int compressionLevel = 1)
-        {
-            unsafe
-            {
-                fixed (byte* src = &MemoryMarshal.GetReference(source))
-                fixed (byte* dest = &MemoryMarshal.GetReference(destination))
-                {
-                    // @return : compressed size written into `dst` (&lt;= `dstCapacity),
-                    // or an error code if it fails (which can be tested using ZSTD_isError()).
-
-                    // TODO:test destination too small???
-                    var codeOrWritten = ZSTD_compress(dest, (nuint)destination.Length, src, (nuint)source.Length, compressionLevel);
-                    if (IsError(codeOrWritten))
-                    {
-                        // TODO: GetErrorName(codeOrWritten);
-                        bytesWritten = 0;
-                        return false;
-                    }
-
-                    bytesWritten = (int)codeOrWritten;
-                    return true;
-                }
-            }
-        }
-
-        // TODO: move to decoder
-        public static unsafe bool TryDecompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten)
-        {
-            fixed (byte* src = &MemoryMarshal.GetReference(source))
-            fixed (byte* dest = &MemoryMarshal.GetReference(destination))
-            {
-                // @return : the number of bytes decompressed into `dst` (&lt;= `dstCapacity`),
-                // or an errorCode if it fails (which can be tested using ZSTD_isError()).
-                var codeOrWritten = ZSTD_decompress(dest, (nuint)destination.Length, src, (nuint)source.Length);
-                if (IsError(codeOrWritten))
-                {
-                    bytesWritten = 0;
-                    return false;
+                    // TODO: dispose managed state (managed objects)
                 }
 
-                bytesWritten = (int)codeOrWritten;
-                return true;
+                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
+                // TODO: set large fields to null
+                disposedValue = true;
             }
         }
 
-        static bool IsError(nuint code)
-        {
-            return ZSTD_isError(code) != 0;
-        }
+        // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
+        // ~ZStdCompressionContext()
+        // {
+        //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        //     Dispose(disposing: false);
+        // }
 
-        static unsafe string GetErrorName(nuint code)
+        public void Dispose()
         {
-            var name = (sbyte*)ZSTD_getErrorName(code);
-            return new string(name);
-        }
-
-        static void HandleError(nuint code)
-        {
-            if (ZSTD_isError(code) != 0)
-            {
-                var error = GetErrorName(code);
-                throw new InvalidOperationException(error);
-            }
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

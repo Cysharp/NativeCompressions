@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -28,7 +29,6 @@ public class ZStdTests
         var bin = EncodeUtf8(text);
         var dest = new byte[1024];
         ZStdEncoder.TryCompress(bin, dest, out var written).Should().BeTrue();
-
         var more = new byte[1024];
         ZStdEncoder.TryDecompress(dest.AsSpan(0, written), more, out var written2).Should().BeTrue();
 

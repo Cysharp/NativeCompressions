@@ -10,49 +10,52 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 
+var @default = ZStdNativeMethods.ZSTD_defaultCLevel();
+var max = ZStdNativeMethods.ZSTD_maxCLevel();
+var min = ZStdNativeMethods.ZSTD_minCLevel();
+Console.WriteLine((@default, max, min));
 
-
-var ms = new MemoryStream();
-var lz4 = new LZ4Stream(ms, CompressionMode.Compress);
-
-
-
-
-
-var bytes1 = Encoding.UTF8.GetBytes("あいうえおかきくけこ");
-lz4.Write(bytes1);
-lz4.Write(bytes1);
-lz4.Write(bytes1);
-lz4.Write(bytes1);
-lz4.Write(bytes1);
-
-
-lz4.Flush();
-
-
-
-var xss = ms.ToArray();
-
-
-ms.Position = 0;
-var lz42 = new LZ4Stream(ms, CompressionMode.Decompress);
-
-//lz42.Read(
+//var ms = new MemoryStream();
+//var lz4 = new LZ4Stream(ms, CompressionMode.Compress);
 
 
 
 
 
+//var bytes1 = Encoding.UTF8.GetBytes("あいうえおかきくけこ");
+//lz4.Write(bytes1);
+//lz4.Write(bytes1);
+//lz4.Write(bytes1);
+//lz4.Write(bytes1);
+//lz4.Write(bytes1);
+
+
+//lz4.Flush();
+
+
+
+//var xss = ms.ToArray();
+
+
+//ms.Position = 0;
+//var lz42 = new LZ4Stream(ms, CompressionMode.Decompress);
+
+////lz42.Read(
 
 
 
 
-var dest = new byte[1024];
-
-
-var written = lz42.Read(dest);
- 
 
 
 
-Console.WriteLine(Encoding.UTF8.GetString(dest, 0, written));
+
+
+//var dest = new byte[1024];
+
+
+//var written = lz42.Read(dest);
+
+
+
+
+//Console.WriteLine(Encoding.UTF8.GetString(dest, 0, written));
