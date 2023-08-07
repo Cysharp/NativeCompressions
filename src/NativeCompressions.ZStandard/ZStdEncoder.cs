@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -11,72 +12,127 @@ namespace NativeCompressions.ZStandard
 {
     // zstd manual: https://raw.githack.com/facebook/zstd/release/doc/zstd_manual.html
 
-    //typedef enum {
-    //    ZSTD_e_continue = 0, /* collect more data, encoder decides when to output compressed result, for optimal compression ratio */
-    //    ZSTD_e_flush = 1,    /* flush any data provided so far,
-    //                    * it creates (at least) one new block, that can be decoded immediately on reception;
-    //                    * frame will continue: any future data can still reference previously compressed data, improving compression.
-    //                    * note : multithreaded compression will block to flush as much output as possible. */
-    //    ZSTD_e_end = 2       /* flush any remaining data _and_ close current frame.
-    //                    * note that frame is only closed after compressed data is fully flushed (return value == 0).
-    //                    * After that point, any additional data starts a new frame.
-    //                    * note : each frame is independent (does not reference any content from previous frame).
-    //                    : note : multithreaded compression will block to flush as much output as possible. */
-    //} ZSTD_EndDirective;
-        
 
     public unsafe partial struct ZStdEncoder
     {
+        ZSTD_CCtx_s* stream;
+
         public ZStdEncoder()
         {
-            //and ZSTD_freeCStream
-            var b = ZSTD_createCStream();
-
-            // ZSTD_CStreamInSize();
-            // ZSTD_compressStream2
-            //ZSTD_compressStream(
-        }
-    }
-
-    // using ZSTD_compressCCtx, ZSTD_freeCCtx is best for performance?
-    public unsafe class ZStdCompressionContext : IDisposable
-    {
-        private bool disposedValue;
-
-        public ZStdCompressionContext()
-        {
-
-            // using ZSTD_compressCCtx, ZSTD_freeCCtx is best for performance?
-            var a = ZSTD_createCCtx();
+            this.stream = ZSTD_createCStream();
         }
 
-        protected virtual void Dispose(bool disposing)
+        public void SetCompressionLevel(int level)
         {
-            if (!disposedValue)
+            // ZSTD_c_compressionLevel = 100
+            SetParameter(100, level);
+        }
+
+        public void SetParameter(int param, int level)
+        {
+            var code = ZSTD_CCtx_setParameter(stream, param, level);
+            HandleError(code);
+        }
+
+        public OperationStatus Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
+        {
+
+            unsafe
             {
-                if (disposing)
-                {
-                    // TODO: dispose managed state (managed objects)
-                }
+                // TODO: consume all source bytes.
 
-                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
-                // TODO: set large fields to null
-                disposedValue = true;
+                fixed (byte* src = source)
+                fixed (byte* dest = destination)
+                {
+                    var inBuffer = new ZSTD_inBuffer_s
+                    {
+                        src = src,
+                        size = (nuint)source.Length,
+                        pos = 0
+                    };
+                    var outBuffer = new ZSTD_outBuffer_s
+                    {
+                        dst = dest,
+                        size = (nuint)destination.Length,
+                        pos = 0
+                    };
+
+                    var directive = isFinalBlock ? EndDirective.End : EndDirective.Continue;
+
+                    var nb = ZSTD_compressStream2(stream, &outBuffer, &inBuffer, directive);
+                    HandleError(nb);
+
+                    bytesConsumed = (int)inBuffer.pos;
+                    bytesWritten = (int)outBuffer.pos;
+
+                    return OperationStatus.Done;
+                }
             }
+
+            throw new NotImplementedException();
         }
 
-        // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
-        // ~ZStdCompressionContext()
-        // {
-        //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-        //     Dispose(disposing: false);
-        // }
-
-        public void Dispose()
+        public OperationStatus Flush(Span<byte> destination, out int bytesWritten)
         {
-            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
+            throw new NotImplementedException();
+        }
+
+        public OperationStatus Close(Span<byte> destination, out int bytesWritten)
+        {
+            unsafe
+            {
+                fixed (byte* src = Array.Empty<byte>())
+                fixed (byte* dest = destination)
+                {
+                    var inBuffer = new ZSTD_inBuffer_s
+                    {
+                        src = src,
+                        size = 0,
+                        pos = 0
+                    };
+                    var outBuffer = new ZSTD_outBuffer_s
+                    {
+                        dst = dest,
+                        size = (nuint)destination.Length,
+                        pos = 0
+                    };
+
+                    var directive = EndDirective.End;
+
+                    var nb = ZSTD_compressStream2(stream, &outBuffer, &inBuffer, directive);
+                    HandleError(nb);
+
+                    minimumBytesForFlush = (int)nb;
+                    bytesWritten = (int)outBuffer.pos;
+
+                    return OperationStatus.Done;
+                }
+            }
+
+            throw new NotImplementedException();
+        }
+
+        // TODO: Reset for reuse.
+
+        internal static class EndDirective
+        {
+            /// <summary>
+            /// collect more data, encoder decides when to output compressed result, for optimal compression ratio
+            /// </summary>
+            public const int Continue = 0;
+            /// <summary>
+            /// flush any data provided so far,
+            /// it creates (at least) one new block, that can be decoded immediately on reception;
+            /// frame will continue: any future data can still reference previously compressed data, improving compression.
+            /// </summary>
+            public const int Flush = 1;
+            /// <summary>
+            /// flush any remaining data _and_ close current frame.
+            /// note that frame is only closed after compressed data is fully flushed (return value == 0).
+            /// After that point, any additional data starts a new frame.
+            /// note : each frame is independent (does not reference any content from previous frame).
+            /// </summary>
+            public const int End = 2;
         }
     }
 }

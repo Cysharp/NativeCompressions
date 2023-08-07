@@ -9,20 +9,62 @@ using System.IO.Compression;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using ZstdNet;
 
-var @default = ZStdNativeMethods.ZSTD_defaultCLevel();
-var max = ZStdNativeMethods.ZSTD_maxCLevel();
-var min = ZStdNativeMethods.ZSTD_minCLevel();
-Console.WriteLine((@default, max, min));
+var bytes1 = Encoding.UTF8.GetBytes("あいうえおかきくけこ");
 
 //var ms = new MemoryStream();
-//var lz4 = new LZ4Stream(ms, CompressionMode.Compress);
+//var compressionStream = new ZstdNet.CompressionStream(ms);
+//compressionStream.Write(bytes1);
+//compressionStream.Flush();
+//compressionStream.Dispose();
 
 
 
+var enc = new ZStdEncoder();
 
 
-//var bytes1 = Encoding.UTF8.GetBytes("あいうえおかきくけこ");
+
+var dest = new byte[1024];
+var slice = dest.AsSpan();
+var totalWritten = 0;
+enc.Compress(bytes1, slice, out var consumed, out var written, false);
+slice = dest.AsSpan(written);
+totalWritten += written;
+
+
+enc.Compress(bytes1, slice, out consumed, out written, false);
+slice = dest.AsSpan(written);
+totalWritten += written;
+
+enc.Compress(bytes1, slice, out consumed, out written, false);
+slice = dest.AsSpan(written);
+totalWritten += written;
+
+enc.Compress(bytes1, slice, out consumed, out written, false);
+slice = dest.AsSpan(written);
+totalWritten += written;
+
+enc.End(slice, out consumed, out written);
+totalWritten += written;
+
+Console.WriteLine(  totalWritten);
+var foo = dest.AsSpan(0, totalWritten).ToArray();
+var dest2 = new byte[1024];
+//var tako = new ZstdNet.Decompressor().Unwrap(foo, dest2, false);
+
+//var sss = Encoding.UTF8.GetString(dest2.AsSpan(0, tako));
+//Console.WriteLine(sss);
+
+
+ZStdEncoder.TryDecompress(foo, dest2, out var written2);
+
+
+var sss = Encoding.UTF8.GetString(dest2.AsSpan(0, written2));
+Console.WriteLine(sss);
+
+
+
 //lz4.Write(bytes1);
 //lz4.Write(bytes1);
 //lz4.Write(bytes1);

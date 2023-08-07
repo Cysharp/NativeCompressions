@@ -14,6 +14,7 @@
 	<ItemGroup>
 		<PackageReference Include="K4os.Compression.LZ4" Version="1.3.5" />
 		<PackageReference Include="K4os.Compression.LZ4.Streams" Version="1.3.5" />
+		<PackageReference Include="ZstdNet" Version="1.4.5" />
 		<ProjectReference Include="..\..\src\NativeCompressions.Lz4\NativeCompressions.Lz4.csproj" />
 		<ProjectReference Include="..\..\src\NativeCompressions.ZStandard\NativeCompressions.ZStandard.csproj" />
 	</ItemGroup>

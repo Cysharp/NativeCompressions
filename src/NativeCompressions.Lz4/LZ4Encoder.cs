@@ -125,6 +125,8 @@ namespace NativeCompressions.Lz4
             }
         }
 
+        
+        
         void HandleError(nuint code)
         {
             if (LZ4F_isError(code) != 0)
