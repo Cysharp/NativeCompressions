@@ -45,7 +45,7 @@ enc.Compress(bytes1, slice, out consumed, out written, false);
 slice = dest.AsSpan(written);
 totalWritten += written;
 
-enc.End(slice, out consumed, out written);
+enc.Close(slice, out written);
 totalWritten += written;
 
 Console.WriteLine(  totalWritten);

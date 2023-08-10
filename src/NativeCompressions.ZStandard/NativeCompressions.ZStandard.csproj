@@ -24,6 +24,7 @@
 		<None Include="runtimes\osx-x64\native\libzstd.dylib">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
+		<None Include="ZStdDecoder.Static.cs" />
 	</ItemGroup>
 
 	<!-- for debug perpose, if exists in debug, copy it -->

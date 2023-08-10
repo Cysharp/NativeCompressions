@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using static NativeCompressions.ZStandard.ZStdNativeMethods;
 
 namespace NativeCompressions.ZStandard
 {
-	public unsafe partial struct ZStdDecoder
-	{
+    public unsafe partial struct ZStdDecoder
+    {
         // TODO: move to decoder
         public static unsafe bool TryDecompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten)
         {
@@ -15,7 +16,7 @@ namespace NativeCompressions.ZStandard
             fixed (byte* dest = destination)
             {
                 // @return : the number of bytes decompressed into `dst` (&lt;= `dstCapacity`),
-                // or an errorCode if it fails (which can be tested using ZSTD_isError()).
+                // or an errorCode if it fails (which can be testedvar  using ZSTD_isError()).
                 var codeOrWritten = ZSTD_decompress(dest, (nuint)destination.Length, src, (nuint)source.Length);
                 if (IsError(codeOrWritten))
                 {
@@ -30,22 +31,20 @@ namespace NativeCompressions.ZStandard
         }
 
 
-        // TODO: move to decoder
         public static unsafe byte[] Decompress(ReadOnlySpan<byte> source)
         {
             fixed (byte* src = source)
             {
-                // TODO:check multiple frame??? test stream mode(is unknown?)
                 const ulong ZSTD_CONTENTSIZE_UNKNOWN = unchecked(0UL - 1);
                 const ulong ZSTD_CONTENTSIZE_ERROR = unchecked(0UL - 2);
                 var size = ZSTD_getFrameContentSize(src, (nuint)source.Length);
                 if (size == ZSTD_CONTENTSIZE_UNKNOWN)
                 {
-                    // TODO:throw
+                    throw new InvalidOperationException("Content size is unknown.");
                 }
                 else if (size == ZSTD_CONTENTSIZE_ERROR)
                 {
-                    // TODO:throw
+                    throw new InvalidOperationException("Content size error.");
                 }
 
 

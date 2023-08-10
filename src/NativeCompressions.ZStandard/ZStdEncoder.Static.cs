@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
 using static NativeCompressions.ZStandard.ZStdNativeMethods;
 
 namespace NativeCompressions.ZStandard
@@ -59,7 +55,32 @@ namespace NativeCompressions.ZStandard
             return inputSize + ((inputSize) >> 8) + ((inputSize < (128 << 10)) ? (((128 << 10) - inputSize) >> 11) : 0);
         }
 
-        // TODO: compression level(3 is ZSTD_defaultCLevel, max is 22, min is -131072)
+        public static void Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten, CompressionLevel compressionLevel)
+        {
+            Compress(source, destination, out bytesWritten, ConvertCompressionLevel(compressionLevel));
+        }
+
+        public static void Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten, int compressionLevel = DefaultCompressionLevel)
+        {
+            unsafe
+            {
+                fixed (byte* src = &MemoryMarshal.GetReference(source))
+                fixed (byte* dest = &MemoryMarshal.GetReference(destination))
+                {
+                    // @return : compressed size written into `dst` (&lt;= `dstCapacity),
+                    // or an error code if it fails (which can be tested using ZSTD_isError()).
+                    var codeOrWritten = ZSTD_compress(dest, (nuint)destination.Length, src, (nuint)source.Length, compressionLevel);
+                    HandleError(codeOrWritten);
+                    bytesWritten = (int)codeOrWritten;
+                }
+            }
+        }
+
+        public static bool TryCompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten, CompressionLevel compressionLevel)
+        {
+            return TryCompress(source, destination, out bytesWritten, ConvertCompressionLevel(compressionLevel));
+        }
+
         public static bool TryCompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten, int compressionLevel = DefaultCompressionLevel)
         {
             unsafe
@@ -69,78 +90,15 @@ namespace NativeCompressions.ZStandard
                 {
                     // @return : compressed size written into `dst` (&lt;= `dstCapacity),
                     // or an error code if it fails (which can be tested using ZSTD_isError()).
-
-                    // TODO:test destination too small???
                     var codeOrWritten = ZSTD_compress(dest, (nuint)destination.Length, src, (nuint)source.Length, compressionLevel);
                     if (IsError(codeOrWritten))
                     {
-                        // TODO: GetErrorName(codeOrWritten);
                         bytesWritten = 0;
                         return false;
                     }
 
                     bytesWritten = (int)codeOrWritten;
                     return true;
-                }
-            }
-        }
-
-        // TODO: move to decoder
-        public static unsafe bool TryDecompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten)
-        {
-            fixed (byte* src = source)
-            fixed (byte* dest = destination)
-            {
-                // @return : the number of bytes decompressed into `dst` (&lt;= `dstCapacity`),
-                // or an errorCode if it fails (which can be tested using ZSTD_isError()).
-                var codeOrWritten = ZSTD_decompress(dest, (nuint)destination.Length, src, (nuint)source.Length);
-                if (IsError(codeOrWritten))
-                {
-                    HandleError(codeOrWritten); // TODO: return false;
-                    bytesWritten = 0;
-                    return false;
-                }
-
-                bytesWritten = (int)codeOrWritten;
-                return true;
-            }
-        }
-
-
-        // TODO: move to decoder
-        public static unsafe byte[] Decompress(ReadOnlySpan<byte> source)
-        {
-            fixed (byte* src = source)
-            {
-                // TODO:check multiple frame??? test stream mode(is unknown?)
-                const ulong ZSTD_CONTENTSIZE_UNKNOWN = unchecked(0UL - 1);
-                const ulong ZSTD_CONTENTSIZE_ERROR = unchecked(0UL - 2);
-                var size = ZSTD_getFrameContentSize(src, (nuint)source.Length);
-                if (size == ZSTD_CONTENTSIZE_UNKNOWN)
-                {
-                    // TODO:throw
-                }
-                else if (size == ZSTD_CONTENTSIZE_ERROR)
-                {
-                    // TODO:throw
-                }
-
-
-                var destination = new byte[checked((int)size)];
-                fixed (byte* dest = destination)
-                {
-                    // @return : the number of bytes decompressed into `dst` (&lt;= `dstCapacity`),
-                    // or an errorCode if it fails (which can be tested using ZSTD_isError()).
-                    var codeOrWritten = ZSTD_decompress(dest, (nuint)destination.Length, src, (nuint)source.Length);
-
-
-                    if (IsError(codeOrWritten))
-                    {
-                        var error = GetErrorName(codeOrWritten);
-                        throw new InvalidOperationException(error);
-                    }
-
-                    return destination;
                 }
             }
         }
@@ -162,6 +120,24 @@ namespace NativeCompressions.ZStandard
             {
                 var error = GetErrorName(code);
                 throw new InvalidOperationException(error);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static int ConvertCompressionLevel(CompressionLevel compressionLevel)
+        {
+            switch (compressionLevel)
+            {
+                case CompressionLevel.Fastest:
+                    return 1;
+                case CompressionLevel.NoCompression:
+                    ThrowNoCompression();
+                    return 0;
+                case CompressionLevel.SmallestSize:
+                    return MaxCompressionLevel;
+                case CompressionLevel.Optimal:
+                default:
+                    return DefaultCompressionLevel;
             }
         }
     }

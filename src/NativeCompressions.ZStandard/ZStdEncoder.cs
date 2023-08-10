@@ -1,25 +1,46 @@
-using System;
 using System.Buffers;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO.Compression;
 using static NativeCompressions.ZStandard.ZStdNativeMethods;
 
 namespace NativeCompressions.ZStandard
 {
     // zstd manual: https://raw.githack.com/facebook/zstd/release/doc/zstd_manual.html
 
-
-    public unsafe partial struct ZStdEncoder
+    public unsafe partial struct ZStdEncoder : IDisposable
     {
-        ZSTD_CCtx_s* stream;
+        ZSTD_CCtx_s* context;
+        int remaining;
+        string? lastError;
+
+        public int RemainingBuffer => remaining;
+        public string? LastError => lastError;
 
         public ZStdEncoder()
         {
-            this.stream = ZSTD_createCStream();
+            this.context = ZSTD_createCStream();
+            this.remaining = 0;
+            this.lastError = null;
+        }
+
+        public ZStdEncoder(int compressionLevel)
+        {
+            this.context = ZSTD_createCStream();
+            this.remaining = 0;
+            this.lastError = null;
+            SetCompressionLevel(compressionLevel);
+        }
+
+        public ZStdEncoder(CompressionLevel compressionLevel)
+        {
+            this.context = ZSTD_createCStream();
+            this.remaining = 0;
+            this.lastError = null;
+            SetCompressionLevel(ConvertCompressionLevel(compressionLevel));
+        }
+
+        static void ThrowNoCompression()
+        {
+            throw new ArgumentException("NoCompression is not supported");
         }
 
         public void SetCompressionLevel(int level)
@@ -30,16 +51,37 @@ namespace NativeCompressions.ZStandard
 
         public void SetParameter(int param, int level)
         {
-            var code = ZSTD_CCtx_setParameter(stream, param, level);
+            ValidateContext();
+
+            var code = ZSTD_CCtx_setParameter(context, param, level);
             HandleError(code);
         }
 
         public OperationStatus Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
         {
+            return CompressCore(source, destination, out bytesConsumed, out bytesWritten, isFinalBlock ? EndDirective.End : EndDirective.Continue);
+        }
+
+        public OperationStatus Flush(Span<byte> destination, out int bytesWritten)
+        {
+            return CompressCore(Array.Empty<byte>(), destination, out _, out bytesWritten, EndDirective.Flush);
+        }
+
+        public OperationStatus Close(Span<byte> destination, out int bytesWritten)
+        {
+            return CompressCore(Array.Empty<byte>(), destination, out _, out bytesWritten, EndDirective.End);
+        }
+
+        // when succeed, bytesConsumed = source.Length
+        OperationStatus CompressCore(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, int endDirective)
+        {
+            ValidateContext();
 
             unsafe
             {
-                // TODO: consume all source bytes.
+                bytesConsumed = 0;
+                bytesWritten = 0;
+                var availableOutput = destination.Length;
 
                 fixed (byte* src = source)
                 fixed (byte* dest = destination)
@@ -57,62 +99,52 @@ namespace NativeCompressions.ZStandard
                         pos = 0
                     };
 
-                    var directive = isFinalBlock ? EndDirective.End : EndDirective.Continue;
+                    while (availableOutput > 0)
+                    {
+                        // @retrun: provides a minimum amount of data remaining to be flushed from internal buffers or an error code
+                        var nb = ZSTD_compressStream2(context, &outBuffer, &inBuffer, endDirective);
+                        if (IsError(nb))
+                        {
+                            lastError = GetErrorName(nb);
+                            return OperationStatus.InvalidData;
+                        }
 
-                    var nb = ZSTD_compressStream2(stream, &outBuffer, &inBuffer, directive);
-                    HandleError(nb);
+                        bytesConsumed = (int)inBuffer.pos;
+                        bytesWritten = (int)outBuffer.pos;
 
-                    bytesConsumed = (int)inBuffer.pos;
-                    bytesWritten = (int)outBuffer.pos;
+                        availableOutput -= bytesWritten;
+                        remaining = (int)nb;
 
-                    return OperationStatus.Done;
+                        if (nb == 0 && bytesConsumed == source.Length)
+                        {
+                            return OperationStatus.Done;
+                        }
+                    }
                 }
             }
 
-            throw new NotImplementedException();
+            return OperationStatus.DestinationTooSmall;
         }
 
-        public OperationStatus Flush(Span<byte> destination, out int bytesWritten)
+        void ValidateContext()
         {
-            throw new NotImplementedException();
-        }
-
-        public OperationStatus Close(Span<byte> destination, out int bytesWritten)
-        {
-            unsafe
+            if (context == null)
             {
-                fixed (byte* src = Array.Empty<byte>())
-                fixed (byte* dest = destination)
-                {
-                    var inBuffer = new ZSTD_inBuffer_s
-                    {
-                        src = src,
-                        size = 0,
-                        pos = 0
-                    };
-                    var outBuffer = new ZSTD_outBuffer_s
-                    {
-                        dst = dest,
-                        size = (nuint)destination.Length,
-                        pos = 0
-                    };
-
-                    var directive = EndDirective.End;
-
-                    var nb = ZSTD_compressStream2(stream, &outBuffer, &inBuffer, directive);
-                    HandleError(nb);
-
-                    minimumBytesForFlush = (int)nb;
-                    bytesWritten = (int)outBuffer.pos;
-
-                    return OperationStatus.Done;
-                }
+                throw new ObjectDisposedException("");
             }
-
-            throw new NotImplementedException();
         }
 
-        // TODO: Reset for reuse.
+        public void Dispose()
+        {
+            if (context != null)
+            {
+                var code = ZSTD_freeCStream(context);
+                context = null;
+                lastError = null;
+                remaining = 0;
+                HandleError(code);
+            }
+        }
 
         internal static class EndDirective
         {
