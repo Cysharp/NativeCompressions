@@ -1,15 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static NativeCompressions.ZStandard.ZStdNativeMethods;
+﻿using static NativeCompressions.ZStandard.ZStdNativeMethods;
 
 namespace NativeCompressions.ZStandard
 {
     public unsafe partial struct ZStdDecoder
     {
-        // TODO: move to decoder
+        public static string Version => ZStdEncoder.Version;
+        public static uint VersionNumber => ZStdEncoder.VersionNumber;
+
+
         public static unsafe bool TryDecompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten)
         {
             fixed (byte* src = source)
@@ -20,7 +18,6 @@ namespace NativeCompressions.ZStandard
                 var codeOrWritten = ZSTD_decompress(dest, (nuint)destination.Length, src, (nuint)source.Length);
                 if (IsError(codeOrWritten))
                 {
-                    HandleError(codeOrWritten); // TODO: return false;
                     bytesWritten = 0;
                     return false;
                 }
@@ -29,7 +26,6 @@ namespace NativeCompressions.ZStandard
                 return true;
             }
         }
-
 
         public static unsafe byte[] Decompress(ReadOnlySpan<byte> source)
         {
@@ -47,26 +43,23 @@ namespace NativeCompressions.ZStandard
                     throw new InvalidOperationException("Content size error.");
                 }
 
-
                 var destination = new byte[checked((int)size)];
                 fixed (byte* dest = destination)
                 {
                     // @return : the number of bytes decompressed into `dst` (&lt;= `dstCapacity`),
                     // or an errorCode if it fails (which can be tested using ZSTD_isError()).
                     var codeOrWritten = ZSTD_decompress(dest, (nuint)destination.Length, src, (nuint)source.Length);
+                    HandleError(codeOrWritten);
 
-
-                    if (IsError(codeOrWritten))
+                    if ((int)codeOrWritten != destination.Length)
                     {
-                        var error = GetErrorName(codeOrWritten);
-                        throw new InvalidOperationException(error);
+                        throw new InvalidOperationException($"Frame header(content-size) and decompressed length is different. content-size: {(int)size}, decompressed: {(int)codeOrWritten}");
                     }
 
                     return destination;
                 }
             }
         }
-
 
         static bool IsError(nuint code)
         {

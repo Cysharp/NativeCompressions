@@ -8,6 +8,8 @@ namespace NativeCompressions.ZStandard
 
     public unsafe partial struct ZStdEncoder : IDisposable
     {
+        const int CompressionLevelParam = 100; // ZSTD_c_compressionLevel
+
         ZSTD_CCtx_s* context;
         int remaining;
         string? lastError;
@@ -45,8 +47,12 @@ namespace NativeCompressions.ZStandard
 
         public void SetCompressionLevel(int level)
         {
-            // ZSTD_c_compressionLevel = 100
-            SetParameter(100, level);
+            SetParameter(CompressionLevelParam, level);
+        }
+
+        public void SetCompressionLevel(CompressionLevel compressionLevel)
+        {
+            SetParameter(CompressionLevelParam, ConvertCompressionLevel(compressionLevel));
         }
 
         public void SetParameter(int param, int level)
@@ -59,67 +65,58 @@ namespace NativeCompressions.ZStandard
 
         public OperationStatus Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
         {
-            return CompressCore(source, destination, out bytesConsumed, out bytesWritten, isFinalBlock ? EndDirective.End : EndDirective.Continue);
+            return Compress(source, destination, out bytesConsumed, out bytesWritten, isFinalBlock ? EndDirective.End : EndDirective.Continue);
         }
 
         public OperationStatus Flush(Span<byte> destination, out int bytesWritten)
         {
-            return CompressCore(Array.Empty<byte>(), destination, out _, out bytesWritten, EndDirective.Flush);
+            return Compress(Array.Empty<byte>(), destination, out _, out bytesWritten, EndDirective.Flush);
         }
 
         public OperationStatus Close(Span<byte> destination, out int bytesWritten)
         {
-            return CompressCore(Array.Empty<byte>(), destination, out _, out bytesWritten, EndDirective.End);
+            return Compress(Array.Empty<byte>(), destination, out _, out bytesWritten, EndDirective.End);
         }
 
         // when succeed, bytesConsumed = source.Length
-        OperationStatus CompressCore(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, int endDirective)
+        public unsafe OperationStatus Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, EndDirective endDirective)
         {
             ValidateContext();
 
-            unsafe
+            bytesConsumed = 0;
+            bytesWritten = 0;
+
+            fixed (byte* src = source)
+            fixed (byte* dest = destination)
             {
-                bytesConsumed = 0;
-                bytesWritten = 0;
-                var availableOutput = destination.Length;
-
-                fixed (byte* src = source)
-                fixed (byte* dest = destination)
+                var inBuffer = new ZSTD_inBuffer_s
                 {
-                    var inBuffer = new ZSTD_inBuffer_s
-                    {
-                        src = src,
-                        size = (nuint)source.Length,
-                        pos = 0
-                    };
-                    var outBuffer = new ZSTD_outBuffer_s
-                    {
-                        dst = dest,
-                        size = (nuint)destination.Length,
-                        pos = 0
-                    };
+                    src = src,
+                    size = (nuint)source.Length,
+                    pos = 0
+                };
+                var outBuffer = new ZSTD_outBuffer_s
+                {
+                    dst = dest,
+                    size = (nuint)destination.Length,
+                    pos = 0
+                };
 
-                    while (availableOutput > 0)
-                    {
-                        // @retrun: provides a minimum amount of data remaining to be flushed from internal buffers or an error code
-                        var nb = ZSTD_compressStream2(context, &outBuffer, &inBuffer, endDirective);
-                        if (IsError(nb))
-                        {
-                            lastError = GetErrorName(nb);
-                            return OperationStatus.InvalidData;
-                        }
+                // @retrun: provides a minimum amount of data remaining to be flushed from internal buffers or an error code
+                var nb = ZSTD_compressStream2(context, &outBuffer, &inBuffer, (int)endDirective);
+                if (IsError(nb))
+                {
+                    lastError = GetErrorName(nb);
+                    return OperationStatus.InvalidData;
+                }
 
-                        bytesConsumed = (int)inBuffer.pos;
-                        bytesWritten = (int)outBuffer.pos;
+                bytesConsumed = (int)inBuffer.pos;
+                bytesWritten = (int)outBuffer.pos;
+                remaining = (int)nb;
 
-                        availableOutput -= bytesWritten;
-                        remaining = (int)nb;
-
-                        if (nb == 0 && bytesConsumed == source.Length)
-                        {
-                            return OperationStatus.Done;
-                        }
-                    }
+                if (nb == 0 && bytesConsumed == source.Length)
+                {
+                    return OperationStatus.Done;
                 }
             }
 
@@ -142,29 +139,30 @@ namespace NativeCompressions.ZStandard
                 context = null;
                 lastError = null;
                 remaining = 0;
-                HandleError(code);
+                // don't throw on disposing...!
+                // HandleError(code);
             }
         }
+    }
 
-        internal static class EndDirective
-        {
-            /// <summary>
-            /// collect more data, encoder decides when to output compressed result, for optimal compression ratio
-            /// </summary>
-            public const int Continue = 0;
-            /// <summary>
-            /// flush any data provided so far,
-            /// it creates (at least) one new block, that can be decoded immediately on reception;
-            /// frame will continue: any future data can still reference previously compressed data, improving compression.
-            /// </summary>
-            public const int Flush = 1;
-            /// <summary>
-            /// flush any remaining data _and_ close current frame.
-            /// note that frame is only closed after compressed data is fully flushed (return value == 0).
-            /// After that point, any additional data starts a new frame.
-            /// note : each frame is independent (does not reference any content from previous frame).
-            /// </summary>
-            public const int End = 2;
-        }
+    public enum EndDirective
+    {
+        /// <summary>
+        /// collect more data, encoder decides when to output compressed result, for optimal compression ratio
+        /// </summary>
+        Continue = 0,
+        /// <summary>
+        /// flush any data provided so far,
+        /// it creates (at least) one new block, that can be decoded immediately on reception;
+        /// frame will continue: any future data can still reference previously compressed data, improving compression.
+        /// </summary>
+        Flush = 1,
+        /// <summary>
+        /// flush any remaining data _and_ close current frame.
+        /// note that frame is only closed after compressed data is fully flushed (return value == 0).
+        /// After that point, any additional data starts a new frame.
+        /// note : each frame is independent (does not reference any content from previous frame).
+        /// </summary>
+        End = 2
     }
 }

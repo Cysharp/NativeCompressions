@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -31,7 +32,7 @@ public class ZStdTests
         var dest = new byte[1024];
         ZStdEncoder.TryCompress(bin, dest, out var written).Should().BeTrue();
         var more = new byte[1024];
-        ZStdEncoder.TryDecompress(dest.AsSpan(0, written), more, out var written2).Should().BeTrue();
+        ZStdDecoder.TryDecompress(dest.AsSpan(0, written), more, out var written2).Should().BeTrue();
 
         DecodeUtf8(more.AsSpan(0, written2)).Should().Be(text);
     }
@@ -102,15 +103,82 @@ public class ZStdTests
             var rand = new Random(9999);
             var source = new byte[10000000];
             rand.NextBytes(source);
-            
-            
-            encoder.Compress(source, dest, out var consumed, out var written, true);
 
-
-
+            // TODO:   
+            // encoder.Compress(source, dest, out var consumed, out var written, true);
         }
 
+        {
+            using var encoder = new ZStdEncoder();
 
+            var rand = new Random(9999);
+            var source = new byte[10000000];
+            rand.NextBytes(source);
+
+
+            var dest = new byte[1024];
+            var span = source.AsSpan();
+            while (span.Length != 0)
+            {
+                encoder.Compress(span, dest, out var consumed, out var written, isFinalBlock: false);
+                span = span.Slice(consumed);
+            }
+        }
+    }
+
+
+    [Fact]
+    public void DecodeTest()
+    {
+        var text = "あいうえおあいうえおあいうえおかきくけこ";
+        var data = ZStdEncoder.Compress(EncodeUtf8(text));
+
+        // all source consumed, dest is ok.
+        {
+            using var decoder = new ZStdDecoder();
+
+            var dest = new byte[1024];
+            decoder.Decompress(data, dest, out var bytesConsumed, out var bytesWritten).Should().Be(OperationStatus.Done);
+            bytesConsumed.Should().Be(data.Length);
+
+            DecodeUtf8(dest.AsSpan(0, bytesWritten)).Should().Be(text);
+        }
+
+        // all source consumed, dest s less.
+        {
+            using var decoder = new ZStdDecoder();
+
+            var dest = new byte[10];
+            decoder.Decompress(data, dest, out var bytesConsumed, out var bytesWritten).Should().Be(OperationStatus.DestinationTooSmall);
+
+            var newDest = new byte[100];
+            dest.CopyTo(newDest.AsSpan());
+
+            decoder.Decompress(data.AsSpan(bytesConsumed), newDest.AsSpan(bytesWritten), out var bytesConsumed2, out var bytesWritten2).Should().Be(OperationStatus.Done);
+            (bytesConsumed + bytesConsumed2).Should().Be(data.Length);
+
+            DecodeUtf8(newDest.AsSpan(0, bytesWritten + bytesWritten2)).Should().Be(text);
+        }
+        // input is small, dest is ok.
+        {
+            using var decoder = new ZStdDecoder();
+
+            var dest = new byte[1024];
+            var src1 = data.AsSpan(0, 5);
+            var src2 = data.AsSpan(src1.Length, 10);
+            var src3 = data.AsSpan(src1.Length + src2.Length);
+
+            decoder.Decompress(src1, dest, out var bytesConsumed, out var bytesWritten).Should().Be(OperationStatus.NeedMoreData);
+            bytesConsumed.Should().Be(src1.Length);
+
+            decoder.Decompress(src2, dest.AsSpan(bytesWritten), out var bytesConsumed2, out var bytesWritten2).Should().Be(OperationStatus.NeedMoreData);
+            bytesConsumed2.Should().Be(src2.Length);
+
+            decoder.Decompress(src3, dest.AsSpan(bytesWritten + bytesWritten2), out var bytesConsumed3, out var bytesWritten3).Should().Be(OperationStatus.Done);
+            bytesConsumed3.Should().Be(src3.Length);
+
+            DecodeUtf8(dest.AsSpan(0, bytesWritten + bytesWritten2 + bytesWritten3)).Should().Be(text);
+        }
     }
 
 

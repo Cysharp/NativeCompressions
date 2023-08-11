@@ -1,4 +1,6 @@
-﻿using System.IO.Compression;
+﻿using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
+using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using static NativeCompressions.ZStandard.ZStdNativeMethods;
@@ -53,6 +55,42 @@ namespace NativeCompressions.ZStandard
             // #define ZSTD_COMPRESSBOUND(srcSize)   ((srcSize) + ((srcSize)>>8) + (((srcSize) < (128<<10)) ? (((128<<10) - (srcSize)) >> 11) /* margin, from 64 to 0 */ : 0))
             // /* this formula ensures that bound(A) + bound(B) <= bound(A+B) as long as A and B >= 128 KB */
             return inputSize + ((inputSize) >> 8) + ((inputSize < (128 << 10)) ? (((128 << 10) - inputSize) >> 11) : 0);
+        }
+
+        public static byte[] Compress(ReadOnlySpan<byte> source, CompressionLevel compressionLevel)
+        {
+            return Compress(source, ConvertCompressionLevel(compressionLevel));
+        }
+
+        public static byte[] Compress(ReadOnlySpan<byte> source, int compressionLevel = DefaultCompressionLevel)
+        {
+            var destSize = GetMaxCompressedLength(source.Length);
+            if (destSize < 512)
+            {
+                Span<byte> dest = stackalloc byte[destSize];
+                if (!TryCompress(source, dest, out var bytesWritten, compressionLevel))
+                {
+                    Throw();
+                }
+
+                return dest.FastToArray(bytesWritten);
+            }
+            else
+            {
+                var dest = ArrayPool<byte>.Shared.Rent(destSize);
+                try
+                {
+                    if (!TryCompress(source, dest, out var bytesWritten))
+                    {
+                        Throw();
+                    }
+                    return dest.FastToArray(bytesWritten);
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(dest);
+                }
+            }
         }
 
         public static void Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten, CompressionLevel compressionLevel)
@@ -123,8 +161,15 @@ namespace NativeCompressions.ZStandard
             }
         }
 
+        [DoesNotReturn]
+        static void Throw()
+        {
+            // TODO:
+            throw new Exception();
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static int ConvertCompressionLevel(CompressionLevel compressionLevel)
+        internal static int ConvertCompressionLevel(CompressionLevel compressionLevel)
         {
             switch (compressionLevel)
             {
