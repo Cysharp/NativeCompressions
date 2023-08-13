@@ -12,11 +12,18 @@ namespace NativeCompressions.ZStandard
 
         public string? LastError => lastError;
 
-
         public ZStdDecoder()
         {
             this.context = ZSTD_createDStream();
             this.lastError = null;
+        }
+
+        public void SetParameter(int param, int value)
+        {
+            ValidateContext();
+
+            var code = ZSTD_DCtx_setParameter(context, param, value);
+            HandleError(code);
         }
 
         public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten)
@@ -81,7 +88,7 @@ namespace NativeCompressions.ZStandard
         {
             if (context == null)
             {
-                throw new ObjectDisposedException("");
+                throw new ObjectDisposedException(nameof(ZStdDecoder));
             }
         }
 

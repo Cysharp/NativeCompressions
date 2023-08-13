@@ -25,7 +25,7 @@ namespace NativeCompressions.Lz4
             this.buffer = ArrayPool<byte>.Shared.Rent(LZ4Encoder.GetMaxFrameCompressedLength(0, withHeader: false));
             this.bufferOffset = 0;
             this.bufferCount = 0;
-
+            
             if (mode == CompressionMode.Decompress)
             {
                 this.decoder = new LZ4Decoder();

@@ -1,4 +1,5 @@
-﻿using static NativeCompressions.ZStandard.ZStdNativeMethods;
+﻿using System.Buffers;
+using static NativeCompressions.ZStandard.ZStdNativeMethods;
 
 namespace NativeCompressions.ZStandard
 {
@@ -6,7 +7,6 @@ namespace NativeCompressions.ZStandard
     {
         public static string Version => ZStdEncoder.Version;
         public static uint VersionNumber => ZStdEncoder.VersionNumber;
-
 
         public static unsafe bool TryDecompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten)
         {
@@ -27,8 +27,13 @@ namespace NativeCompressions.ZStandard
             }
         }
 
-        public static unsafe byte[] Decompress(ReadOnlySpan<byte> source)
+        public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, bool preferUseFrameContentSize = true)
         {
+            if (!preferUseFrameContentSize)
+            {
+                return StreamingDecompress(source);
+            }
+
             fixed (byte* src = source)
             {
                 const ulong ZSTD_CONTENTSIZE_UNKNOWN = unchecked(0UL - 1);
@@ -36,11 +41,13 @@ namespace NativeCompressions.ZStandard
                 var size = ZSTD_getFrameContentSize(src, (nuint)source.Length);
                 if (size == ZSTD_CONTENTSIZE_UNKNOWN)
                 {
-                    throw new InvalidOperationException("Content size is unknown.");
+                    // throw new InvalidOperationException("Content size is unknown.");
+                    return StreamingDecompress(source);
                 }
                 else if (size == ZSTD_CONTENTSIZE_ERROR)
                 {
-                    throw new InvalidOperationException("Content size error.");
+                    // throw new InvalidOperationException("Content size error.");
+                    return StreamingDecompress(source);
                 }
 
                 var destination = new byte[checked((int)size)];
@@ -57,6 +64,31 @@ namespace NativeCompressions.ZStandard
                     }
 
                     return destination;
+                }
+            }
+        }
+
+        static unsafe byte[] StreamingDecompress(ReadOnlySpan<byte> source)
+        {
+            using var decoder = new ZStdDecoder();
+            using var sequence = new ArraySequence(ZStdStream.DecompressOutputLimit); // use recommended size for output in default
+            var dest = sequence.CurrentSpan;
+            while (true)
+            {
+                var status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
+                source = source.Slice(bytesConsumed);
+
+                switch (status)
+                {
+                    case OperationStatus.Done:
+                        return sequence.ToArrayAndDispose(bytesWritten);
+                    case OperationStatus.DestinationTooSmall:
+                        dest = sequence.AllocateNextBlock(bytesWritten);
+                        break;
+                    case OperationStatus.NeedMoreData:
+                    case OperationStatus.InvalidData:
+                    default:
+                        throw new InvalidOperationException($"Decompress result is {status}, source is invalid.");
                 }
             }
         }

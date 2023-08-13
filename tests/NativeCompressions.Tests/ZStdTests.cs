@@ -25,7 +25,7 @@ public class ZStdTests
     }
 
     [Fact]
-    public void SimpleCompress()
+    public void TryCompressDecompress()
     {
         var text = "あいうえおあいうえおあいうえおかきくけこ";
         var bin = EncodeUtf8(text);
@@ -35,6 +35,34 @@ public class ZStdTests
         ZStdDecoder.TryDecompress(dest.AsSpan(0, written), more, out var written2).Should().BeTrue();
 
         DecodeUtf8(more.AsSpan(0, written2)).Should().Be(text);
+    }
+
+    [Fact]
+    public void CompressDecompress()
+    {
+        {
+            var smallText = "あいうえおあいうえおあいうえおかきくけこ";
+            var bin = EncodeUtf8(smallText);
+            var dest = ZStdEncoder.Compress(bin);
+
+            var more1 = ZStdDecoder.Decompress(dest, preferUseFrameContentSize: true);
+            var more2 = ZStdDecoder.Decompress(dest, preferUseFrameContentSize: false);
+
+            DecodeUtf8(more1).Should().Be(smallText);
+            DecodeUtf8(more2).Should().Be(smallText);
+        }
+        {
+            var randomLargeBin = new byte[999999];
+            new Random(1111).NextBytes(randomLargeBin);
+
+            var dest = ZStdEncoder.Compress(randomLargeBin);
+
+            var more1 = ZStdDecoder.Decompress(dest, preferUseFrameContentSize: true);
+            var more2 = ZStdDecoder.Decompress(dest, preferUseFrameContentSize: false);
+
+            more1.SequenceEqual(randomLargeBin).Should().BeTrue();
+            more2.SequenceEqual(randomLargeBin).Should().BeTrue();
+        }
     }
 
     [Fact]
