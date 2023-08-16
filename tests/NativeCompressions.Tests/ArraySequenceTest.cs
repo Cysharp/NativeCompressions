@@ -12,7 +12,7 @@ namespace NativeCompressions.Tests
         [Fact]
         public void Foo()
         {
-            var seq = new ArraySequence(65536);
+            var seq = new ArraySequence(65535);
             var span = seq.CurrentSpan;
             span = seq.AllocateNextBlock(span.Length);
 

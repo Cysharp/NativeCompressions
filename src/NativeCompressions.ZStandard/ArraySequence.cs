@@ -49,7 +49,7 @@ namespace NativeCompressions.ZStandard
             index = 0;
             length = 0;
             block0 = block1 = block2 = block3 = block4 = block5 = block6 = block7 = block8 = block9 = block10 = block11 = default;
-            block0 = ArrayBlock.Create(Math.Min(initialSize, ushort.MaxValue));
+            block0 = ArrayBlock.Create(Math.Max(initialSize, ushort.MaxValue));
         }
 
         public Span<byte> CurrentSpan
@@ -80,9 +80,17 @@ namespace NativeCompressions.ZStandard
         public byte[] ToArrayAndDispose(int lastBlockCount)
         {
             if (index == -1) throw new ObjectDisposedException(nameof(ArraySequence));
-            if (length == 0) return Array.Empty<byte>();
 
-            var result = GC.AllocateUninitializedArray<byte>(length);
+            var resultLength = length + lastBlockCount;
+
+            if (resultLength == 0)
+            {
+                GetBlock(ref this, 0).ReturnBlock();
+                index = -1;
+                return Array.Empty<byte>();
+            }
+
+            var result = GC.AllocateUninitializedArray<byte>(resultLength);
 
             var dest = result.AsSpan();
 
