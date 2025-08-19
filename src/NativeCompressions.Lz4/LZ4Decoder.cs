@@ -1,8 +1,9 @@
 ﻿using System.Buffers;
 using System.Runtime.InteropServices;
-using static NativeCompressions.Lz4.Lz4NativeMethods;
+using NativeCompressions.LZ4.Raw;
+using static NativeCompressions.LZ4.Raw.NativeMethods;
 
-namespace NativeCompressions.Lz4
+namespace NativeCompressions.LZ4
 {
     // https://github.com/lz4/lz4/blob/v1.9.4/lib/lz4.h
     // https://github.com/lz4/lz4/blob/v1.9.4/lib/lz4frame.h
@@ -22,7 +23,7 @@ namespace NativeCompressions.Lz4
         public LZ4Decoder()
         {
             LZ4F_dctx_s* context = default;
-            var code = LZ4F_createDecompressionContext(&context, FrameVersion);
+            var code = LZ4F_createDecompressionContext(&context, LZ4.FrameVersion);
             HandleError(code);
             this.context = context;
         }

@@ -8,7 +8,7 @@ use super::zstd;
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_versionNumber(
-    
+
 ) -> c_uint
 {
     zstd::ZSTD_versionNumber(
@@ -18,7 +18,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_versionNumber(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_versionString(
-    
+
 ) -> *const c_char
 {
     zstd::ZSTD_versionString(
@@ -32,7 +32,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_compress(
     dstCapacity: usize,
     src: *const c_void,
     srcSize: usize,
-    compressionLevel: c_int    
+    compressionLevel: c_int
 ) -> usize
 {
     zstd::ZSTD_compress(
@@ -49,7 +49,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_decompress(
     dst: *mut c_void,
     dstCapacity: usize,
     src: *const c_void,
-    compressedSize: usize    
+    compressedSize: usize
 ) -> usize
 {
     zstd::ZSTD_decompress(
@@ -63,7 +63,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_decompress(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_getFrameContentSize(
     src: *const c_void,
-    srcSize: usize    
+    srcSize: usize
 ) -> c_ulonglong
 {
     zstd::ZSTD_getFrameContentSize(
@@ -75,7 +75,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_getFrameContentSize(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_getDecompressedSize(
     src: *const c_void,
-    srcSize: usize    
+    srcSize: usize
 ) -> c_ulonglong
 {
     zstd::ZSTD_getDecompressedSize(
@@ -87,7 +87,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_getDecompressedSize(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_findFrameCompressedSize(
     src: *const c_void,
-    srcSize: usize    
+    srcSize: usize
 ) -> usize
 {
     zstd::ZSTD_findFrameCompressedSize(
@@ -98,7 +98,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_findFrameCompressedSize(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_compressBound(
-    srcSize: usize    
+    srcSize: usize
 ) -> usize
 {
     zstd::ZSTD_compressBound(
@@ -108,7 +108,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_compressBound(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_isError(
-    code: usize    
+    code: usize
 ) -> c_uint
 {
     zstd::ZSTD_isError(
@@ -118,7 +118,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_isError(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_getErrorName(
-    code: usize    
+    code: usize
 ) -> *const c_char
 {
     zstd::ZSTD_getErrorName(
@@ -128,7 +128,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_getErrorName(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_minCLevel(
-    
+
 ) -> c_int
 {
     zstd::ZSTD_minCLevel(
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_minCLevel(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_maxCLevel(
-    
+
 ) -> c_int
 {
     zstd::ZSTD_maxCLevel(
@@ -148,7 +148,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_maxCLevel(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_defaultCLevel(
-    
+
 ) -> c_int
 {
     zstd::ZSTD_defaultCLevel(
@@ -158,7 +158,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_defaultCLevel(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_createCCtx(
-    
+
 ) -> *mut zstd::ZSTD_CCtx
 {
     zstd::ZSTD_createCCtx(
@@ -168,7 +168,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_createCCtx(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_freeCCtx(
-    cctx: *mut zstd::ZSTD_CCtx    
+    cctx: *mut zstd::ZSTD_CCtx
 ) -> usize
 {
     zstd::ZSTD_freeCCtx(
@@ -183,7 +183,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_compressCCtx(
     dstCapacity: usize,
     src: *const c_void,
     srcSize: usize,
-    compressionLevel: c_int    
+    compressionLevel: c_int
 ) -> usize
 {
     zstd::ZSTD_compressCCtx(
@@ -198,7 +198,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_compressCCtx(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_createDCtx(
-    
+
 ) -> *mut zstd::ZSTD_DCtx
 {
     zstd::ZSTD_createDCtx(
@@ -208,7 +208,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_createDCtx(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_freeDCtx(
-    dctx: *mut zstd::ZSTD_DCtx    
+    dctx: *mut zstd::ZSTD_DCtx
 ) -> usize
 {
     zstd::ZSTD_freeDCtx(
@@ -222,7 +222,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_decompressDCtx(
     dst: *mut c_void,
     dstCapacity: usize,
     src: *const c_void,
-    srcSize: usize    
+    srcSize: usize
 ) -> usize
 {
     zstd::ZSTD_decompressDCtx(
@@ -236,7 +236,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_decompressDCtx(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_cParam_getBounds(
-    cParam: zstd::ZSTD_cParameter    
+    cParam: zstd::ZSTD_cParameter
 ) -> zstd::ZSTD_bounds
 {
     zstd::ZSTD_cParam_getBounds(
@@ -248,7 +248,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_cParam_getBounds(
 pub unsafe extern "C" fn nativecompressions_ZSTD_CCtx_setParameter(
     cctx: *mut zstd::ZSTD_CCtx,
     param: zstd::ZSTD_cParameter,
-    value: c_int    
+    value: c_int
 ) -> usize
 {
     zstd::ZSTD_CCtx_setParameter(
@@ -261,7 +261,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_CCtx_setParameter(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_CCtx_setPledgedSrcSize(
     cctx: *mut zstd::ZSTD_CCtx,
-    pledgedSrcSize: c_ulonglong    
+    pledgedSrcSize: c_ulonglong
 ) -> usize
 {
     zstd::ZSTD_CCtx_setPledgedSrcSize(
@@ -273,7 +273,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_CCtx_setPledgedSrcSize(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_CCtx_reset(
     cctx: *mut zstd::ZSTD_CCtx,
-    reset: zstd::ZSTD_ResetDirective    
+    reset: zstd::ZSTD_ResetDirective
 ) -> usize
 {
     zstd::ZSTD_CCtx_reset(
@@ -288,7 +288,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_compress2(
     dst: *mut c_void,
     dstCapacity: usize,
     src: *const c_void,
-    srcSize: usize    
+    srcSize: usize
 ) -> usize
 {
     zstd::ZSTD_compress2(
@@ -302,7 +302,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_compress2(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_dParam_getBounds(
-    dParam: zstd::ZSTD_dParameter    
+    dParam: zstd::ZSTD_dParameter
 ) -> zstd::ZSTD_bounds
 {
     zstd::ZSTD_dParam_getBounds(
@@ -314,7 +314,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_dParam_getBounds(
 pub unsafe extern "C" fn nativecompressions_ZSTD_DCtx_setParameter(
     dctx: *mut zstd::ZSTD_DCtx,
     param: zstd::ZSTD_dParameter,
-    value: c_int    
+    value: c_int
 ) -> usize
 {
     zstd::ZSTD_DCtx_setParameter(
@@ -327,7 +327,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_DCtx_setParameter(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_DCtx_reset(
     dctx: *mut zstd::ZSTD_DCtx,
-    reset: zstd::ZSTD_ResetDirective    
+    reset: zstd::ZSTD_ResetDirective
 ) -> usize
 {
     zstd::ZSTD_DCtx_reset(
@@ -338,7 +338,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_DCtx_reset(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_createCStream(
-    
+
 ) -> *mut zstd::ZSTD_CStream
 {
     zstd::ZSTD_createCStream(
@@ -348,7 +348,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_createCStream(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_freeCStream(
-    zcs: *mut zstd::ZSTD_CStream    
+    zcs: *mut zstd::ZSTD_CStream
 ) -> usize
 {
     zstd::ZSTD_freeCStream(
@@ -361,7 +361,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_compressStream2(
     cctx: *mut zstd::ZSTD_CCtx,
     output: *mut zstd::ZSTD_outBuffer,
     input: *mut zstd::ZSTD_inBuffer,
-    endOp: zstd::ZSTD_EndDirective    
+    endOp: zstd::ZSTD_EndDirective
 ) -> usize
 {
     zstd::ZSTD_compressStream2(
@@ -374,7 +374,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_compressStream2(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_CStreamInSize(
-    
+
 ) -> usize
 {
     zstd::ZSTD_CStreamInSize(
@@ -384,7 +384,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_CStreamInSize(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_CStreamOutSize(
-    
+
 ) -> usize
 {
     zstd::ZSTD_CStreamOutSize(
@@ -395,7 +395,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_CStreamOutSize(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_initCStream(
     zcs: *mut zstd::ZSTD_CStream,
-    compressionLevel: c_int    
+    compressionLevel: c_int
 ) -> usize
 {
     zstd::ZSTD_initCStream(
@@ -408,7 +408,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_initCStream(
 pub unsafe extern "C" fn nativecompressions_ZSTD_compressStream(
     zcs: *mut zstd::ZSTD_CStream,
     output: *mut zstd::ZSTD_outBuffer,
-    input: *mut zstd::ZSTD_inBuffer    
+    input: *mut zstd::ZSTD_inBuffer
 ) -> usize
 {
     zstd::ZSTD_compressStream(
@@ -421,7 +421,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_compressStream(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_flushStream(
     zcs: *mut zstd::ZSTD_CStream,
-    output: *mut zstd::ZSTD_outBuffer    
+    output: *mut zstd::ZSTD_outBuffer
 ) -> usize
 {
     zstd::ZSTD_flushStream(
@@ -433,7 +433,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_flushStream(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_endStream(
     zcs: *mut zstd::ZSTD_CStream,
-    output: *mut zstd::ZSTD_outBuffer    
+    output: *mut zstd::ZSTD_outBuffer
 ) -> usize
 {
     zstd::ZSTD_endStream(
@@ -444,7 +444,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_endStream(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_createDStream(
-    
+
 ) -> *mut zstd::ZSTD_DStream
 {
     zstd::ZSTD_createDStream(
@@ -454,7 +454,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_createDStream(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_freeDStream(
-    zds: *mut zstd::ZSTD_DStream    
+    zds: *mut zstd::ZSTD_DStream
 ) -> usize
 {
     zstd::ZSTD_freeDStream(
@@ -464,7 +464,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_freeDStream(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_initDStream(
-    zds: *mut zstd::ZSTD_DStream    
+    zds: *mut zstd::ZSTD_DStream
 ) -> usize
 {
     zstd::ZSTD_initDStream(
@@ -476,7 +476,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_initDStream(
 pub unsafe extern "C" fn nativecompressions_ZSTD_decompressStream(
     zds: *mut zstd::ZSTD_DStream,
     output: *mut zstd::ZSTD_outBuffer,
-    input: *mut zstd::ZSTD_inBuffer    
+    input: *mut zstd::ZSTD_inBuffer
 ) -> usize
 {
     zstd::ZSTD_decompressStream(
@@ -488,7 +488,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_decompressStream(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_DStreamInSize(
-    
+
 ) -> usize
 {
     zstd::ZSTD_DStreamInSize(
@@ -498,7 +498,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_DStreamInSize(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_DStreamOutSize(
-    
+
 ) -> usize
 {
     zstd::ZSTD_DStreamOutSize(
@@ -515,7 +515,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_compress_usingDict(
     srcSize: usize,
     dict: *const c_void,
     dictSize: usize,
-    compressionLevel: c_int    
+    compressionLevel: c_int
 ) -> usize
 {
     zstd::ZSTD_compress_usingDict(
@@ -538,7 +538,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_decompress_usingDict(
     src: *const c_void,
     srcSize: usize,
     dict: *const c_void,
-    dictSize: usize    
+    dictSize: usize
 ) -> usize
 {
     zstd::ZSTD_decompress_usingDict(
@@ -556,7 +556,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_decompress_usingDict(
 pub unsafe extern "C" fn nativecompressions_ZSTD_createCDict(
     dictBuffer: *const c_void,
     dictSize: usize,
-    compressionLevel: c_int    
+    compressionLevel: c_int
 ) -> *mut zstd::ZSTD_CDict
 {
     zstd::ZSTD_createCDict(
@@ -568,7 +568,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_createCDict(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_freeCDict(
-    CDict: *mut zstd::ZSTD_CDict    
+    CDict: *mut zstd::ZSTD_CDict
 ) -> usize
 {
     zstd::ZSTD_freeCDict(
@@ -583,7 +583,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_compress_usingCDict(
     dstCapacity: usize,
     src: *const c_void,
     srcSize: usize,
-    cdict: *const zstd::ZSTD_CDict    
+    cdict: *const zstd::ZSTD_CDict
 ) -> usize
 {
     zstd::ZSTD_compress_usingCDict(
@@ -599,7 +599,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_compress_usingCDict(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_createDDict(
     dictBuffer: *const c_void,
-    dictSize: usize    
+    dictSize: usize
 ) -> *mut zstd::ZSTD_DDict
 {
     zstd::ZSTD_createDDict(
@@ -610,7 +610,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_createDDict(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_freeDDict(
-    ddict: *mut zstd::ZSTD_DDict    
+    ddict: *mut zstd::ZSTD_DDict
 ) -> usize
 {
     zstd::ZSTD_freeDDict(
@@ -625,7 +625,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_decompress_usingDDict(
     dstCapacity: usize,
     src: *const c_void,
     srcSize: usize,
-    ddict: *const zstd::ZSTD_DDict    
+    ddict: *const zstd::ZSTD_DDict
 ) -> usize
 {
     zstd::ZSTD_decompress_usingDDict(
@@ -641,7 +641,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_decompress_usingDDict(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_getDictID_fromDict(
     dict: *const c_void,
-    dictSize: usize    
+    dictSize: usize
 ) -> c_uint
 {
     zstd::ZSTD_getDictID_fromDict(
@@ -652,7 +652,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_getDictID_fromDict(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_getDictID_fromCDict(
-    cdict: *const zstd::ZSTD_CDict    
+    cdict: *const zstd::ZSTD_CDict
 ) -> c_uint
 {
     zstd::ZSTD_getDictID_fromCDict(
@@ -662,7 +662,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_getDictID_fromCDict(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_getDictID_fromDDict(
-    ddict: *const zstd::ZSTD_DDict    
+    ddict: *const zstd::ZSTD_DDict
 ) -> c_uint
 {
     zstd::ZSTD_getDictID_fromDDict(
@@ -673,7 +673,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_getDictID_fromDDict(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_getDictID_fromFrame(
     src: *const c_void,
-    srcSize: usize    
+    srcSize: usize
 ) -> c_uint
 {
     zstd::ZSTD_getDictID_fromFrame(
@@ -686,7 +686,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_getDictID_fromFrame(
 pub unsafe extern "C" fn nativecompressions_ZSTD_CCtx_loadDictionary(
     cctx: *mut zstd::ZSTD_CCtx,
     dict: *const c_void,
-    dictSize: usize    
+    dictSize: usize
 ) -> usize
 {
     zstd::ZSTD_CCtx_loadDictionary(
@@ -699,7 +699,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_CCtx_loadDictionary(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_CCtx_refCDict(
     cctx: *mut zstd::ZSTD_CCtx,
-    cdict: *const zstd::ZSTD_CDict    
+    cdict: *const zstd::ZSTD_CDict
 ) -> usize
 {
     zstd::ZSTD_CCtx_refCDict(
@@ -712,7 +712,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_CCtx_refCDict(
 pub unsafe extern "C" fn nativecompressions_ZSTD_CCtx_refPrefix(
     cctx: *mut zstd::ZSTD_CCtx,
     prefix: *const c_void,
-    prefixSize: usize    
+    prefixSize: usize
 ) -> usize
 {
     zstd::ZSTD_CCtx_refPrefix(
@@ -726,7 +726,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_CCtx_refPrefix(
 pub unsafe extern "C" fn nativecompressions_ZSTD_DCtx_loadDictionary(
     dctx: *mut zstd::ZSTD_DCtx,
     dict: *const c_void,
-    dictSize: usize    
+    dictSize: usize
 ) -> usize
 {
     zstd::ZSTD_DCtx_loadDictionary(
@@ -739,7 +739,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_DCtx_loadDictionary(
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_DCtx_refDDict(
     dctx: *mut zstd::ZSTD_DCtx,
-    ddict: *const zstd::ZSTD_DDict    
+    ddict: *const zstd::ZSTD_DDict
 ) -> usize
 {
     zstd::ZSTD_DCtx_refDDict(
@@ -752,7 +752,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_DCtx_refDDict(
 pub unsafe extern "C" fn nativecompressions_ZSTD_DCtx_refPrefix(
     dctx: *mut zstd::ZSTD_DCtx,
     prefix: *const c_void,
-    prefixSize: usize    
+    prefixSize: usize
 ) -> usize
 {
     zstd::ZSTD_DCtx_refPrefix(
@@ -764,7 +764,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_DCtx_refPrefix(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_sizeof_CCtx(
-    cctx: *const zstd::ZSTD_CCtx    
+    cctx: *const zstd::ZSTD_CCtx
 ) -> usize
 {
     zstd::ZSTD_sizeof_CCtx(
@@ -774,7 +774,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_sizeof_CCtx(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_sizeof_DCtx(
-    dctx: *const zstd::ZSTD_DCtx    
+    dctx: *const zstd::ZSTD_DCtx
 ) -> usize
 {
     zstd::ZSTD_sizeof_DCtx(
@@ -784,7 +784,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_sizeof_DCtx(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_sizeof_CStream(
-    zcs: *const zstd::ZSTD_CStream    
+    zcs: *const zstd::ZSTD_CStream
 ) -> usize
 {
     zstd::ZSTD_sizeof_CStream(
@@ -794,7 +794,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_sizeof_CStream(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_sizeof_DStream(
-    zds: *const zstd::ZSTD_DStream    
+    zds: *const zstd::ZSTD_DStream
 ) -> usize
 {
     zstd::ZSTD_sizeof_DStream(
@@ -804,7 +804,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_sizeof_DStream(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_sizeof_CDict(
-    cdict: *const zstd::ZSTD_CDict    
+    cdict: *const zstd::ZSTD_CDict
 ) -> usize
 {
     zstd::ZSTD_sizeof_CDict(
@@ -814,7 +814,7 @@ pub unsafe extern "C" fn nativecompressions_ZSTD_sizeof_CDict(
 
 #[no_mangle]
 pub unsafe extern "C" fn nativecompressions_ZSTD_sizeof_DDict(
-    ddict: *const zstd::ZSTD_DDict    
+    ddict: *const zstd::ZSTD_DDict
 ) -> usize
 {
     zstd::ZSTD_sizeof_DDict(

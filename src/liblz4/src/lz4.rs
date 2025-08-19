@@ -3,22 +3,19 @@
 pub const LZ4_HEAPMODE: u32 = 0;
 pub const LZ4_ACCELERATION_DEFAULT: u32 = 1;
 pub const LZ4_ACCELERATION_MAX: u32 = 65537;
+pub const LZ4_FORCE_MEMORY_ACCESS: u32 = 1;
 pub const LZ4_SRC_INCLUDED: u32 = 1;
 pub const LZ4_FREESTANDING: u32 = 0;
 pub const LZ4_VERSION_MAJOR: u32 = 1;
-pub const LZ4_VERSION_MINOR: u32 = 9;
-pub const LZ4_VERSION_RELEASE: u32 = 4;
-pub const LZ4_VERSION_NUMBER: u32 = 10904;
+pub const LZ4_VERSION_MINOR: u32 = 10;
+pub const LZ4_VERSION_RELEASE: u32 = 0;
+pub const LZ4_VERSION_NUMBER: u32 = 11000;
 pub const LZ4_MEMORY_USAGE_MIN: u32 = 10;
 pub const LZ4_MEMORY_USAGE_DEFAULT: u32 = 14;
 pub const LZ4_MEMORY_USAGE_MAX: u32 = 20;
-pub const LZ4_MEMORY_USAGE: u32 = 14;
 pub const LZ4_MAX_INPUT_SIZE: u32 = 2113929216;
 pub const LZ4_DISTANCE_MAX: u32 = 65535;
 pub const LZ4_COMPRESS_INPLACE_MARGIN: u32 = 65567;
-pub const LZ4_HASHLOG: u32 = 12;
-pub const LZ4_HASHTABLESIZE: u32 = 16384;
-pub const LZ4_HASH_SIZE_U32: u32 = 4096;
 pub const _VCRT_COMPILER_PREPROCESSOR: u32 = 1;
 pub const _SAL_VERSION: u32 = 20;
 pub const __SAL_H_VERSION: u32 = 180000000;
@@ -30,21 +27,23 @@ pub const _STL_LANG: u32 = 0;
 pub const _HAS_CXX17: u32 = 0;
 pub const _HAS_CXX20: u32 = 0;
 pub const _HAS_CXX23: u32 = 0;
+pub const _HAS_CXX26: u32 = 0;
 pub const _HAS_NODISCARD: u32 = 0;
 pub const WCHAR_MIN: u32 = 0;
 pub const WCHAR_MAX: u32 = 65535;
 pub const WINT_MIN: u32 = 0;
 pub const WINT_MAX: u32 = 65535;
-pub const LZ4_STREAM_MINSIZE: u32 = 16416;
 pub const LZ4_STREAMDECODE_MINSIZE: u32 = 32;
-pub const __FULLBX: &[u8; 4usize] = b"rbx\0";
+pub const __SAVE_GPRBX: &[u8; 30usize] = b"mov {%%rbx, %%rax |rax, rbx};\0";
+pub const __RESTORE_GPRBX: &[u8; 30usize] = b"mov {%%rax, %%rbx |rbx, rax};\0";
 pub const __TMPGPR: &[u8; 4usize] = b"rax\0";
+pub const _ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE: u32 = 1;
+pub const _CRT_BUILD_DESKTOP_APP: u32 = 1;
 pub const _ARGMAX: u32 = 100;
 pub const _CRT_INT_MAX: u32 = 2147483647;
 pub const _CRT_FUNCTIONS_REQUIRED: u32 = 1;
 pub const _CRT_HAS_CXX17: u32 = 0;
-pub const _ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE: u32 = 1;
-pub const _CRT_BUILD_DESKTOP_APP: u32 = 1;
+pub const _CRT_HAS_C11: u32 = 1;
 pub const _CRT_INTERNAL_NONSTDC_NAMES: u32 = 1;
 pub const __STDC_SECURE_LIB__: u32 = 200411;
 pub const __GOT_SECURE_LIB__: u32 = 200411;
@@ -249,7 +248,7 @@ pub const RUN_BITS: u32 = 4;
 pub const RUN_MASK: u32 = 15;
 pub const LZ4_FAST_DEC_LOOP: u32 = 1;
 pub const LZ4HC_HEAPMODE: u32 = 1;
-pub const LZ4HC_CLEVEL_MIN: u32 = 3;
+pub const LZ4HC_CLEVEL_MIN: u32 = 2;
 pub const LZ4HC_CLEVEL_DEFAULT: u32 = 9;
 pub const LZ4HC_CLEVEL_OPT_MIN: u32 = 10;
 pub const LZ4HC_CLEVEL_MAX: u32 = 12;
@@ -261,6 +260,10 @@ pub const LZ4HC_HASHTABLESIZE: u32 = 32768;
 pub const LZ4HC_HASH_MASK: u32 = 32767;
 pub const LZ4_STREAMHC_MINSIZE: u32 = 262200;
 pub const LZ4_OPT_NUM: u32 = 4096;
+pub const LZ4HC_HASHSIZE: u32 = 4;
+pub const LZ4MID_HASHSIZE: u32 = 8;
+pub const LZ4MID_HASHLOG: u32 = 14;
+pub const LZ4MID_HASHTABLESIZE: u32 = 16384;
 pub const TRAILING_LITERALS: u32 = 3;
 pub const LZ4F_HEAPMODE: u32 = 0;
 pub const LZ4F_VERSION: u32 = 100;
@@ -304,7 +307,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    #[doc = " LZ4_decompress_safe() :\n  compressedSize : is the exact complete size of the compressed block.\n  dstCapacity : is the size of destination buffer (which must be already allocated), presumed an upper bound of decompressed size.\n @return : the number of bytes decompressed into destination buffer (necessarily <= dstCapacity)\n           If destination buffer is not large enough, decoding will stop and output an error code (negative value).\n           If the source stream is detected malformed, the function will stop decoding and return a negative result.\n Note 1 : This function is protected against malicious data packets :\n          it will never writes outside 'dst' buffer, nor read outside 'source' buffer,\n          even if the compressed block is maliciously modified to order the decoder to do these actions.\n          In such case, the decoder stops immediately, and considers the compressed block malformed.\n Note 2 : compressedSize and dstCapacity must be provided to the function, the compressed block does not contain them.\n          The implementation is free to send / store / derive this information in whichever way is most beneficial.\n          If there is a need for a different format which bundles together both compressed data and its metadata, consider looking at lz4frame.h instead."]
+    #[doc = " LZ4_decompress_safe() :\n @compressedSize : is the exact complete size of the compressed block.\n @dstCapacity : is the size of destination buffer (which must be already allocated),\n                presumed an upper bound of decompressed size.\n @return : the number of bytes decompressed into destination buffer (necessarily <= dstCapacity)\n           If destination buffer is not large enough, decoding will stop and output an error code (negative value).\n           If the source stream is detected malformed, the function will stop decoding and return a negative result.\n Note 1 : This function is protected against malicious data packets :\n          it will never writes outside 'dst' buffer, nor read outside 'source' buffer,\n          even if the compressed block is maliciously modified to order the decoder to do these actions.\n          In such case, the decoder stops immediately, and considers the compressed block malformed.\n Note 2 : compressedSize and dstCapacity must be provided to the function, the compressed block does not contain them.\n          The implementation is free to send / store / derive this information in whichever way is most beneficial.\n          If there is a need for a different format which bundles together both compressed data and its metadata, consider looking at lz4frame.h instead."]
     pub fn LZ4_decompress_safe(
         src: *const ::std::os::raw::c_char,
         dst: *mut ::std::os::raw::c_char,
@@ -341,7 +344,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    #[doc = " LZ4_compress_destSize() :\n  Reverse the logic : compresses as much data as possible from 'src' buffer\n  into already allocated buffer 'dst', of size >= 'targetDestSize'.\n  This function either compresses the entire 'src' content into 'dst' if it's large enough,\n  or fill 'dst' buffer completely with as much data as possible from 'src'.\n  note: acceleration parameter is fixed to \"default\".\n\n *srcSizePtr : will be modified to indicate how many bytes where read from 'src' to fill 'dst'.\n               New value is necessarily <= input value.\n @return : Nb bytes written into 'dst' (necessarily <= targetDestSize)\n           or 0 if compression fails.\n\n Note : from v1.8.2 to v1.9.1, this function had a bug (fixed un v1.9.2+):\n        the produced compressed content could, in specific circumstances,\n        require to be decompressed into a destination buffer larger\n        by at least 1 byte than the content to decompress.\n        If an application uses `LZ4_compress_destSize()`,\n        it's highly recommended to update liblz4 to v1.9.2 or better.\n        If this can't be done or ensured,\n        the receiving decompression function should provide\n        a dstCapacity which is > decompressedSize, by at least 1 byte.\n        See https://github.com/lz4/lz4/issues/859 for details"]
+    #[doc = " LZ4_compress_destSize() :\n  Reverse the logic : compresses as much data as possible from 'src' buffer\n  into already allocated buffer 'dst', of size >= 'dstCapacity'.\n  This function either compresses the entire 'src' content into 'dst' if it's large enough,\n  or fill 'dst' buffer completely with as much data as possible from 'src'.\n  note: acceleration parameter is fixed to \"default\".\n\n *srcSizePtr : in+out parameter. Initially contains size of input.\n               Will be modified to indicate how many bytes where read from 'src' to fill 'dst'.\n               New value is necessarily <= input value.\n @return : Nb bytes written into 'dst' (necessarily <= dstCapacity)\n           or 0 if compression fails.\n\n Note : from v1.8.2 to v1.9.1, this function had a bug (fixed in v1.9.2+):\n        the produced compressed content could, in specific circumstances,\n        require to be decompressed into a destination buffer larger\n        by at least 1 byte than the content to decompress.\n        If an application uses `LZ4_compress_destSize()`,\n        it's highly recommended to update liblz4 to v1.9.2 or better.\n        If this can't be done or ensured,\n        the receiving decompression function should provide\n        a dstCapacity which is > decompressedSize, by at least 1 byte.\n        See https://github.com/lz4/lz4/issues/859 for details"]
     pub fn LZ4_compress_destSize(
         src: *const ::std::os::raw::c_char,
         dst: *mut ::std::os::raw::c_char,
@@ -371,12 +374,27 @@ extern "C" {
     pub fn LZ4_resetStream_fast(streamPtr: *mut LZ4_stream_t);
 }
 extern "C" {
-    #[doc = " LZ4_loadDict() :\n  Use this function to reference a static dictionary into LZ4_stream_t.\n  The dictionary must remain available during compression.\n  LZ4_loadDict() triggers a reset, so any previous data will be forgotten.\n  The same dictionary will have to be loaded on decompression side for successful decoding.\n  Dictionary are useful for better compression of small data (KB range).\n  While LZ4 accept any input as dictionary,\n  results are generally better when using Zstandard's Dictionary Builder.\n  Loading a size of 0 is allowed, and is the same as reset.\n @return : loaded dictionary size, in bytes (necessarily <= 64 KB)"]
+    #[doc = " LZ4_loadDict() :\n  Use this function to reference a static dictionary into LZ4_stream_t.\n  The dictionary must remain available during compression.\n  LZ4_loadDict() triggers a reset, so any previous data will be forgotten.\n  The same dictionary will have to be loaded on decompression side for successful decoding.\n  Dictionary are useful for better compression of small data (KB range).\n  While LZ4 itself accepts any input as dictionary, dictionary efficiency is also a topic.\n  When in doubt, employ the Zstandard's Dictionary Builder.\n  Loading a size of 0 is allowed, and is the same as reset.\n @return : loaded dictionary size, in bytes (note: only the last 64 KB are loaded)"]
     pub fn LZ4_loadDict(
         streamPtr: *mut LZ4_stream_t,
         dictionary: *const ::std::os::raw::c_char,
         dictSize: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    #[doc = " LZ4_loadDictSlow() : v1.10.0+\n  Same as LZ4_loadDict(),\n  but uses a bit more cpu to reference the dictionary content more thoroughly.\n  This is expected to slightly improve compression ratio.\n  The extra-cpu cost is likely worth it if the dictionary is re-used across multiple sessions.\n @return : loaded dictionary size, in bytes (note: only the last 64 KB are loaded)"]
+    pub fn LZ4_loadDictSlow(
+        streamPtr: *mut LZ4_stream_t,
+        dictionary: *const ::std::os::raw::c_char,
+        dictSize: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    #[doc = " LZ4_attach_dictionary() : stable since v1.10.0\n\n  This allows efficient re-use of a static dictionary multiple times.\n\n  Rather than re-loading the dictionary buffer into a working context before\n  each compression, or copying a pre-loaded dictionary's LZ4_stream_t into a\n  working LZ4_stream_t, this function introduces a no-copy setup mechanism,\n  in which the working stream references @dictionaryStream in-place.\n\n  Several assumptions are made about the state of @dictionaryStream.\n  Currently, only states which have been prepared by LZ4_loadDict() or\n  LZ4_loadDictSlow() should be expected to work.\n\n  Alternatively, the provided @dictionaryStream may be NULL,\n  in which case any existing dictionary stream is unset.\n\n  If a dictionary is provided, it replaces any pre-existing stream history.\n  The dictionary contents are the only history that can be referenced and\n  logically immediately precede the data compressed in the first subsequent\n  compression call.\n\n  The dictionary will only remain attached to the working stream through the\n  first compression call, at the end of which it is cleared.\n @dictionaryStream stream (and source buffer) must remain in-place / accessible / unchanged\n  through the completion of the compression session.\n\n  Note: there is no equivalent LZ4_attach_*() method on the decompression side\n  because there is no initialization cost, hence no need to share the cost across multiple sessions.\n  To decompress LZ4 blocks using dictionary, attached or not,\n  just employ the regular LZ4_setStreamDecode() for streaming,\n  or the stateless LZ4_decompress_safe_usingDict() for one-shot decompression."]
+    pub fn LZ4_attach_dictionary(
+        workingStream: *mut LZ4_stream_t,
+        dictionaryStream: *const LZ4_stream_t,
+    );
 }
 extern "C" {
     #[doc = " LZ4_compress_fast_continue() :\n  Compress 'src' content using data from previously compressed blocks, for better compression ratio.\n 'dst' buffer must be already allocated.\n  If dstCapacity >= LZ4_compressBound(srcSize), compression is guaranteed to succeed, and runs faster.\n\n @return : size of compressed block\n           or 0 if there is an error (typically, cannot fit into 'dst').\n\n  Note 1 : Each invocation to LZ4_compress_fast_continue() generates a new block.\n           Each block has precise boundaries.\n           Each block must be decompressed separately, calling LZ4_decompress_*() with relevant metadata.\n           It's not possible to append blocks together and expect a single invocation of LZ4_decompress_*() to decompress them together.\n\n  Note 2 : The previous 64KB of source data is __assumed__ to remain present, unmodified, at same address in memory !\n\n  Note 3 : When input is structured as a double-buffer, each buffer can have any size, including < 64 KB.\n           Make sure that buffers are separated, by at least one byte.\n           This construction ensures that each block only depends on previous block.\n\n  Note 4 : If input buffer is a ring-buffer, it can have any size, including < 64 KB.\n\n  Note 5 : After an error, the stream status is undefined (invalid), it can only be reset or freed."]
@@ -417,7 +435,7 @@ extern "C" {
     pub fn LZ4_decoderRingBufferSize(maxBlockSize: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    #[doc = " LZ4_decompress_*_continue() :\n  These decoding functions allow decompression of consecutive blocks in \"streaming\" mode.\n  A block is an unsplittable entity, it must be presented entirely to a decompression function.\n  Decompression functions only accepts one block at a time.\n  The last 64KB of previously decoded data *must* remain available and unmodified at the memory position where they were decoded.\n  If less than 64KB of data has been decoded, all the data must be present.\n\n  Special : if decompression side sets a ring buffer, it must respect one of the following conditions :\n  - Decompression buffer size is _at least_ LZ4_decoderRingBufferSize(maxBlockSize).\n    maxBlockSize is the maximum size of any single block. It can have any value > 16 bytes.\n    In which case, encoding and decoding buffers do not need to be synchronized.\n    Actually, data can be produced by any source compliant with LZ4 format specification, and respecting maxBlockSize.\n  - Synchronized mode :\n    Decompression buffer size is _exactly_ the same as compression buffer size,\n    and follows exactly same update rule (block boundaries at same positions),\n    and decoding function is provided with exact decompressed size of each block (exception for last block of the stream),\n    _then_ decoding & encoding ring buffer can have any size, including small ones ( < 64 KB).\n  - Decompression buffer is larger than encoding buffer, by a minimum of maxBlockSize more bytes.\n    In which case, encoding and decoding buffers do not need to be synchronized,\n    and encoding ring buffer can have any size, including small ones ( < 64 KB).\n\n  Whenever these conditions are not possible,\n  save the last 64KB of decoded data into a safe buffer where it can't be modified during decompression,\n  then indicate where this data is saved using LZ4_setStreamDecode(), before decompressing next block."]
+    #[doc = " LZ4_decompress_safe_continue() :\n  This decoding function allows decompression of consecutive blocks in \"streaming\" mode.\n  The difference with the usual independent blocks is that\n  new blocks are allowed to find references into former blocks.\n  A block is an unsplittable entity, and must be presented entirely to the decompression function.\n  LZ4_decompress_safe_continue() only accepts one block at a time.\n  It's modeled after `LZ4_decompress_safe()` and behaves similarly.\n\n @LZ4_streamDecode : decompression state, tracking the position in memory of past data\n @compressedSize : exact complete size of one compressed block.\n @dstCapacity : size of destination buffer (which must be already allocated),\n                must be an upper bound of decompressed size.\n @return : number of bytes decompressed into destination buffer (necessarily <= dstCapacity)\n           If destination buffer is not large enough, decoding will stop and output an error code (negative value).\n           If the source stream is detected malformed, the function will stop decoding and return a negative result.\n\n  The last 64KB of previously decoded data *must* remain available and unmodified\n  at the memory position where they were previously decoded.\n  If less than 64KB of data has been decoded, all the data must be present.\n\n  Special : if decompression side sets a ring buffer, it must respect one of the following conditions :\n  - Decompression buffer size is _at least_ LZ4_decoderRingBufferSize(maxBlockSize).\n    maxBlockSize is the maximum size of any single block. It can have any value > 16 bytes.\n    In which case, encoding and decoding buffers do not need to be synchronized.\n    Actually, data can be produced by any source compliant with LZ4 format specification, and respecting maxBlockSize.\n  - Synchronized mode :\n    Decompression buffer size is _exactly_ the same as compression buffer size,\n    and follows exactly same update rule (block boundaries at same positions),\n    and decoding function is provided with exact decompressed size of each block (exception for last block of the stream),\n    _then_ decoding & encoding ring buffer can have any size, including small ones ( < 64 KB).\n  - Decompression buffer is larger than encoding buffer, by a minimum of maxBlockSize more bytes.\n    In which case, encoding and decoding buffers do not need to be synchronized,\n    and encoding ring buffer can have any size, including small ones ( < 64 KB).\n\n  Whenever these conditions are not possible,\n  save the last 64KB of decoded data into a safe buffer where it can't be modified during decompression,\n  then indicate where this data is saved using LZ4_setStreamDecode(), before decompressing next block."]
     pub fn LZ4_decompress_safe_continue(
         LZ4_streamDecode: *mut LZ4_streamDecode_t,
         src: *const ::std::os::raw::c_char,
@@ -427,7 +445,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    #[doc = " LZ4_decompress_*_usingDict() :\n  These decoding functions work the same as\n  a combination of LZ4_setStreamDecode() followed by LZ4_decompress_*_continue()\n  They are stand-alone, and don't need an LZ4_streamDecode_t structure.\n  Dictionary is presumed stable : it must remain accessible and unmodified during decompression.\n  Performance tip : Decompression speed can be substantially increased\n                    when dst == dictStart + dictSize."]
+    #[doc = " LZ4_decompress_safe_usingDict() :\n  Works the same as\n  a combination of LZ4_setStreamDecode() followed by LZ4_decompress_safe_continue()\n  However, it's stateless: it doesn't need any LZ4_streamDecode_t state.\n  Dictionary is presumed stable : it must remain accessible and unmodified during decompression.\n  Performance tip : Decompression speed can be substantially increased\n                    when dst == dictStart + dictSize."]
     pub fn LZ4_decompress_safe_usingDict(
         src: *const ::std::os::raw::c_char,
         dst: *mut ::std::os::raw::c_char,
@@ -438,6 +456,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    #[doc = " LZ4_decompress_safe_partial_usingDict() :\n  Behaves the same as LZ4_decompress_safe_partial()\n  with the added ability to specify a memory segment for past data.\n  Performance tip : Decompression speed can be substantially increased\n                    when dst == dictStart + dictSize."]
     pub fn LZ4_decompress_safe_partial_usingDict(
         src: *const ::std::os::raw::c_char,
         dst: *mut ::std::os::raw::c_char,
@@ -460,11 +479,15 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    #[doc = " LZ4_attach_dictionary() :\n  This is an experimental API that allows\n  efficient use of a static dictionary many times.\n\n  Rather than re-loading the dictionary buffer into a working context before\n  each compression, or copying a pre-loaded dictionary's LZ4_stream_t into a\n  working LZ4_stream_t, this function introduces a no-copy setup mechanism,\n  in which the working stream references the dictionary stream in-place.\n\n  Several assumptions are made about the state of the dictionary stream.\n  Currently, only streams which have been prepared by LZ4_loadDict() should\n  be expected to work.\n\n  Alternatively, the provided dictionaryStream may be NULL,\n  in which case any existing dictionary stream is unset.\n\n  If a dictionary is provided, it replaces any pre-existing stream history.\n  The dictionary contents are the only history that can be referenced and\n  logically immediately precede the data compressed in the first subsequent\n  compression call.\n\n  The dictionary will only remain attached to the working stream through the\n  first compression call, at the end of which it is cleared. The dictionary\n  stream (and source buffer) must remain in-place / accessible / unchanged\n  through the completion of the first compression call on the stream."]
-    pub fn LZ4_attach_dictionary(
-        workingStream: *mut LZ4_stream_t,
-        dictionaryStream: *const LZ4_stream_t,
-    );
+    #[doc = " LZ4_compress_destSize_extState() : introduced in v1.10.0\n  Same as LZ4_compress_destSize(), but using an externally allocated state.\n  Also: exposes @acceleration"]
+    pub fn LZ4_compress_destSize_extState(
+        state: *mut ::std::os::raw::c_void,
+        src: *const ::std::os::raw::c_char,
+        dst: *mut ::std::os::raw::c_char,
+        srcSizePtr: *mut ::std::os::raw::c_int,
+        targetDstSize: ::std::os::raw::c_int,
+        acceleration: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
 }
 pub type va_list = *mut ::std::os::raw::c_char;
 extern "C" {
@@ -634,7 +657,10 @@ fn bindgen_test_layout_LZ4_stream_u() {
 }
 extern "C" {
     #[doc = " LZ4_initStream() : v1.9.0+\n  An LZ4_stream_t structure must be initialized at least once.\n  This is automatically done when invoking LZ4_createStream(),\n  but it's not when the structure is simply declared on stack (for example).\n\n  Use LZ4_initStream() to properly initialize a newly declared LZ4_stream_t.\n  It can also initialize any arbitrary buffer of sufficient size,\n  and will @return a pointer of proper type upon initialization.\n\n  Note : initialization fails if size and alignment conditions are not respected.\n         In which case, the function will @return NULL.\n  Note2: An LZ4_stream_t structure guarantees correct alignment and size.\n  Note3: Before v1.9.0, use LZ4_resetStream() instead"]
-    pub fn LZ4_initStream(buffer: *mut ::std::os::raw::c_void, size: usize) -> *mut LZ4_stream_t;
+    pub fn LZ4_initStream(
+        stateBuffer: *mut ::std::os::raw::c_void,
+        size: usize,
+    ) -> *mut LZ4_stream_t;
 }
 #[doc = " LZ4_streamDecode_t :\n  Never ever use below internal definitions directly !\n  These definitions are not API/ABI safe, and may change in future versions.\n  If you need static allocation, declare or allocate an LZ4_streamDecode_t object."]
 #[repr(C)]
@@ -2806,6 +2832,11 @@ pub type __v2du = [::std::os::raw::c_ulonglong; 2usize];
 pub type __v8hu = [::std::os::raw::c_ushort; 8usize];
 pub type __v16qu = [::std::os::raw::c_uchar; 16usize];
 pub type __v16qs = [::std::os::raw::c_schar; 16usize];
+pub type __v8hf = u128;
+pub type __m128h = u128;
+pub type __m128h_u = u128;
+pub type __v8bf = u128;
+pub type __m128bh = u128;
 extern "C" {
     pub fn _mm_clflush(__p: *const ::std::os::raw::c_void);
 }
@@ -4626,6 +4657,96 @@ pub const limitedOutput_directive_notLimited: limitedOutput_directive = 0;
 pub const limitedOutput_directive_limitedOutput: limitedOutput_directive = 1;
 pub const limitedOutput_directive_fillOutput: limitedOutput_directive = 2;
 pub type limitedOutput_directive = ::std::os::raw::c_int;
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
+pub struct LZ4_unalign16 {
+    pub u16_: U16,
+}
+#[test]
+fn bindgen_test_layout_LZ4_unalign16() {
+    const UNINIT: ::std::mem::MaybeUninit<LZ4_unalign16> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<LZ4_unalign16>(),
+        2usize,
+        concat!("Size of: ", stringify!(LZ4_unalign16))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<LZ4_unalign16>(),
+        1usize,
+        concat!("Alignment of ", stringify!(LZ4_unalign16))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).u16_) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(LZ4_unalign16),
+            "::",
+            stringify!(u16_)
+        )
+    );
+}
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
+pub struct LZ4_unalign32 {
+    pub u32_: U32,
+}
+#[test]
+fn bindgen_test_layout_LZ4_unalign32() {
+    const UNINIT: ::std::mem::MaybeUninit<LZ4_unalign32> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<LZ4_unalign32>(),
+        4usize,
+        concat!("Size of: ", stringify!(LZ4_unalign32))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<LZ4_unalign32>(),
+        1usize,
+        concat!("Alignment of ", stringify!(LZ4_unalign32))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).u32_) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(LZ4_unalign32),
+            "::",
+            stringify!(u32_)
+        )
+    );
+}
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
+pub struct LZ4_unalignST {
+    pub uArch: reg_t,
+}
+#[test]
+fn bindgen_test_layout_LZ4_unalignST() {
+    const UNINIT: ::std::mem::MaybeUninit<LZ4_unalignST> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<LZ4_unalignST>(),
+        8usize,
+        concat!("Size of: ", stringify!(LZ4_unalignST))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<LZ4_unalignST>(),
+        1usize,
+        concat!("Alignment of ", stringify!(LZ4_unalignST))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).uArch) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(LZ4_unalignST),
+            "::",
+            stringify!(uArch)
+        )
+    );
+}
 extern "C" {
     pub static inc32table: [::std::os::raw::c_uint; 8usize];
 }
@@ -4677,12 +4798,20 @@ extern "C" {
         dictSize: usize,
     ) -> ::std::os::raw::c_int;
 }
+pub const LoadDict_mode_e__ld_fast: LoadDict_mode_e = 0;
+pub const LoadDict_mode_e__ld_slow: LoadDict_mode_e = 1;
+pub type LoadDict_mode_e = ::std::os::raw::c_int;
+extern "C" {
+    pub fn LZ4_loadDict_internal(
+        LZ4_dict: *mut LZ4_stream_t,
+        dictionary: *const ::std::os::raw::c_char,
+        dictSize: ::std::os::raw::c_int,
+        _ld: LoadDict_mode_e,
+    ) -> ::std::os::raw::c_int;
+}
 pub const earlyEnd_directive_decode_full_block: earlyEnd_directive = 0;
 pub const earlyEnd_directive_partial_decode: earlyEnd_directive = 1;
 pub type earlyEnd_directive = ::std::os::raw::c_int;
-extern "C" {
-    pub fn read_long_length_no_check(pp: *mut *const BYTE) -> usize;
-}
 pub type Rvl_t = usize;
 extern "C" {
     pub static rvl_error: Rvl_t;
@@ -4769,6 +4898,13 @@ extern "C" {
         safeBuffer: *mut ::std::os::raw::c_char,
         maxDictSize: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    #[doc = " LZ4_attach_HC_dictionary() : stable since v1.10.0\n  This API allows for the efficient re-use of a static dictionary many times.\n\n  Rather than re-loading the dictionary buffer into a working context before\n  each compression, or copying a pre-loaded dictionary's LZ4_streamHC_t into a\n  working LZ4_streamHC_t, this function introduces a no-copy setup mechanism,\n  in which the working stream references the dictionary stream in-place.\n\n  Several assumptions are made about the state of the dictionary stream.\n  Currently, only streams which have been prepared by LZ4_loadDictHC() should\n  be expected to work.\n\n  Alternatively, the provided dictionary stream pointer may be NULL, in which\n  case any existing dictionary stream is unset.\n\n  A dictionary should only be attached to a stream without any history (i.e.,\n  a stream that has just been reset).\n\n  The dictionary will remain attached to the working stream only for the\n  current stream session. Calls to LZ4_resetStreamHC(_fast) will remove the\n  dictionary context association from the working stream. The dictionary\n  stream (and source buffer) must remain in-place / accessible / unchanged\n  through the lifetime of the stream session."]
+    pub fn LZ4_attach_HC_dictionary(
+        working_stream: *mut LZ4_streamHC_t,
+        dictionary_stream: *const LZ4_streamHC_t,
+    );
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -5124,16 +5260,171 @@ extern "C" {
         compressionLevel: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
-    #[doc = " LZ4_attach_HC_dictionary() :\n  This is an experimental API that allows for the efficient use of a\n  static dictionary many times.\n\n  Rather than re-loading the dictionary buffer into a working context before\n  each compression, or copying a pre-loaded dictionary's LZ4_streamHC_t into a\n  working LZ4_streamHC_t, this function introduces a no-copy setup mechanism,\n  in which the working stream references the dictionary stream in-place.\n\n  Several assumptions are made about the state of the dictionary stream.\n  Currently, only streams which have been prepared by LZ4_loadDictHC() should\n  be expected to work.\n\n  Alternatively, the provided dictionary stream pointer may be NULL, in which\n  case any existing dictionary stream is unset.\n\n  A dictionary should only be attached to a stream without any history (i.e.,\n  a stream that has just been reset).\n\n  The dictionary will remain attached to the working stream only for the\n  current stream session. Calls to LZ4_resetStreamHC(_fast) will remove the\n  dictionary context association from the working stream. The dictionary\n  stream (and source buffer) must remain in-place / accessible / unchanged\n  through the lifetime of the stream session."]
-    pub fn LZ4_attach_HC_dictionary(
-        working_stream: *mut LZ4_streamHC_t,
-        dictionary_stream: *const LZ4_streamHC_t,
-    );
-}
 pub const dictCtx_directive_noDictCtx: dictCtx_directive = 0;
 pub const dictCtx_directive_usingDictCtxHc: dictCtx_directive = 1;
 pub type dictCtx_directive = ::std::os::raw::c_int;
+pub const lz4hc_strat_e_lz4mid: lz4hc_strat_e = 0;
+pub const lz4hc_strat_e_lz4hc: lz4hc_strat_e = 1;
+pub const lz4hc_strat_e_lz4opt: lz4hc_strat_e = 2;
+pub type lz4hc_strat_e = ::std::os::raw::c_int;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct cParams_t {
+    pub strat: lz4hc_strat_e,
+    pub nbSearches: ::std::os::raw::c_int,
+    pub targetLength: U32,
+}
+#[test]
+fn bindgen_test_layout_cParams_t() {
+    const UNINIT: ::std::mem::MaybeUninit<cParams_t> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<cParams_t>(),
+        12usize,
+        concat!("Size of: ", stringify!(cParams_t))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<cParams_t>(),
+        4usize,
+        concat!("Alignment of ", stringify!(cParams_t))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).strat) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(cParams_t),
+            "::",
+            stringify!(strat)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).nbSearches) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(cParams_t),
+            "::",
+            stringify!(nbSearches)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).targetLength) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(cParams_t),
+            "::",
+            stringify!(targetLength)
+        )
+    );
+}
+extern "C" {
+    pub static k_clTable: [cParams_t; 13usize];
+}
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
+pub struct LZ4_unalign64 {
+    pub u64_: U64,
+}
+#[test]
+fn bindgen_test_layout_LZ4_unalign64() {
+    const UNINIT: ::std::mem::MaybeUninit<LZ4_unalign64> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<LZ4_unalign64>(),
+        8usize,
+        concat!("Size of: ", stringify!(LZ4_unalign64))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<LZ4_unalign64>(),
+        1usize,
+        concat!("Alignment of ", stringify!(LZ4_unalign64))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).u64_) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(LZ4_unalign64),
+            "::",
+            stringify!(u64_)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct LZ4HC_match_t {
+    pub off: ::std::os::raw::c_int,
+    pub len: ::std::os::raw::c_int,
+    pub back: ::std::os::raw::c_int,
+}
+#[test]
+fn bindgen_test_layout_LZ4HC_match_t() {
+    const UNINIT: ::std::mem::MaybeUninit<LZ4HC_match_t> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<LZ4HC_match_t>(),
+        12usize,
+        concat!("Size of: ", stringify!(LZ4HC_match_t))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<LZ4HC_match_t>(),
+        4usize,
+        concat!("Alignment of ", stringify!(LZ4HC_match_t))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).off) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(LZ4HC_match_t),
+            "::",
+            stringify!(off)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).len) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(LZ4HC_match_t),
+            "::",
+            stringify!(len)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).back) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(LZ4HC_match_t),
+            "::",
+            stringify!(back)
+        )
+    );
+}
+extern "C" {
+    pub fn LZ4HC_searchExtDict(
+        ip: *const BYTE,
+        ipIndex: U32,
+        iLowLimit: *const BYTE,
+        iHighLimit: *const BYTE,
+        dictCtx: *const LZ4HC_CCtx_internal,
+        gDictEndIndex: U32,
+        currentBestML: ::std::os::raw::c_int,
+        nbAttempts: ::std::os::raw::c_int,
+    ) -> LZ4HC_match_t;
+}
+pub type LZ4MID_searchIntoDict_f = ::std::option::Option<
+    unsafe extern "C" fn(
+        ip: *const BYTE,
+        ipIndex: U32,
+        iHighLimit: *const BYTE,
+        dictCtx: *const LZ4HC_CCtx_internal,
+        gDictEndIndex: U32,
+    ) -> LZ4HC_match_t,
+>;
 pub const repeat_state_e_rep_untested: repeat_state_e = 0;
 pub const repeat_state_e_rep_not: repeat_state_e = 1;
 pub const repeat_state_e_rep_confirmed: repeat_state_e = 2;
@@ -5201,47 +5492,6 @@ fn bindgen_test_layout_LZ4HC_optimal_t() {
             stringify!(LZ4HC_optimal_t),
             "::",
             stringify!(litlen)
-        )
-    );
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct LZ4HC_match_t {
-    pub off: ::std::os::raw::c_int,
-    pub len: ::std::os::raw::c_int,
-}
-#[test]
-fn bindgen_test_layout_LZ4HC_match_t() {
-    const UNINIT: ::std::mem::MaybeUninit<LZ4HC_match_t> = ::std::mem::MaybeUninit::uninit();
-    let ptr = UNINIT.as_ptr();
-    assert_eq!(
-        ::std::mem::size_of::<LZ4HC_match_t>(),
-        8usize,
-        concat!("Size of: ", stringify!(LZ4HC_match_t))
-    );
-    assert_eq!(
-        ::std::mem::align_of::<LZ4HC_match_t>(),
-        4usize,
-        concat!("Alignment of ", stringify!(LZ4HC_match_t))
-    );
-    assert_eq!(
-        unsafe { ::std::ptr::addr_of!((*ptr).off) as usize - ptr as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(LZ4HC_match_t),
-            "::",
-            stringify!(off)
-        )
-    );
-    assert_eq!(
-        unsafe { ::std::ptr::addr_of!((*ptr).len) as usize - ptr as usize },
-        4usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(LZ4HC_match_t),
-            "::",
-            stringify!(len)
         )
     );
 }
@@ -5443,7 +5693,14 @@ fn bindgen_test_layout_LZ4F_preferences_t() {
     );
 }
 extern "C" {
-    pub fn LZ4F_compressionLevel_max() -> ::std::os::raw::c_int;
+    #[doc = " LZ4F_compressFrame() :\n  Compress srcBuffer content into an LZ4-compressed frame.\n  It's a one shot operation, all input content is consumed, and all output is generated.\n\n  Note : it's a stateless operation (no LZ4F_cctx state needed).\n  In order to reduce load on the allocator, LZ4F_compressFrame(), by default,\n  uses the stack to allocate space for the compression state and some table.\n  If this usage of the stack is too much for your application,\n  consider compiling `lz4frame.c` with compile-time macro LZ4F_HEAPMODE set to 1 instead.\n  All state allocations will use the Heap.\n  It also means each invocation of LZ4F_compressFrame() will trigger several internal alloc/free invocations.\n\n @dstCapacity MUST be >= LZ4F_compressFrameBound(srcSize, preferencesPtr).\n @preferencesPtr is optional : one can provide NULL, in which case all preferences are set to default.\n @return : number of bytes written into dstBuffer.\n           or an error code if it fails (can be tested using LZ4F_isError())"]
+    pub fn LZ4F_compressFrame(
+        dstBuffer: *mut ::std::os::raw::c_void,
+        dstCapacity: usize,
+        srcBuffer: *const ::std::os::raw::c_void,
+        srcSize: usize,
+        preferencesPtr: *const LZ4F_preferences_t,
+    ) -> usize;
 }
 extern "C" {
     #[doc = " LZ4F_compressFrameBound() :\n  Returns the maximum possible compressed size with LZ4F_compressFrame() given srcSize and preferences.\n `preferencesPtr` is optional. It can be replaced by NULL, in which case, the function will assume default preferences.\n  Note : this result is only usable with LZ4F_compressFrame().\n         It may also be relevant to LZ4F_compressUpdate() _only if_ no flush() operation is ever performed."]
@@ -5453,14 +5710,8 @@ extern "C" {
     ) -> usize;
 }
 extern "C" {
-    #[doc = " LZ4F_compressFrame() :\n  Compress an entire srcBuffer into a valid LZ4 frame.\n  dstCapacity MUST be >= LZ4F_compressFrameBound(srcSize, preferencesPtr).\n  The LZ4F_preferences_t structure is optional : you can provide NULL as argument. All preferences will be set to default.\n @return : number of bytes written into dstBuffer.\n           or an error code if it fails (can be tested using LZ4F_isError())"]
-    pub fn LZ4F_compressFrame(
-        dstBuffer: *mut ::std::os::raw::c_void,
-        dstCapacity: usize,
-        srcBuffer: *const ::std::os::raw::c_void,
-        srcSize: usize,
-        preferencesPtr: *const LZ4F_preferences_t,
-    ) -> usize;
+    #[doc = " LZ4F_compressionLevel_max() :\n @return maximum allowed compression level (currently: 12)"]
+    pub fn LZ4F_compressionLevel_max() -> ::std::os::raw::c_int;
 }
 pub type LZ4F_cctx = LZ4F_cctx_s;
 pub type LZ4F_compressionContext_t = *mut LZ4F_cctx;
@@ -5520,7 +5771,7 @@ extern "C" {
     pub fn LZ4F_freeCompressionContext(cctx: *mut LZ4F_cctx) -> LZ4F_errorCode_t;
 }
 extern "C" {
-    #[doc = " LZ4F_compressBegin() :\n  will write the frame header into dstBuffer.\n  dstCapacity must be >= LZ4F_HEADER_SIZE_MAX bytes.\n `prefsPtr` is optional : you can provide NULL as argument, all preferences will then be set to default.\n @return : number of bytes written into dstBuffer for the header\n           or an error code (which can be tested using LZ4F_isError())"]
+    #[doc = " LZ4F_compressBegin() :\n  will write the frame header into dstBuffer.\n  dstCapacity must be >= LZ4F_HEADER_SIZE_MAX bytes.\n `prefsPtr` is optional : NULL can be provided to set all preferences to default.\n @return : number of bytes written into dstBuffer for the header\n           or an error code (which can be tested using LZ4F_isError())"]
     pub fn LZ4F_compressBegin(
         cctx: *mut LZ4F_cctx,
         dstBuffer: *mut ::std::os::raw::c_void,
@@ -5651,7 +5902,7 @@ extern "C" {
     ) -> usize;
 }
 extern "C" {
-    #[doc = " LZ4F_decompress() :\n  Call this function repetitively to regenerate data compressed in `srcBuffer`.\n\n  The function requires a valid dctx state.\n  It will read up to *srcSizePtr bytes from srcBuffer,\n  and decompress data into dstBuffer, of capacity *dstSizePtr.\n\n  The nb of bytes consumed from srcBuffer will be written into *srcSizePtr (necessarily <= original value).\n  The nb of bytes decompressed into dstBuffer will be written into *dstSizePtr (necessarily <= original value).\n\n  The function does not necessarily read all input bytes, so always check value in *srcSizePtr.\n  Unconsumed source data must be presented again in subsequent invocations.\n\n `dstBuffer` can freely change between each consecutive function invocation.\n `dstBuffer` content will be overwritten.\n\n @return : an hint of how many `srcSize` bytes LZ4F_decompress() expects for next call.\n  Schematically, it's the size of the current (or remaining) compressed block + header of next block.\n  Respecting the hint provides some small speed benefit, because it skips intermediate buffers.\n  This is just a hint though, it's always possible to provide any srcSize.\n\n  When a frame is fully decoded, @return will be 0 (no more data expected).\n  When provided with more bytes than necessary to decode a frame,\n  LZ4F_decompress() will stop reading exactly at end of current frame, and @return 0.\n\n  If decompression failed, @return is an error code, which can be tested using LZ4F_isError().\n  After a decompression error, the `dctx` context is not resumable.\n  Use LZ4F_resetDecompressionContext() to return to clean state.\n\n  After a frame is fully decoded, dctx can be used again to decompress another frame."]
+    #[doc = " LZ4F_decompress() :\n  Call this function repetitively to regenerate data compressed in `srcBuffer`.\n\n  The function requires a valid dctx state.\n  It will read up to *srcSizePtr bytes from srcBuffer,\n  and decompress data into dstBuffer, of capacity *dstSizePtr.\n\n  The nb of bytes consumed from srcBuffer will be written into *srcSizePtr (necessarily <= original value).\n  The nb of bytes decompressed into dstBuffer will be written into *dstSizePtr (necessarily <= original value).\n\n  The function does not necessarily read all input bytes, so always check value in *srcSizePtr.\n  Unconsumed source data must be presented again in subsequent invocations.\n\n `dstBuffer` can freely change between each consecutive function invocation.\n `dstBuffer` content will be overwritten.\n\n  Note: if `LZ4F_getFrameInfo()` is called before `LZ4F_decompress()`, srcBuffer must be updated to reflect\n  the number of bytes consumed after reading the frame header. Failure to update srcBuffer before calling\n  `LZ4F_decompress()` will cause decompression failure or, even worse, successful but incorrect decompression.\n  See the `LZ4F_getFrameInfo()` docs for details.\n\n @return : an hint of how many `srcSize` bytes LZ4F_decompress() expects for next call.\n  Schematically, it's the size of the current (or remaining) compressed block + header of next block.\n  Respecting the hint provides some small speed benefit, because it skips intermediate buffers.\n  This is just a hint though, it's always possible to provide any srcSize.\n\n  When a frame is fully decoded, @return will be 0 (no more data expected).\n  When provided with more bytes than necessary to decode a frame,\n  LZ4F_decompress() will stop reading exactly at end of current frame, and @return 0.\n\n  If decompression failed, @return is an error code, which can be tested using LZ4F_isError().\n  After a decompression error, the `dctx` context is not resumable.\n  Use LZ4F_resetDecompressionContext() to return to clean state.\n\n  After a frame is fully decoded, dctx can be used again to decompress another frame."]
     pub fn LZ4F_decompress(
         dctx: *mut LZ4F_dctx,
         dstBuffer: *mut ::std::os::raw::c_void,
@@ -5665,11 +5916,69 @@ extern "C" {
     #[doc = " LZ4F_resetDecompressionContext() : added in v1.8.0\n  In case of an error, the context is left in \"undefined\" state.\n  In which case, it's necessary to reset it, before re-using it.\n  This method can also be used to abruptly stop any unfinished decompression,\n  and start a new one using same context resources."]
     pub fn LZ4F_resetDecompressionContext(dctx: *mut LZ4F_dctx);
 }
+extern "C" {
+    #[doc = " LZ4F_compressBegin_usingDict() : stable since v1.10\n  Inits dictionary compression streaming, and writes the frame header into dstBuffer.\n @dstCapacity must be >= LZ4F_HEADER_SIZE_MAX bytes.\n @prefsPtr is optional : one may provide NULL as argument,\n  however, it's the only way to provide dictID in the frame header.\n @dictBuffer must outlive the compression session.\n @return : number of bytes written into dstBuffer for the header,\n           or an error code (which can be tested using LZ4F_isError())\n  NOTE: The LZ4Frame spec allows each independent block to be compressed with the dictionary,\n        but this entry supports a more limited scenario, where only the first block uses the dictionary.\n        This is still useful for small data, which only need one block anyway.\n        For larger inputs, one may be more interested in LZ4F_compressFrame_usingCDict() below."]
+    pub fn LZ4F_compressBegin_usingDict(
+        cctx: *mut LZ4F_cctx,
+        dstBuffer: *mut ::std::os::raw::c_void,
+        dstCapacity: usize,
+        dictBuffer: *const ::std::os::raw::c_void,
+        dictSize: usize,
+        prefsPtr: *const LZ4F_preferences_t,
+    ) -> usize;
+}
+extern "C" {
+    #[doc = " LZ4F_decompress_usingDict() : stable since v1.10\n  Same as LZ4F_decompress(), using a predefined dictionary.\n  Dictionary is used \"in place\", without any preprocessing.\n  It must remain accessible throughout the entire frame decoding."]
+    pub fn LZ4F_decompress_usingDict(
+        dctxPtr: *mut LZ4F_dctx,
+        dstBuffer: *mut ::std::os::raw::c_void,
+        dstSizePtr: *mut usize,
+        srcBuffer: *const ::std::os::raw::c_void,
+        srcSizePtr: *mut usize,
+        dict: *const ::std::os::raw::c_void,
+        dictSize: usize,
+        decompressOptionsPtr: *const LZ4F_decompressOptions_t,
+    ) -> usize;
+}
+#[doc = "  Bulk processing dictionary compression"]
+pub type LZ4F_CDict = LZ4F_CDict_s;
+extern "C" {
+    #[doc = " LZ4_createCDict() : stable since v1.10\n  When compressing multiple messages / blocks using the same dictionary, it's recommended to initialize it just once.\n  LZ4_createCDict() will create a digested dictionary, ready to start future compression operations without startup delay.\n  LZ4_CDict can be created once and shared by multiple threads concurrently, since its usage is read-only.\n @dictBuffer can be released after LZ4_CDict creation, since its content is copied within CDict."]
+    pub fn LZ4F_createCDict(
+        dictBuffer: *const ::std::os::raw::c_void,
+        dictSize: usize,
+    ) -> *mut LZ4F_CDict;
+}
+extern "C" {
+    pub fn LZ4F_freeCDict(CDict: *mut LZ4F_CDict);
+}
+extern "C" {
+    #[doc = " LZ4_compressFrame_usingCDict() : stable since v1.10\n  Compress an entire srcBuffer into a valid LZ4 frame using a digested Dictionary.\n @cctx must point to a context created by LZ4F_createCompressionContext().\n  If @cdict==NULL, compress without a dictionary.\n @dstBuffer MUST be >= LZ4F_compressFrameBound(srcSize, preferencesPtr).\n  If this condition is not respected, function will fail (@return an errorCode).\n  The LZ4F_preferences_t structure is optional : one may provide NULL as argument,\n  but it's not recommended, as it's the only way to provide @dictID in the frame header.\n @return : number of bytes written into dstBuffer.\n           or an error code if it fails (can be tested using LZ4F_isError())\n  Note: for larger inputs generating multiple independent blocks,\n        this entry point uses the dictionary for each block."]
+    pub fn LZ4F_compressFrame_usingCDict(
+        cctx: *mut LZ4F_cctx,
+        dst: *mut ::std::os::raw::c_void,
+        dstCapacity: usize,
+        src: *const ::std::os::raw::c_void,
+        srcSize: usize,
+        cdict: *const LZ4F_CDict,
+        preferencesPtr: *const LZ4F_preferences_t,
+    ) -> usize;
+}
+extern "C" {
+    #[doc = " LZ4F_compressBegin_usingCDict() : stable since v1.10\n  Inits streaming dictionary compression, and writes the frame header into dstBuffer.\n @dstCapacity must be >= LZ4F_HEADER_SIZE_MAX bytes.\n @prefsPtr is optional : one may provide NULL as argument,\n  note however that it's the only way to insert a @dictID in the frame header.\n @cdict must outlive the compression session.\n @return : number of bytes written into dstBuffer for the header,\n           or an error code, which can be tested using LZ4F_isError()."]
+    pub fn LZ4F_compressBegin_usingCDict(
+        cctx: *mut LZ4F_cctx,
+        dstBuffer: *mut ::std::os::raw::c_void,
+        dstCapacity: usize,
+        cdict: *const LZ4F_CDict,
+        prefsPtr: *const LZ4F_preferences_t,
+    ) -> usize;
+}
 pub const LZ4F_errorCodes_LZ4F_OK_NoError: LZ4F_errorCodes = 0;
 pub const LZ4F_errorCodes_LZ4F_ERROR_GENERIC: LZ4F_errorCodes = 1;
 pub const LZ4F_errorCodes_LZ4F_ERROR_maxBlockSize_invalid: LZ4F_errorCodes = 2;
 pub const LZ4F_errorCodes_LZ4F_ERROR_blockMode_invalid: LZ4F_errorCodes = 3;
-pub const LZ4F_errorCodes_LZ4F_ERROR_contentChecksumFlag_invalid: LZ4F_errorCodes = 4;
+pub const LZ4F_errorCodes_LZ4F_ERROR_parameter_invalid: LZ4F_errorCodes = 4;
 pub const LZ4F_errorCodes_LZ4F_ERROR_compressionLevel_invalid: LZ4F_errorCodes = 5;
 pub const LZ4F_errorCodes_LZ4F_ERROR_headerVersion_wrong: LZ4F_errorCodes = 6;
 pub const LZ4F_errorCodes_LZ4F_ERROR_blockChecksum_invalid: LZ4F_errorCodes = 7;
@@ -5687,18 +5996,20 @@ pub const LZ4F_errorCodes_LZ4F_ERROR_contentChecksum_invalid: LZ4F_errorCodes = 
 pub const LZ4F_errorCodes_LZ4F_ERROR_frameDecoding_alreadyStarted: LZ4F_errorCodes = 19;
 pub const LZ4F_errorCodes_LZ4F_ERROR_compressionState_uninitialized: LZ4F_errorCodes = 20;
 pub const LZ4F_errorCodes_LZ4F_ERROR_parameter_null: LZ4F_errorCodes = 21;
-pub const LZ4F_errorCodes_LZ4F_ERROR_maxCode: LZ4F_errorCodes = 22;
-pub const LZ4F_errorCodes__LZ4F_dummy_error_enum_for_c89_never_used: LZ4F_errorCodes = 23;
+pub const LZ4F_errorCodes_LZ4F_ERROR_io_write: LZ4F_errorCodes = 22;
+pub const LZ4F_errorCodes_LZ4F_ERROR_io_read: LZ4F_errorCodes = 23;
+pub const LZ4F_errorCodes_LZ4F_ERROR_maxCode: LZ4F_errorCodes = 24;
+pub const LZ4F_errorCodes__LZ4F_dummy_error_enum_for_c89_never_used: LZ4F_errorCodes = 25;
 pub type LZ4F_errorCodes = ::std::os::raw::c_int;
 extern "C" {
     pub fn LZ4F_getErrorCode(functionResult: usize) -> LZ4F_errorCodes;
 }
 extern "C" {
-    #[doc = " LZ4F_getBlockSize() :\n  Return, in scalar format (size_t),\n  the maximum block size associated with blockSizeID."]
+    #[doc = " LZ4F_getBlockSize() :\n @return, in scalar format (size_t),\n          the maximum block size associated with @blockSizeID,\n          or an error code (can be tested using LZ4F_isError()) if @blockSizeID is invalid."]
     pub fn LZ4F_getBlockSize(blockSizeID: LZ4F_blockSizeID_t) -> usize;
 }
 extern "C" {
-    #[doc = " LZ4F_uncompressedUpdate() :\n  LZ4F_uncompressedUpdate() can be called repetitively to add as much data uncompressed data as necessary.\n  Important rule: dstCapacity MUST be large enough to store the entire source buffer as\n  no compression is done for this operation\n  If this condition is not respected, LZ4F_uncompressedUpdate() will fail (result is an errorCode).\n  After an error, the state is left in a UB state, and must be re-initialized or freed.\n  If previously a compressed block was written, buffered data is flushed\n  before appending uncompressed data is continued.\n  This is only supported when LZ4F_blockIndependent is used\n `cOptPtr` is optional : NULL can be provided, in which case all options are set to default.\n @return : number of bytes written into `dstBuffer` (it can be zero, meaning input data was just buffered).\n           or an error code if it fails (which can be tested using LZ4F_isError())"]
+    #[doc = " LZ4F_uncompressedUpdate() :\n  LZ4F_uncompressedUpdate() can be called repetitively to add data stored as uncompressed blocks.\n  Important rule: dstCapacity MUST be large enough to store the entire source buffer as\n  no compression is done for this operation\n  If this condition is not respected, LZ4F_uncompressedUpdate() will fail (result is an errorCode).\n  After an error, the state is left in a UB state, and must be re-initialized or freed.\n  If previously a compressed block was written, buffered data is flushed first,\n  before appending uncompressed data is continued.\n  This operation is only supported when LZ4F_blockIndependent is used.\n `cOptPtr` is optional : NULL can be provided, in which case all options are set to default.\n @return : number of bytes written into `dstBuffer` (it can be zero, meaning input data was just buffered).\n           or an error code if it fails (which can be tested using LZ4F_isError())"]
     pub fn LZ4F_uncompressedUpdate(
         cctx: *mut LZ4F_cctx,
         dstBuffer: *mut ::std::os::raw::c_void,
@@ -5708,54 +6019,7 @@ extern "C" {
         cOptPtr: *const LZ4F_compressOptions_t,
     ) -> usize;
 }
-#[doc = "  Bulk processing dictionary API"]
-pub type LZ4F_CDict = LZ4F_CDict_s;
-extern "C" {
-    #[doc = " LZ4_createCDict() :\n  When compressing multiple messages / blocks using the same dictionary, it's recommended to load it just once.\n  LZ4_createCDict() will create a digested dictionary, ready to start future compression operations without startup delay.\n  LZ4_CDict can be created once and shared by multiple threads concurrently, since its usage is read-only.\n `dictBuffer` can be released after LZ4_CDict creation, since its content is copied within CDict"]
-    pub fn LZ4F_createCDict(
-        dictBuffer: *const ::std::os::raw::c_void,
-        dictSize: usize,
-    ) -> *mut LZ4F_CDict;
-}
-extern "C" {
-    pub fn LZ4F_freeCDict(CDict: *mut LZ4F_CDict);
-}
-extern "C" {
-    #[doc = " LZ4_compressFrame_usingCDict() :\n  Compress an entire srcBuffer into a valid LZ4 frame using a digested Dictionary.\n  cctx must point to a context created by LZ4F_createCompressionContext().\n  If cdict==NULL, compress without a dictionary.\n  dstBuffer MUST be >= LZ4F_compressFrameBound(srcSize, preferencesPtr).\n  If this condition is not respected, function will fail (@return an errorCode).\n  The LZ4F_preferences_t structure is optional : you may provide NULL as argument,\n  but it's not recommended, as it's the only way to provide dictID in the frame header.\n @return : number of bytes written into dstBuffer.\n           or an error code if it fails (can be tested using LZ4F_isError())"]
-    pub fn LZ4F_compressFrame_usingCDict(
-        cctx: *mut LZ4F_cctx,
-        dst: *mut ::std::os::raw::c_void,
-        dstCapacity: usize,
-        src: *const ::std::os::raw::c_void,
-        srcSize: usize,
-        cdict: *const LZ4F_CDict,
-        preferencesPtr: *const LZ4F_preferences_t,
-    ) -> usize;
-}
-extern "C" {
-    #[doc = " LZ4F_compressBegin_usingCDict() :\n  Inits streaming dictionary compression, and writes the frame header into dstBuffer.\n  dstCapacity must be >= LZ4F_HEADER_SIZE_MAX bytes.\n `prefsPtr` is optional : you may provide NULL as argument,\n  however, it's the only way to provide dictID in the frame header.\n @return : number of bytes written into dstBuffer for the header,\n           or an error code (which can be tested using LZ4F_isError())"]
-    pub fn LZ4F_compressBegin_usingCDict(
-        cctx: *mut LZ4F_cctx,
-        dstBuffer: *mut ::std::os::raw::c_void,
-        dstCapacity: usize,
-        cdict: *const LZ4F_CDict,
-        prefsPtr: *const LZ4F_preferences_t,
-    ) -> usize;
-}
-extern "C" {
-    #[doc = " LZ4F_decompress_usingDict() :\n  Same as LZ4F_decompress(), using a predefined dictionary.\n  Dictionary is used \"in place\", without any preprocessing.\n  It must remain accessible throughout the entire frame decoding."]
-    pub fn LZ4F_decompress_usingDict(
-        dctxPtr: *mut LZ4F_dctx,
-        dstBuffer: *mut ::std::os::raw::c_void,
-        dstSizePtr: *mut usize,
-        srcBuffer: *const ::std::os::raw::c_void,
-        srcSizePtr: *mut usize,
-        dict: *const ::std::os::raw::c_void,
-        dictSize: usize,
-        decompressOptionsPtr: *const LZ4F_decompressOptions_t,
-    ) -> usize;
-}
-#[doc = " Custom memory allocation :\n  These prototypes make it possible to pass custom allocation/free functions.\n  LZ4F_customMem is provided at state creation time, using LZ4F_create*_advanced() listed below.\n  All allocation/free operations will be completed using these custom variants instead of regular <stdlib.h> ones."]
+#[doc = " Custom memory allocation : v1.9.4+\n  These prototypes make it possible to pass custom allocation/free functions.\n  LZ4F_customMem is provided at state creation time, using LZ4F_create*_advanced() listed below.\n  All allocation/free operations will be completed using these custom variants instead of regular <stdlib.h> ones."]
 pub type LZ4F_AllocFunction = ::std::option::Option<
     unsafe extern "C" fn(
         opaqueState: *mut ::std::os::raw::c_void,
@@ -6236,9 +6500,13 @@ pub const minFHSize: usize = 7;
 pub const maxFHSize: usize = 19;
 pub const BHSize: usize = 4;
 pub const BFSize: usize = 4;
-pub const LZ4F_blockCompression_t_LZ4B_COMPRESSED: LZ4F_blockCompression_t = 0;
-pub const LZ4F_blockCompression_t_LZ4B_UNCOMPRESSED: LZ4F_blockCompression_t = 1;
-pub type LZ4F_blockCompression_t = ::std::os::raw::c_int;
+pub const LZ4F_BlockCompressMode_e_LZ4B_COMPRESSED: LZ4F_BlockCompressMode_e = 0;
+pub const LZ4F_BlockCompressMode_e_LZ4B_UNCOMPRESSED: LZ4F_BlockCompressMode_e = 1;
+pub type LZ4F_BlockCompressMode_e = ::std::os::raw::c_int;
+pub const LZ4F_CtxType_e_ctxNone: LZ4F_CtxType_e = 0;
+pub const LZ4F_CtxType_e_ctxFast: LZ4F_CtxType_e = 1;
+pub const LZ4F_CtxType_e_ctxHC: LZ4F_CtxType_e = 2;
+pub type LZ4F_CtxType_e = ::std::os::raw::c_int;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct LZ4F_cctx_s {
@@ -6256,8 +6524,8 @@ pub struct LZ4F_cctx_s {
     pub xxh: XXH32_state_t,
     pub lz4CtxPtr: *mut ::std::os::raw::c_void,
     pub lz4CtxAlloc: U16,
-    pub lz4CtxState: U16,
-    pub blockCompression: LZ4F_blockCompression_t,
+    pub lz4CtxType: U16,
+    pub blockCompressMode: LZ4F_BlockCompressMode_e,
 }
 #[test]
 fn bindgen_test_layout_LZ4F_cctx_s() {
@@ -6414,29 +6682,29 @@ fn bindgen_test_layout_LZ4F_cctx_s() {
         )
     );
     assert_eq!(
-        unsafe { ::std::ptr::addr_of!((*ptr).lz4CtxState) as usize - ptr as usize },
+        unsafe { ::std::ptr::addr_of!((*ptr).lz4CtxType) as usize - ptr as usize },
         210usize,
         concat!(
             "Offset of field: ",
             stringify!(LZ4F_cctx_s),
             "::",
-            stringify!(lz4CtxState)
+            stringify!(lz4CtxType)
         )
     );
     assert_eq!(
-        unsafe { ::std::ptr::addr_of!((*ptr).blockCompression) as usize - ptr as usize },
+        unsafe { ::std::ptr::addr_of!((*ptr).blockCompressMode) as usize - ptr as usize },
         212usize,
         concat!(
             "Offset of field: ",
             stringify!(LZ4F_cctx_s),
             "::",
-            stringify!(blockCompression)
+            stringify!(blockCompressMode)
         )
     );
 }
 pub type LZ4F_cctx_t = LZ4F_cctx_s;
 extern "C" {
-    pub static mut LZ4F_errorStrings: [*const ::std::os::raw::c_char; 23usize];
+    pub static mut LZ4F_errorStrings: [*const ::std::os::raw::c_char; 25usize];
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -6500,6 +6768,27 @@ fn bindgen_test_layout_LZ4F_CDict_s() {
             stringify!(HCCtx)
         )
     );
+}
+extern "C" {
+    pub fn LZ4F_compressBegin_internal(
+        cctx: *mut LZ4F_cctx,
+        dstBuffer: *mut ::std::os::raw::c_void,
+        dstCapacity: usize,
+        dictBuffer: *const ::std::os::raw::c_void,
+        dictSize: usize,
+        cdict: *const LZ4F_CDict,
+        preferencesPtr: *const LZ4F_preferences_t,
+    ) -> usize;
+}
+extern "C" {
+    pub fn LZ4F_compressBegin_usingDictOnce(
+        cctx: *mut LZ4F_cctx,
+        dstBuffer: *mut ::std::os::raw::c_void,
+        dstCapacity: usize,
+        dict: *const ::std::os::raw::c_void,
+        dictSize: usize,
+        preferencesPtr: *const LZ4F_preferences_t,
+    ) -> usize;
 }
 pub type compressFunc_t = ::std::option::Option<
     unsafe extern "C" fn(
@@ -6777,9 +7066,9 @@ fn bindgen_test_layout_LZ4F_dctx_s() {
 extern "C" {
     pub fn _wassert(_Message: *const wchar_t, _File: *const wchar_t, _Line: ::std::os::raw::c_uint);
 }
-pub const XXH_endianess_XXH_bigEndian: XXH_endianess = 0;
-pub const XXH_endianess_XXH_littleEndian: XXH_endianess = 1;
-pub type XXH_endianess = ::std::os::raw::c_int;
+pub const XXH_endianness_XXH_bigEndian: XXH_endianness = 0;
+pub const XXH_endianness_XXH_littleEndian: XXH_endianness = 1;
+pub type XXH_endianness = ::std::os::raw::c_int;
 pub const XXH_alignment_XXH_aligned: XXH_alignment = 0;
 pub const XXH_alignment_XXH_unaligned: XXH_alignment = 1;
 pub type XXH_alignment = ::std::os::raw::c_int;

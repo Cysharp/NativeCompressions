@@ -1,11 +1,12 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using static NativeCompressions.Lz4.Lz4NativeMethods;
+using NativeCompressions.LZ4.Raw;
+using static NativeCompressions.LZ4.Raw.NativeMethods;
 
-namespace NativeCompressions.Lz4
+namespace NativeCompressions.LZ4
 {
-    // https://github.com/lz4/lz4/blob/v1.9.4/lib/lz4.h
-    // https://github.com/lz4/lz4/blob/v1.9.4/lib/lz4frame.h
+    // https://github.com/lz4/lz4/blob/v1.10.0/lib/lz4.h
+    // https://github.com/lz4/lz4/blob/v1.10.0/lib/lz4frame.h
 
     // spec
     // https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md
@@ -14,33 +15,40 @@ namespace NativeCompressions.Lz4
     // manual
     // https://htmlpreview.github.io/?https://github.com/lz4/lz4/blob/master/doc/lz4_manual.html
     // https://htmlpreview.github.io/?https://github.com/lz4/lz4/blob/master/doc/lz4frame_manual.html
+    
+    // cctx = Compression Context
+    // dctx = Decompression Context
+    // CDict = Compression Dictionary
+
     public unsafe partial struct LZ4Encoder : IDisposable
     {
         LZ4F_cctx_s* context;
-        LZ4FrameHeader? header;
+        LZ4FrameOptions? header; // LZ4F_preferences_t
+        LZ4CompressionDictionary? compressionDictionary;
+
         bool writeBegin;
         bool writeEnd;
         bool disposed;
 
-        public LZ4FrameHeader? FrameHader => header;
         public bool IsWrittenHeader => writeBegin;
         public bool IsWrittenFooter => writeEnd;
 
         public LZ4Encoder()
-            : this(null)
+            : this(null, null)
         {
         }
 
-        public LZ4Encoder(LZ4FrameHeader? header)
+        public LZ4Encoder(LZ4FrameOptions? options, LZ4CompressionDictionary? compressionDictionary)
         {
             LZ4F_cctx_s* ptr = default;
-            var code = LZ4F_createCompressionContext(&ptr, FrameVersion);
+            var code = LZ4F_createCompressionContext(&ptr, LZ4.FrameVersion);
             HandleError(code);
             this.context = ptr;
-            this.header = header;
+            this.header = options;
+            this.compressionDictionary = compressionDictionary;
         }
 
-        public unsafe int WriteHeader(Span<byte> destination)
+        unsafe int WriteHeader(Span<byte> destination)
         {
             ValidateDisposed();
             ValidateFlushed();
@@ -52,9 +60,20 @@ namespace NativeCompressions.Lz4
                 if (header != null)
                 {
                     var v = header.Value;
-                    preference = Unsafe.As<LZ4FrameHeader, LZ4F_preferences_t>(ref v);
+                    preference = Unsafe.As<LZ4FrameOptions, LZ4F_preferences_t>(ref v);
                     preferencePtr = &preference;
                 }
+
+
+                
+
+                // TODO:
+                // LZ4F_compressBegin
+                // LZ4F_compressBegin_usingCDict
+                // LZ4F_compressBegin_usingDict
+                // LZ4F_compressBegin_usingDictOnce
+
+                // LZ4F_compressBegin_usingDictOnce(
 
                 var writtenOrErrorCode = LZ4F_compressBegin(context, dest, (nuint)destination.Length, preferencePtr);
                 HandleError(writtenOrErrorCode);
@@ -88,7 +107,6 @@ namespace NativeCompressions.Lz4
 
 
 
-
                 // Write block
                 var writtenOrErrorCode = LZ4F_compressUpdate(context, dest, (nuint)destination.Length, src, (nuint)source.Length, null);
                 HandleError(writtenOrErrorCode);
@@ -97,6 +115,9 @@ namespace NativeCompressions.Lz4
                 return writtenSize;
             }
         }
+
+        // Finish()
+
 
         public unsafe int Flush(Span<byte> destination)
         {
@@ -125,8 +146,8 @@ namespace NativeCompressions.Lz4
             }
         }
 
-        
-        
+
+
         void HandleError(nuint code)
         {
             if (LZ4F_isError(code) != 0)

@@ -3,69 +3,14 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using static NativeCompressions.Lz4.Lz4NativeMethods;
+using NativeCompressions.LZ4.Raw;
+using static NativeCompressions.LZ4.Raw.NativeMethods;
 
-namespace NativeCompressions.Lz4
+
+namespace NativeCompressions.LZ4
 {
     public partial struct LZ4Encoder
     {
-        static string? version;
-        static uint? versionNumber;
-
-        static bool initFrameVersion;
-        static uint frameVersion;
-
-        public static string Version
-        {
-            get
-            {
-                if (version == null)
-                {
-                    unsafe
-                    {
-                        // null-terminated
-                        version = new string((sbyte*)LZ4_versionString());
-                    }
-                }
-                return version;
-            }
-        }
-
-        public static uint VersionNumber
-        {
-            get
-            {
-                if (versionNumber == null)
-                {
-                    unsafe
-                    {
-                        versionNumber = (uint)LZ4_versionNumber();
-                    }
-                }
-                return versionNumber.Value;
-            }
-        }
-
-        public static uint FrameVersion
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
-            {
-                if (!initFrameVersion)
-                {
-                    SetFrameversion();
-                }
-
-                return frameVersion;
-
-                static void SetFrameversion()
-                {
-                    frameVersion = LZ4F_getVersion();
-                    initFrameVersion = true;
-                }
-            }
-        }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int GetMaxBlockCompressedLength(int inputSize)
         {
@@ -263,7 +208,7 @@ namespace NativeCompressions.Lz4
         // Frame Format
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int GetMaxFrameCompressedLength(int inputSize, bool withHeader = true, LZ4FrameHeader? frameHeader = null)
+        public static int GetMaxFrameCompressedLength(int inputSize, bool withHeader = true, LZ4FrameOptions? frameHeader = null)
         {
             unsafe
             {
@@ -272,7 +217,7 @@ namespace NativeCompressions.Lz4
                 if (frameHeader != null)
                 {
                     var v = frameHeader.Value;
-                    preference = Unsafe.As<LZ4FrameHeader, LZ4F_preferences_t>(ref v);
+                    preference = Unsafe.As<LZ4FrameOptions, LZ4F_preferences_t>(ref v);
                     preferencePtr = &preference;
                 }
 

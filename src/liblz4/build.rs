@@ -23,25 +23,25 @@ fn main() -> Result<(), Box<dyn Error>> {
         .rust_method_prefix("nativecompressions_")
         .rust_file_header("use super::lz4;")
         .rust_method_type_path("lz4")
-        .csharp_class_name("Lz4NativeMethods")
-        .csharp_namespace("NativeCompressions.Lz4")
+        .csharp_class_name("NativeMethods")
+        .csharp_namespace("NativeCompressions.LZ4.Raw")
         .csharp_dll_name("liblz4")
-        .csharp_dll_name_if("UNITY_IOS && !UNITY_EDITOR", "__Internal")
-        .csharp_entry_point_prefix("nativecompressions_")
+        // .csharp_dll_name_if("UNITY_IOS && !UNITY_EDITOR", "__Internal")
+        .csharp_entry_point_prefix("")
         .csharp_method_prefix("")
         .csharp_class_accessibility("public")
-        .generate_to_file("src/lz4_ffi.rs", "../NativeCompressions.Lz4/Lz4NativeMethods.cs")
+        .generate_to_file("src/lz4_ffi.rs", "../NativeCompressions.LZ4/NativeMethods.cs")
         .unwrap();
 
-    cc::Build::new()
-        .files([
-            "../../lz4/lib/lz4.c",
-            "../../lz4/lib/lz4hc.c",
-            "../../lz4/lib/lz4frame.c",
-            "../../lz4/lib/xxhash.c",
-        ])
-        .opt_level(3)
-        .compile("lz4");
+    // cc::Build::new()
+    //     .files([
+    //         "../../lz4/lib/lz4.c",
+    //         "../../lz4/lib/lz4hc.c",
+    //         "../../lz4/lib/lz4frame.c",
+    //         "../../lz4/lib/xxhash.c",
+    //     ])
+    //     .opt_level(3)
+    //     .compile("lz4");
 
     Ok(())
 }

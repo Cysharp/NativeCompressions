@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net6.0</TargetFramework>
+		<TargetFramework>net9.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
@@ -12,7 +12,7 @@
 		<None Include="runtimes\win-x64\native\liblz4.dll">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
-		<None Include="runtimes\linux-arm64\native\liblz4.so">
+		<!-- <None Include="runtimes\linux-arm64\native\liblz4.so">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
 		<None Include="runtimes\linux-x64\native\liblz4.so">
@@ -23,11 +23,11 @@
 		</None>
 		<None Include="runtimes\osx-x64\native\liblz4.dylib">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
+		</None> -->
 	</ItemGroup>
 	
 	<!-- for debug perpose, if exists in debug, copy it -->
-	<ItemGroup Condition="'$(Configuration)' == 'Debug' and Exists('../../target/debug/lz4.dll')">
+	<!-- <ItemGroup Condition="'$(Configuration)' == 'Debug' and Exists('../../target/debug/lz4.dll')">
 		<None Include="../../target/debug/lz4.dll">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 			<Link>liblz4.dll</Link>
@@ -36,6 +36,6 @@
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 			<Link>liblz4.pdb</Link>
 		</None>
-	</ItemGroup>
+	</ItemGroup> -->
 
 </Project>

@@ -1,17 +1,12 @@
 ﻿using System.Buffers;
 using System.Runtime.InteropServices;
-using static NativeCompressions.Lz4.Lz4NativeMethods;
+using NativeCompressions.LZ4.Raw;
+using static NativeCompressions.LZ4.Raw.NativeMethods;
 
-namespace NativeCompressions.Lz4
+namespace NativeCompressions.LZ4
 {
     public unsafe partial struct LZ4Decoder : IDisposable
     {
-        public static string Version => LZ4Encoder.Version;
-
-        public static uint VersionNumber => LZ4Encoder.VersionNumber;
-
-        public static uint FrameVersion => LZ4Encoder.FrameVersion;
-
         /// <summary>
         /// <para>Invoke LZ4_decompress_safe().</para>
         /// If destination buffer is not large enough, decoding will stop and output an error code (negative value).

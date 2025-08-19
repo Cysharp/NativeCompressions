@@ -1,5 +1,4 @@
 ﻿//using K4os.Compression.LZ4.Streams;
-using NativeCompressions.Lz4;
 using NativeCompressions.ZStandard;
 using System;
 using System.Buffers;
@@ -12,18 +11,38 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using ZstdNet;
+using NativeCompressions.LZ4;
 
 
+//var len = LZ4.GetMaxCompressedLength(999, LZ4FrameOptions.Default);
 
+//Console.WriteLine(len);
 
+//using var encoder = new LZ4Encoder(LZ4FrameOptions.Default);
 
-var seq = new ArraySequence(ushort.MaxValue);
-var span = seq.CurrentSpan;
-for (int i = 0; i <= 11; i++)
+//encoder.Compress();
+//encoder.Compress();
+// encoder.Flush();
+
+var opt = new LZ4FrameOptions
 {
-    Console.WriteLine($"{i} {span.Length} {seq.length + span.Length} {Array.MaxLength}");
-    if (i != 11)
+    FrameInfo = new LZ4FrameInfo
     {
-        span = seq.AllocateNextBlock(span.Length);
+        BlockSizeID = BlockSizeId.Max64KB,
+        BlockMode = BlockMode.BlockIndepent
     }
-}
+};
+
+var len3 = LZ4.GetMaxCompressedLength(100, LZ4FrameOptions.Default);
+var len4 = LZ4.GetMaxCompressedLengthInFrame(100, opt);
+
+Console.WriteLine("MaxCompressed " + len3);
+Console.WriteLine("MaxCompressedInFrame " + len4);
+
+
+//Console.WriteLine(len3);
+
+
+//Console.WriteLine(LZ4.Version);
+//Console.WriteLine(LZ4.VersionNumber);
+//Console.WriteLine(LZ4.FrameVersion);

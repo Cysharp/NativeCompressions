@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net7.0</TargetFramework>
+		<TargetFramework>net9.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<IsPackable>false</IsPackable>
@@ -20,7 +20,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\src\NativeCompressions.Lz4\NativeCompressions.Lz4.csproj" />
+		<ProjectReference Include="..\..\src\NativeCompressions.LZ4\NativeCompressions.LZ4.csproj" />
 		<ProjectReference Include="..\..\src\NativeCompressions.ZStandard\NativeCompressions.ZStandard.csproj" />
 	</ItemGroup>
 

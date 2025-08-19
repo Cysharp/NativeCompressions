@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/sandbox/">
+    <Project Path="sandbox/Benchmark/Benchmark.csproj" />
+    <Project Path="sandbox/NativeCompressions.Sandbox.ConsoleApp/NativeCompressions.Sandbox.ConsoleApp.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/NativeCompressions.LZ4/NativeCompressions.LZ4.csproj" />
+    <Project Path="src/NativeCompressions.ZStandard/NativeCompressions.ZStandard.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NativeCompressions.Tests/NativeCompressions.Tests.csproj" />
+  </Folder>
+</Solution>

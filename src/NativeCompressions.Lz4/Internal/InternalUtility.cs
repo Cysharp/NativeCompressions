@@ -1,7 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace NativeCompressions.Lz4
+namespace NativeCompressions.LZ4
 {
     internal static class InternalUtility
     {

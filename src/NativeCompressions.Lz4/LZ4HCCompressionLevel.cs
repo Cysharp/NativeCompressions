@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace NativeCompressions.Lz4
+namespace NativeCompressions.LZ4
 {
     public enum LZ4HCCompressionLevel : int
     {
