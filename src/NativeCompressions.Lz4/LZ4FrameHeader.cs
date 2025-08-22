@@ -7,7 +7,6 @@ namespace NativeCompressions.LZ4;
 // LZ4FrameOptions is NativeMethods.LZ4F_preferences_t
 // LZ4FrameInfo is NativeMethods.LZ4F_frameInfo_t
 
-// TODO: make record and internal ToOptions...?
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct LZ4FrameOptions
 {

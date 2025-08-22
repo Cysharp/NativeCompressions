@@ -25,6 +25,7 @@ public unsafe partial struct LZ4Decoder : IDisposable
     /// <exception cref="LZ4Exception">Thrown when the decompression context cannot be created.</exception>
     public LZ4Decoder()
     {
+        // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         LZ4F_dctx_s* ptr = default;
         var code = LZ4F_createDecompressionContext(&ptr, LZ4.FrameVersion);
         LZ4.HandleErrorCode(code);
@@ -175,14 +176,6 @@ public unsafe partial struct LZ4Decoder : IDisposable
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten)
     {
         ValidateDisposed();
-
-        // Handle empty source as a special case
-        if (source.IsEmpty)
-        {
-            bytesConsumed = 0;
-            bytesWritten = 0;
-            return OperationStatus.NeedMoreData;
-        }
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)

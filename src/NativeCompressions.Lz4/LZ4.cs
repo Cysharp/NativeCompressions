@@ -194,8 +194,3 @@ public static class LZ4
         return new string(name);
     }
 }
-
-public class LZ4Exception(string errorName)
-    : Exception($"LZ4 native operation has been failed, error: {errorName}")
-{
-}

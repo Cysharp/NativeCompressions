@@ -284,6 +284,12 @@ public unsafe partial struct LZ4Encoder : IDisposable
     {
         ValidateDisposed();
 
+        if (!isWrittenHeader)
+        {
+            // This will write header, empty body and footer.
+            return Compress([], destination, isFinalBlock: true);
+        }
+
         fixed (byte* dest = destination)
         {
             // LZ4F_compressOptions_t(stableSrc) is currently not used in LZ4 source so always pass null.
