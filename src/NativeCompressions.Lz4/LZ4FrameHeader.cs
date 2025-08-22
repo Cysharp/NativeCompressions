@@ -60,7 +60,7 @@ public unsafe struct LZ4FrameInfo
     /// <summary>Size of uncompressed content ; 0 == unknown</summary>
     public ulong ContentSize;
     /// <summary>Dictionary ID, sent by compressor to help decoder select correct dictionary; 0 == no dictID provided</summary>
-    public uint DictID;
+    public uint DictionaryID;
     /// <summary>1: each block followed by a checksum of block's compressed data; 0 == default (disabled)</summary>
     public BlockChecksum BlockChecksumFlag;
 }

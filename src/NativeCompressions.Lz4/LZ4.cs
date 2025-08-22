@@ -1,9 +1,6 @@
 ﻿using NativeCompressions.LZ4.Raw;
 using System.Buffers;
-using System.IO.Compression;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Text;
 using static NativeCompressions.LZ4.Raw.NativeMethods;
 
 namespace NativeCompressions.LZ4;
@@ -49,23 +46,6 @@ public static class LZ4
         return LZ4F_compressionLevel_max();
     }
 
-    // TODO: rename
-    public static int GetMaxCompressedLengthInFrame(int inputSize, in LZ4FrameOptions options)
-    {
-        // TODO: same as brotli validation
-        // ArgumentOutOfRangeException.ThrowIfNegative(inputSize);
-        // ArgumentOutOfRangeException.ThrowIfGreaterThan(inputSize, BrotliUtils.MaxInputSize);
-
-        ref var preferences_t = ref Unsafe.As<LZ4FrameOptions, LZ4F_preferences_t>(ref Unsafe.AsRef(in options));
-        unsafe
-        {
-
-
-            var bound = LZ4F_compressBound((nuint)inputSize, (LZ4F_preferences_t*)Unsafe.AsPointer(ref preferences_t));
-            return (int)bound;
-        }
-    }
-
     public static int GetMaxCompressedLength(int inputSize, in LZ4FrameOptions options)
     {
         // TODO: same as brotli validation
@@ -75,15 +55,18 @@ public static class LZ4
         ref var preferences_t = ref Unsafe.As<LZ4FrameOptions, LZ4F_preferences_t>(ref Unsafe.AsRef(in options));
         unsafe
         {
+            // calculate bound for LZ4F_compressFrame
             var bound = LZ4F_compressFrameBound((nuint)inputSize, (LZ4F_preferences_t*)Unsafe.AsPointer(ref preferences_t));
             return (int)bound;
         }
     }
 
-    public static unsafe byte[] Compress(ReadOnlySpan<byte> source) // TODO: Options, Dictionary.
+    public static byte[] Compress(ReadOnlySpan<byte> source) => Compress(source, LZ4FrameOptions.Default, null);
+
+    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, LZ4FrameOptions options, LZ4CompressionDictionary? dictionary)
     {
-        var options = LZ4FrameOptions.Default.ToPreferences();
-        var maxLength = LZ4F_compressFrameBound((uint)source.Length, options);
+        var pref = options.ToPreferences();
+        var maxLength = LZ4F_compressFrameBound((uint)source.Length, pref);
 
         var buffer = ArrayPool<byte>.Shared.Rent((int)maxLength);
         try
@@ -91,9 +74,28 @@ public static class LZ4
             fixed (byte* src = source)
             fixed (byte* dest = buffer)
             {
-                var bytesWrittenOrErrorCode = LZ4F_compressFrame(dest, (nuint)buffer.Length, src, (nuint)source.Length, options);
-                HandleErrorCode(bytesWrittenOrErrorCode);
-                return buffer.AsSpan(0, (int)bytesWrittenOrErrorCode).ToArray();
+                if (dictionary == null)
+                {
+                    var bytesWrittenOrErrorCode = LZ4F_compressFrame(dest, (nuint)buffer.Length, src, (nuint)source.Length, pref);
+                    HandleErrorCode(bytesWrittenOrErrorCode);
+                    return buffer.AsSpan(0, (int)bytesWrittenOrErrorCode).ToArray();
+                }
+                else
+                {
+                    LZ4F_cctx_s* cctx = default;
+                    var code = LZ4F_createCompressionContext(&cctx, LZ4.FrameVersion);
+                    LZ4.HandleErrorCode(code);
+                    try
+                    {
+                        var bytesWrittenOrErrorCode = LZ4F_compressFrame_usingCDict(cctx, dest, (nuint)buffer.Length, src, (nuint)source.Length, dictionary.Handle, pref);
+                        HandleErrorCode(bytesWrittenOrErrorCode);
+                        return buffer.AsSpan(0, (int)bytesWrittenOrErrorCode).ToArray();
+                    }
+                    finally
+                    {
+                        LZ4F_freeCompressionContext(cctx);
+                    }
+                }
             }
         }
         finally
@@ -102,27 +104,87 @@ public static class LZ4
         }
     }
 
-
-    public static bool TryCompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten)
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="source"></param>
+    /// <param name="destination">MUST be &gt;= LZ4.GetMaxCompressedLength()</param>
+    /// <param name="bytesWritten"></param>
+    /// <returns></returns>
+    public static unsafe bool TryCompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten)
     {
-        // use one-shot operations
+        var pref = LZ4FrameOptions.Default.ToPreferences();
 
-        // LZ4F_compressFrameBound
-        // LZ4F_compressFrame
-        // LZ4F_compressFrame_usingCDict(
-
-
-
-
-        throw new NotSupportedException();
+        fixed (byte* src = source)
+        fixed (byte* dest = destination)
+        {
+            var bytesWrittenOrErrorCode = LZ4F_compressFrame(dest, (nuint)destination.Length, src, (nuint)source.Length, pref);
+            HandleErrorCode(bytesWrittenOrErrorCode); // TODO: should check operation code and return false;
+            bytesWritten = (int)bytesWrittenOrErrorCode;
+            return true;
+        }
     }
+
+    // TODO: Compress: options, dictionary
+
+
+    // PipeReader? ReadOnlySequence<T>? Stream?
+    public static unsafe byte[] Decompress(ReadOnlySpan<byte> source)
+    {
+        // LZ4F_decompress
+        LZ4F_dctx_s* dctx = default; // TODO: create from DecompressOptions?
+        var code = LZ4F_createDecompressionContext(&dctx, FrameVersion);
+        HandleErrorCode(code);
+        // LZ4F_getFrameInfo
+
+
+
+        var destination = new byte[60000]; // TODO: which bytes?
+
+        var totalWritten = 0;
+        fixed (byte* src = source)
+        fixed (byte* dest = destination)
+        {
+
+            // LZ4F_getFrameInfo()
+            var consumedSourceLength = (nuint)source.Length;
+            var writtenDestinationLength = (nuint)destination.Length;
+
+
+            //LZ4F_frameInfo_t finfo = default;
+            //var code2 = LZ4F_getFrameInfo(dctx, &finfo, src, &consumedSourceLength);
+
+            // an hint of how many `srcSize` bytes LZ4F_decompress() expects for next call.
+
+            var hintOrErrorCode = LZ4F_decompress(dctx, dest, &writtenDestinationLength, src, &consumedSourceLength, null);
+            totalWritten += (int)writtenDestinationLength;
+
+
+
+
+            if (hintOrErrorCode == 0)
+            {
+                // success decompression.
+                return destination.AsSpan(0, totalWritten).ToArray();
+            }
+
+            if (LZ4F_isError(hintOrErrorCode) != 0)
+            {
+                LZ4.HandleErrorCode(hintOrErrorCode);
+                // error...
+            }
+        }
+
+        return destination;
+    }
+
 
     internal static void HandleErrorCode(nuint code)
     {
         if (LZ4F_isError(code) != 0)
         {
             var error = GetErrorName(code);
-            throw new InvalidOperationException(error);
+            throw new LZ4Exception(error);
         }
     }
 
@@ -133,46 +195,7 @@ public static class LZ4
     }
 }
 
-public sealed class LZ4CompressionDictionary : SafeHandle
+public class LZ4Exception(string errorName)
+    : Exception($"LZ4 native operation has been failed, error: {errorName}")
 {
-    readonly byte[] dictionaryData;
-
-    public override bool IsInvalid => handle == IntPtr.Zero;
-
-    // for decompression
-    internal ReadOnlySpan<byte> RawDictionary => dictionaryData;
-
-    internal unsafe LZ4F_CDict_s* CompressionDictionary => ((LZ4F_CDict_s*)handle);
-
-    public LZ4CompressionDictionary(ReadOnlySpan<byte> dictionaryData)
-        : base(IntPtr.Zero, true)
-    {
-        if (dictionaryData.Length == 0) throw new ArgumentException("Dictionary data cannot be empty", nameof(dictionaryData));
-
-        var data = dictionaryData.ToArray(); // diffencive copy
-
-        unsafe
-        {
-            fixed (void* p = data)
-            {
-                var handle = LZ4F_createCDict(p, (UIntPtr)data.Length);
-                SetHandle((IntPtr)handle);
-                this.dictionaryData = data;
-            }
-        }
-    }
-
-    protected override bool ReleaseHandle()
-    {
-        if (handle != IntPtr.Zero)
-        {
-            unsafe
-            {
-                LZ4F_freeCDict((LZ4F_CDict_s*)handle);
-            }
-            handle = IntPtr.Zero;
-            return true;
-        }
-        return false;
-    }
 }

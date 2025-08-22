@@ -24,25 +24,24 @@ using NativeCompressions.LZ4;
 //encoder.Compress();
 // encoder.Flush();
 
-var opt = new LZ4FrameOptions
-{
-    FrameInfo = new LZ4FrameInfo
-    {
-        BlockSizeID = BlockSizeId.Max64KB,
-        BlockMode = BlockMode.BlockIndepent
-    }
-};
 
-var len3 = LZ4.GetMaxCompressedLength(100, LZ4FrameOptions.Default);
-var len4 = LZ4.GetMaxCompressedLengthInFrame(100, opt);
+var src = new byte[202400];
+Random.Shared.NextBytes(src);
 
-Console.WriteLine("MaxCompressed " + len3);
-Console.WriteLine("MaxCompressedInFrame " + len4);
+var dest = new byte[242164];
+
+using var encoder = new LZ4Encoder();
 
 
-//Console.WriteLine(len3);
+
+var size = LZ4.GetMaxCompressedLengthForStreamingEncoder(src.Length, LZ4FrameOptions.Default);
 
 
-//Console.WriteLine(LZ4.Version);
-//Console.WriteLine(LZ4.VersionNumber);
-//Console.WriteLine(LZ4.FrameVersion);
+var result = encoder.Compress(src, dest, out var bytesConsumed, out var bytesWritten, isFinalBlock: true);
+Console.WriteLine(result);
+Console.WriteLine("consumed:" + bytesConsumed);
+
+var decompressed = LZ4.Decompress(dest.AsSpan(0, bytesWritten));
+
+Console.WriteLine("Equal:" + decompressed.SequenceEqual(src));
+
