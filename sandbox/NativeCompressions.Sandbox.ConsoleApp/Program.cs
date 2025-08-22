@@ -13,35 +13,24 @@ using System.Text;
 using ZstdNet;
 using NativeCompressions.LZ4;
 
-
-//var len = LZ4.GetMaxCompressedLength(999, LZ4FrameOptions.Default);
-
-//Console.WriteLine(len);
-
-//using var encoder = new LZ4Encoder(LZ4FrameOptions.Default);
-
-//encoder.Compress();
-//encoder.Compress();
-// encoder.Flush();
-
-
 var src = new byte[202400];
 Random.Shared.NextBytes(src);
 
-var dest = new byte[242164];
-
 using var encoder = new LZ4Encoder();
 
+var dest = new byte[encoder.GetMaxCompressedLength(src.Length, includingHeaderAndFooter: true)];
+var bytesWritten = encoder.Compress(src, dest, isFinalBlock: true);
+Console.WriteLine(bytesWritten); // 202427
 
+using var decoder = new LZ4Decoder();
 
-var size = LZ4.GetMaxCompressedLengthForStreamingEncoder(src.Length, LZ4FrameOptions.Default);
+var newSource = dest.AsSpan(0, bytesWritten).ToArray();
+var newDest = new byte[202400]; // original src size
 
+var done = decoder.Decompress(newSource, newDest, out var consumed2, out var written2);
 
-var result = encoder.Compress(src, dest, out var bytesConsumed, out var bytesWritten, isFinalBlock: true);
-Console.WriteLine(result);
-Console.WriteLine("consumed:" + bytesConsumed);
+Console.WriteLine(done); // Done
+Console.WriteLine(consumed2);
+Console.WriteLine(written2);
 
-var decompressed = LZ4.Decompress(dest.AsSpan(0, bytesWritten));
-
-Console.WriteLine("Equal:" + decompressed.SequenceEqual(src));
 

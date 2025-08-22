@@ -168,15 +168,27 @@ public unsafe partial struct LZ4Encoder : IDisposable
     /// </summary>
     /// <param name="source">The data to compress. The entire source buffer will be consumed.</param>
     /// <param name="destination">The buffer to write compressed data to. Must be at least <see cref="GetMaxCompressedLength"/> in size.</param>
-    /// <returns>The number of bytes written to the destination buffer. May be 0 if data was only buffered internally.</returns>
+    /// <param name="isFinalBlock">If true, finalizes the frame by writing the end marker and optional checksum.</param>
+    /// <returns>The total number of bytes written to the destination buffer, including header (if first call) and frame ending (if final block).</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
     /// <exception cref="LZ4Exception">Thrown when compression fails (e.g., destination buffer too small).</exception>
     /// <remarks>
     /// On first call, automatically writes the LZ4 frame header.
     /// The source data is always entirely consumed - either compressed to destination or buffered internally.
-    /// If the return value is 0, it means the data was buffered and will be output in subsequent calls or during <see cref="Flush"/>.
+    /// 
+    /// When <paramref name="isFinalBlock"/> is true:
+    /// - Compresses the provided source data
+    /// - Flushes any internally buffered data
+    /// - Writes the frame end marker and optional content checksum
+    /// - Completes the current frame, making the encoder ready for a new frame
+    /// 
+    /// This design allows for both streaming and single-shot compression:
+    /// - Streaming: Call with isFinalBlock=false for intermediate chunks, true for the last chunk
+    /// - Single-shot: Call once with isFinalBlock=true for complete compression
+    /// 
+    /// After isFinalBlock=true, the encoder can be reused to compress another frame without disposing.
     /// </remarks>
-    public int Compress(ReadOnlySpan<byte> source, Span<byte> destination)
+    public int Compress(ReadOnlySpan<byte> source, Span<byte> destination, bool isFinalBlock)
     {
         ValidateDisposed();
 
@@ -215,7 +227,14 @@ public unsafe partial struct LZ4Encoder : IDisposable
             var writtenOrErrorCode = LZ4F_compressUpdate(context, dest, (nuint)destination.Length, src, (nuint)source.Length, null);
             LZ4.HandleErrorCode(writtenOrErrorCode);
 
+            destination = destination.Slice((int)writtenOrErrorCode);
             totalWritten += (int)writtenOrErrorCode; // written size can be zero, meaning input data was just buffered.
+        }
+
+        if (isFinalBlock)
+        {
+            // Close finalizes the frame
+            totalWritten += Close(destination);
         }
 
         return totalWritten;
@@ -255,9 +274,11 @@ public unsafe partial struct LZ4Encoder : IDisposable
     /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
     /// <exception cref="LZ4Exception">Thrown when finalization fails.</exception>
     /// <remarks>
-    /// This method must be called to properly terminate an LZ4 frame.
+    /// This method is typically called explicitly when isFinalBlock=false was used in Compress calls.
+    /// If Compress was called with isFinalBlock=true, this method has already been called internally.
+    /// 
     /// After calling this method, the encoder can be reused to compress another frame
-    /// by calling <see cref="Compress"/> again (which will write a new header).
+    /// by calling Compress again (which will write a new header).
     /// </remarks>
     public int Close(Span<byte> destination)
     {
@@ -283,6 +304,15 @@ public unsafe partial struct LZ4Encoder : IDisposable
         {
             Throws.ObjectDisposedException();
         }
+    }
+
+    /// <summary>
+    /// Sets the header options for the LZ4 frame.
+    /// </summary>
+    /// <param name="options">The LZ4 frame options to apply. Can be <see langword="null"/> to reset the header to its default state.</param>
+    public void SetHeader(LZ4FrameOptions? options)
+    {
+        this.header = options;
     }
 
     /// <summary>
