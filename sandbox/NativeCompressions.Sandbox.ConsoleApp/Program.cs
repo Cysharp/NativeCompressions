@@ -14,25 +14,25 @@ using ZstdNet;
 using NativeCompressions.LZ4;
 
 var src = new byte[202400];
-Random.Shared.NextBytes(src);
+//Random.Shared.NextBytes(src);
+
+src = Enumerable.Repeat((byte)'a', 202400).ToArray();
 
 using var encoder = new LZ4Encoder();
 
 var dest = new byte[encoder.GetMaxCompressedLength(src.Length, includingHeaderAndFooter: true)];
 var bytesWritten = encoder.Compress(src, dest, isFinalBlock: true);
-Console.WriteLine(bytesWritten); // 202427
+Console.WriteLine(bytesWritten);
 
 using var decoder = new LZ4Decoder();
 
 var newSource = dest.AsSpan(0, bytesWritten).ToArray();
-var newDest = new byte[202400];
+var newDest = new byte[10000];
 
 
-var frameInfo = decoder.GetFrameInfo(newSource, out var frameConsumed);
+var done = decoder.Decompress(newSource, newDest, out var consumed2, out var written2);
 
-var done = decoder.Decompress(newSource.AsSpan(frameConsumed), newDest, out var consumed2, out var written2);
-
-Console.WriteLine(done); // Done
+Console.WriteLine(done);
 Console.WriteLine("consumed2:" + consumed2);
 Console.WriteLine("written2:" + written2);
 
