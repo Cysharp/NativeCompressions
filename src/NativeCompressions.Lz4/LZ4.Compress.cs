@@ -15,7 +15,7 @@ public static partial class LZ4
 
     public static byte[] Compress(ReadOnlySpan<byte> source) => Compress(source, LZ4FrameOptions.Default, null);
 
-    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, in LZ4FrameOptions options, LZ4CompressionDictionary? dictionary)
+    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, in LZ4FrameOptions options, LZ4CompressionDictionary? dictionary = null)
     {
         var newOptions = (dictionary == null)
             ? options.WithContentSize(source.Length)
@@ -62,7 +62,7 @@ public static partial class LZ4
 
     public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination) => Compress(source, destination, LZ4FrameOptions.Default, null);
 
-    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in LZ4FrameOptions options, LZ4CompressionDictionary? dictionary)
+    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in LZ4FrameOptions options, LZ4CompressionDictionary? dictionary = null)
     {
         var newOptions = (dictionary == null)
             ? options.WithContentSize(source.Length)
@@ -101,8 +101,10 @@ public static partial class LZ4
     // public static async ValueTask CompressAsync(SafeFileHandle source, PipeWriter destination, LZ4FrameOptions options, LZ4CompressionDictionary? dictionary, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default);
     // public static async ValueTask CompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, LZ4FrameOptions options, LZ4CompressionDictionary? dictionary, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default);
 
-    public static async ValueTask CompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4FrameOptions options, LZ4CompressionDictionary? dictionary, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static async ValueTask CompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4FrameOptions options, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
+        // TODo: validate computate hash option
+
         options = options with
         {
             AutoFlush = true, // set auto-flush
@@ -187,12 +189,13 @@ public static partial class LZ4
             };
 
             var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
+            var capacity = Math.Min(threadCount * 2, 8);
 
-            // TODO: use BoundedChannel?
-            var outputChannel = Channel.CreateUnbounded<MultithreadCompressionBuffer>(new UnboundedChannelOptions
+            var outputChannel = Channel.CreateBounded<MultithreadCompressionBuffer>(new BoundedChannelOptions(capacity)
             {
                 SingleWriter = false,
                 SingleReader = true,
+                FullMode = BoundedChannelFullMode.Wait
             });
 
             using (var headerEncoder = new LZ4Encoder(options, dictionary) { IsWriteHeader = true })
@@ -240,7 +243,7 @@ public static partial class LZ4
             var readerTasks = new Task[threadCount];
             for (int i = 0; i < readerTasks.Length; i++)
             {
-                readerTasks[i] = Task.Run(() =>
+                readerTasks[i] = Task.Run(async () =>
                 {
                     using var encoder = new LZ4Encoder(options, dictionary) { IsWriteHeader = false };
 
@@ -261,12 +264,12 @@ public static partial class LZ4
 
                         var written = encoder.Compress(src, dest);
 
-                        outputChannel.Writer.TryWrite(new MultithreadCompressionBuffer
+                        await outputChannel.Writer.WriteAsync(new MultithreadCompressionBuffer
                         {
                             CompressedBuffer = dest,
                             Count = written,
                             Id = id
-                        });
+                        }, cancellationToken);
                     }
                 });
             }
