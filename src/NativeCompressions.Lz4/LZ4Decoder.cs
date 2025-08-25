@@ -183,6 +183,9 @@ public unsafe partial struct LZ4Decoder : IDisposable
             var consumed = (nuint)source.Length;
             var written = (nuint)destination.Length;
 
+            // TODO: dictionary support of decoding.
+            // LZ4F_decompress_usingDict
+
             // LZ4F_decompressOptions_t is currently unused in LZ4 implementation, so we pass null.
             var hintOrErrorCode = LZ4F_decompress(context, dest, &written, src, &consumed, dOptPtr: null);
             LZ4.HandleErrorCode(hintOrErrorCode);
