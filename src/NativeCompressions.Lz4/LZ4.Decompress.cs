@@ -1,62 +1,73 @@
-﻿//using NativeCompressions.LZ4.Raw;
-//using System;
-//using System.Collections.Generic;
-//using System.Linq;
-//using System.Text;
-//using System.Threading.Tasks;
+﻿using NativeCompressions.LZ4.Internal;
+using System.Buffers;
+using System.Net.NetworkInformation;
 
-//namespace NativeCompressions.LZ4;
+namespace NativeCompressions.LZ4;
 
-//public static partial class LZ4
-//{
-//    // PipeReader? ReadOnlySequence<T>? Stream?
-//    public static unsafe byte[] Decompress(ReadOnlySpan<byte> source)
-//    {
-//        // LZ4F_decompress
-//        LZ4F_dctx_s* dctx = default; // TODO: create from DecompressOptions?
-//        var code = LZ4F_createDecompressionContext(&dctx, FrameVersion);
-//        HandleErrorCode(code);
-//        // LZ4F_getFrameInfo
+public static partial class LZ4
+{
+    public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, bool trustedData = false)
+    {
+        using var decoder = new LZ4Decoder();
 
+        if (trustedData)
+        {
+            var frameInfo = decoder.GetFrameInfo(source, out var consumed);
+            source = source.Slice(consumed);
 
+            if (frameInfo.ContentSize != 0) // 0 means unknown
+            {
+                var destination = new byte[frameInfo.ContentSize]; // trusted ContentSize, decode one-shot.
+                var dest = destination.AsSpan();
+                var status = OperationStatus.DestinationTooSmall;
+                while (status == OperationStatus.DestinationTooSmall && source.Length > 0)
+                {
+                    status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
+                    source = source.Slice(bytesConsumed);
+                    dest = dest.Slice(bytesWritten);
+                }
 
-//        var destination = new byte[60000]; // TODO: which bytes?
+                if (status == OperationStatus.NeedMoreData)
+                {
+                    throw new InvalidOperationException("Invalid LZ4 frame.");
+                }
 
-//        var totalWritten = 0;
-//        fixed (byte* src = source)
-//        fixed (byte* dest = destination)
-//        {
+                return destination;
+            }
+        }
 
-//            // LZ4F_getFrameInfo()
-//            var consumedSourceLength = (nuint)source.Length;
-//            var writtenDestinationLength = (nuint)destination.Length;
+        {
+            Span<byte> scratch = stackalloc byte[127];
+            var arrayProvider = new SegmentedArrayProvider<byte>(scratch);
 
+            var dest = arrayProvider.GetSpan();
+            var status = OperationStatus.DestinationTooSmall;
+            while (status == OperationStatus.DestinationTooSmall && source.Length > 0)
+            {
+                status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
+                if (bytesWritten == 0 && bytesConsumed == 0 && status == OperationStatus.DestinationTooSmall)
+                {
+                    throw new InvalidOperationException("Decoder stuck");
+                }
 
-//            //LZ4F_frameInfo_t finfo = default;
-//            //var code2 = LZ4F_getFrameInfo(dctx, &finfo, src, &consumedSourceLength);
+                source = source.Slice(bytesConsumed);
+                dest = dest.Slice(bytesWritten);
+                arrayProvider.Advance(bytesWritten);
 
-//            // an hint of how many `srcSize` bytes LZ4F_decompress() expects for next call.
+                if (dest.Length == 0)
+                {
+                    dest = arrayProvider.GetSpan();
+                }
+            }
 
-//            var hintOrErrorCode = LZ4F_decompress(dctx, dest, &writtenDestinationLength, src, &consumedSourceLength, null);
-//            totalWritten += (int)writtenDestinationLength;
+            if (status == OperationStatus.NeedMoreData)
+            {
+                throw new InvalidOperationException("Invalid LZ4 frame.");
+            }
 
-
-
-
-//            if (hintOrErrorCode == 0)
-//            {
-//                // success decompression.
-//                return destination.AsSpan(0, totalWritten).ToArray();
-//            }
-
-//            if (LZ4F_isError(hintOrErrorCode) != 0)
-//            {
-//                LZ4.HandleErrorCode(hintOrErrorCode);
-//                // error...
-//            }
-//        }
-
-//        return destination;
-//    }
-
-//}
+            var result = GC.AllocateUninitializedArray<byte>(arrayProvider.Count);
+            arrayProvider.CopyToAndClear(result);
+            return result;
+        }
+    }
+}
