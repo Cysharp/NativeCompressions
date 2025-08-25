@@ -12,48 +12,37 @@ using System.Runtime.InteropServices;
 using System.Text;
 using ZstdNet;
 using NativeCompressions.LZ4;
+using System.IO.Pipelines;
 
-var src = new byte[202400];
-//Random.Shared.NextBytes(src);
+var ms = new MemoryStream();
+var writer = PipeWriter.Create(ms);
 
-src = Enumerable.Repeat((byte)'a', 202400).ToArray();
+var path = @"C:\Users\S04451\Downloads\silesia.tar";
+var src = File.ReadAllBytes(path);
 
-using var encoder = new LZ4Encoder();
+var dest = new byte[LZ4.GetMaxCompressedLength(src.Length, LZ4FrameOptions.Default)];
 
-var dest = new byte[encoder.GetMaxCompressedLength(src.Length, includingHeaderAndFooter: true)];
-var bytesWritten = encoder.Compress(src, dest);
-bytesWritten += encoder.Close(dest.AsSpan(bytesWritten));
+var sw = Stopwatch.StartNew();
 
-Console.WriteLine(bytesWritten);
+//var written1 = K4os.Compression.LZ4.LZ4Codec.Encode(src, dest);
 
-using var decoder = new LZ4Decoder();
+await LZ4.CompressAsync(src, writer, LZ4FrameOptions.Default, null);
 
-var newSource = dest.AsSpan(0, bytesWritten).ToArray();
-var newDest = new byte[10000];
-
-
-// var options = new LZ4FrameOptions();
-
-
-
-//var options = LZ4FrameOptions.Default with
-//{
-//    CompressionLevel = 10,
-//    FrameInfo = with
-//    {
-//        DictionaryID = 1,
-//        ContentSize = 100
-//    }
-//};
+//var written2 = LZ4.Compress(src, dest);
+//Console.WriteLine(written1);
+//Console.WriteLine(written2);
+// var a = ms.ToArray();
+Console.WriteLine(sw.ElapsedMilliseconds + "ms");
 
 
-// var a = info with { DictionaryID = 1 };
+var more = new byte[src.Length];
+
+var decoder = new LZ4Decoder();
+dest = ms.ToArray();
+
+decoder.Decompress(dest/*.AsSpan(0, written2)*/, more, out var a, out var b);
+Console.WriteLine(src.SequenceEqual(more)); // ???
 
 
-var done = decoder.Decompress(newSource, newDest, out var consumed2, out var written2);
-
-Console.WriteLine(done);
-Console.WriteLine("consumed2:" + consumed2);
-Console.WriteLine("written2:" + written2);
 
 

@@ -169,7 +169,7 @@ public unsafe partial struct LZ4Encoder : IDisposable
         var totalWritten = 0;
 
         // Write header block
-        if (IsWriteHeader && !isWrittenHeader)
+        if (!isWrittenHeader)
         {
             fixed (byte* dest = destination)
             {
@@ -181,8 +181,12 @@ public unsafe partial struct LZ4Encoder : IDisposable
                 LZ4.HandleErrorCode(writtenOrErrorCode);
                 isWrittenHeader = true;
 
-                destination = destination.Slice((int)writtenOrErrorCode);
-                totalWritten += (int)writtenOrErrorCode;
+                // LZ4F_cctx_s always need to call compressBegin but header can ignore(write for single frame from multiple context(multiple block))
+                if (IsWriteHeader)
+                {
+                    destination = destination.Slice((int)writtenOrErrorCode);
+                    totalWritten += (int)writtenOrErrorCode;
+                }
             }
         }
 

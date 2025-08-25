@@ -36,11 +36,11 @@ public sealed class LZ4Stream : Stream
         }
         else
         {
-            this.encoder = new LZ4Encoder(null, null);
+            this.encoder = new LZ4Encoder();
         }
     }
 
-    public LZ4Stream(Stream stream, LZ4FrameOptions? options, LZ4CompressionDictionary? compressionDictionary, bool leaveOpen = false)
+    public LZ4Stream(Stream stream, in LZ4FrameOptions options, LZ4CompressionDictionary? compressionDictionary, bool leaveOpen = false)
     {
         this.mode = CompressionMode.Compress;
         this.stream = stream;
@@ -155,7 +155,7 @@ public sealed class LZ4Stream : Stream
             dest = buffer = ArrayPool<byte>.Shared.Rent(maxDest);
         }
 
-        var written = encoder.Compress(source, dest, isFinalBlock: false);
+        var written = encoder.Compress(source, dest);
 
         if (written > 0)
         {
@@ -185,7 +185,7 @@ public sealed class LZ4Stream : Stream
             dest = buffer = ArrayPool<byte>.Shared.Rent(maxDest);
         }
 
-        var written = encoder.Compress(source.Span, dest, isFinalBlock: false);
+        var written = encoder.Compress(source.Span, dest);
 
         if (written > 0)
         {

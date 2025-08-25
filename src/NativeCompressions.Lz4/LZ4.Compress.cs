@@ -180,6 +180,7 @@ public static partial class LZ4
             {
                 FrameInfo = options.FrameInfo with
                 {
+                    ContentSize = 0, // in multi-thread, LZ4 can't handle content-size(multiple context)
                     BlockSizeID = BlockSizeId.Max4MB, // use 4MB
                     BlockMode = BlockMode.BlockIndependent // for parallel
                 }
@@ -226,7 +227,7 @@ public static partial class LZ4
                 }
 
                 // channel complete, flush
-                var encoder = new LZ4Encoder(options, dictionary) { IsWriteHeader = false };
+                using var encoder = new LZ4Encoder(options, dictionary) { IsWriteHeader = false };
                 var lastBuffer = destination.GetSpan(encoder.GetActualFrameFooterLength());
                 var lastWritten = encoder.Close(lastBuffer);
                 destination.Advance(lastWritten);
