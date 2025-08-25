@@ -1,4 +1,4 @@
-﻿using NativeCompressions.LZ4.Internal;
+using NativeCompressions.LZ4.Internal;
 using System.Buffers;
 using System.Net.NetworkInformation;
 

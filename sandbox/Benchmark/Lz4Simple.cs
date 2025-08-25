@@ -1,4 +1,4 @@
-﻿using Benchmark.Models;
+using Benchmark.Models;
 using NativeCompressions.LZ4;
 using System.Text;
 using System.Text.Json;
@@ -24,20 +24,14 @@ public class Lz4Simple
     }
 
     [Benchmark]
-    public int K4os_LZ4_Encode()
+    public int K4os_Lz4_Encode()
     {
         return K4os.Compression.LZ4.LZ4Codec.Encode(src, dest, K4os.Compression.LZ4.LZ4Level.L00_FAST);
     }
 
-    //[Benchmark]
-    //public int Lz4Net_Encode()
-    //{
-    //    return LZ4.LZ4Codec.Encode(src, 0, src.Length, dest, 0, dest.Length);
-    //}
-
     [Benchmark]
     public int NativeCompressions_LZ4_Compress()
     {
-        return NativeCompressions.LZ4.LZ4.Compress(src, dest);
+        return LZ4.LZ4Codec.Encode(src, 0, src.Length, dest, 0, dest.Length);
     }
 }

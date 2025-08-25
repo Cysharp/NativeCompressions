@@ -1,6 +1,6 @@
-﻿using Benchmark.BenchmarkNetUtilities;
+using Benchmark.BenchmarkNetUtilities;
 using Benchmark.Models;
-using NativeCompressions.LZ4;
+using NativeCompressions.Lz4;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
@@ -39,6 +39,36 @@ public class CompressionCompare
     public int LZ4()
     {
         var bytesWritten = NativeCompressions.LZ4.LZ4.Compress(src, dest);
+        return bytesWritten;
+    }
+
+
+
+    [Benchmark]
+    public int LZ4HC_Min()
+    {
+        LZ4Encoder.TryCompressHC(src, dest, out var bytesWritten, LZ4HCCompressionLevel.Min);
+        return bytesWritten;
+    }
+
+    [Benchmark]
+    public int LZ4HC_Default()
+    {
+        LZ4Encoder.TryCompressHC(src, dest, out var bytesWritten, LZ4HCCompressionLevel.Default);
+        return bytesWritten;
+    }
+
+    [Benchmark]
+    public int LZ4HC_OptMin()
+    {
+        LZ4Encoder.TryCompressHC(src, dest, out var bytesWritten, LZ4HCCompressionLevel.OptMin);
+        return bytesWritten;
+    }
+
+    [Benchmark]
+    public int LZ4HC_Max()
+    {
+        LZ4Encoder.TryCompressHC(src, dest, out var bytesWritten, LZ4HCCompressionLevel.Max);
         return bytesWritten;
     }
 
