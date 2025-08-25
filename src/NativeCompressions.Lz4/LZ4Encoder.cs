@@ -25,33 +25,34 @@ namespace NativeCompressions.LZ4;
 public unsafe partial struct LZ4Encoder : IDisposable
 {
     LZ4F_cctx_s* context;
-    LZ4FrameOptions? header; // LZ4F_preferences_t
+    LZ4FrameOptions header; // LZ4F_preferences_t
     LZ4CompressionDictionary? compressionDictionary;
 
     bool isWrittenHeader;
     bool disposed;
 
+    public bool IsWriteHeader { get; set; } = true;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="LZ4Encoder"/> struct with default settings.
     /// </summary>
     public LZ4Encoder()
-        : this(null, null)
+        : this(LZ4FrameOptions.Default, null)
     {
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LZ4Encoder"/> struct with specified options.
     /// </summary>
-    /// <param name="options">Frame format options such as block size, compression level, and checksums. Pass null for defaults.</param>
+    /// <param name="options">Frame format options such as block size, compression level, and checksums. Pass LZ4FrameOptions.Default for defaults.</param>
     /// <param name="compressionDictionary">Optional pre-built dictionary for improved compression ratio. Pass null if not using dictionary compression.</param>
     /// <exception cref="LZ4Exception">Thrown when the compression context cannot be created.</exception>
-    public LZ4Encoder(LZ4FrameOptions? options, LZ4CompressionDictionary? compressionDictionary)
+    public LZ4Encoder(in LZ4FrameOptions options, LZ4CompressionDictionary? compressionDictionary)
     {
         // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         LZ4F_cctx_s* ptr = default;
         var code = LZ4F_createCompressionContext(&ptr, LZ4.FrameVersion);
         LZ4.HandleErrorCode(code);
-
         this.context = ptr;
         this.header = options;
         this.compressionDictionary = compressionDictionary;
@@ -72,26 +73,15 @@ public unsafe partial struct LZ4Encoder : IDisposable
     /// - Compressed data with block headers
     /// - Frame footer (4-8 bytes: end mark and optional content checksum)
     /// </remarks>
-    public int GetMaxCompressedLength(int inputSize, bool includingHeaderAndFooter = true)
+    public unsafe int GetMaxCompressedLength(int inputSize, bool includingHeaderAndFooter = true)
     {
         var bound = 0;
-        if (header == null)
-        {
-            bound = (int)LZ4F_compressBound((nuint)inputSize, null);
-        }
-        else
-        {
-            var options = header.Value;
-            ref var preferences_t = ref Unsafe.As<LZ4FrameOptions, LZ4F_preferences_t>(ref Unsafe.AsRef(in options));
-            unsafe
-            {
-                bound = (int)LZ4F_compressBound((nuint)inputSize, (LZ4F_preferences_t*)Unsafe.AsPointer(ref preferences_t));
-            }
-        }
+        var preferences = header.ToPreferences();
+        bound = (int)LZ4F_compressBound((nuint)inputSize, preferences);
 
         if (includingHeaderAndFooter)
         {
-            return bound + GetActualFrameHeaderSize() + GetActualFrameFooterSize();
+            return bound + GetActualFrameHeaderLength() + GetActualFrameFooterLength();
         }
         else
         {
@@ -113,46 +103,6 @@ public unsafe partial struct LZ4Encoder : IDisposable
     public int GetMaxHeaderLength() => 19; // LZ4F_HEADER_SIZE_MAX
 
     /// <summary>
-    /// Gets the actual frame header size based on current options.
-    /// </summary>
-    /// <returns>Actual header size in bytes.</returns>
-    public int GetActualFrameHeaderSize()
-    {
-        if (header == null) return 7; // Minimum header size
-
-        var options = header.Value;
-        int size = 7; // Base size (magic, FLG, BD, HC)
-
-        if (options.FrameInfo.ContentSize > 0)
-        {
-            size += 8; // Content size field
-        }
-
-        if (options.FrameInfo.DictionaryID != 0)
-        {
-            size += 4; // Dictionary ID field
-        }
-
-        return size;
-    }
-
-    /// <summary>
-    /// Gets the actual frame footer size based on current options.
-    /// </summary>
-    /// <returns>Actual footer size in bytes.</returns>
-    public int GetActualFrameFooterSize()
-    {
-        int size = 4; // End mark (always present)
-
-        if (header?.FrameInfo.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
-        {
-            size += 4; // Content checksum
-        }
-
-        return size;
-    }
-
-    /// <summary>
     /// Gets the maximum possible size of an LZ4 frame footer.
     /// </summary>
     /// <returns>Maximum footer size in bytes (8 bytes).</returns>
@@ -164,49 +114,66 @@ public unsafe partial struct LZ4Encoder : IDisposable
     public static int GetMaxFooterLength() => 8;  // EndMarkSize + ChecksumSize
 
     /// <summary>
+    /// Gets the actual frame header size based on current options.
+    /// </summary>
+    /// <returns>Actual header size in bytes.</returns>
+    public int GetActualFrameHeaderLength()
+    {
+        int size = 7; // Base size (magic, FLG, BD, HC)
+
+        if (header.FrameInfo.ContentSize > 0)
+        {
+            size += 8; // Content size field
+        }
+
+        if (header.FrameInfo.DictionaryID != 0)
+        {
+            size += 4; // Dictionary ID field
+        }
+
+        return size;
+    }
+
+    /// <summary>
+    /// Gets the actual frame footer size based on current options.
+    /// </summary>
+    /// <returns>Actual footer size in bytes.</returns>
+    public int GetActualFrameFooterLength()
+    {
+        int size = 4; // End mark (always present)
+
+        if (header.FrameInfo.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
+        {
+            size += 4; // Content checksum
+        }
+
+        return size;
+    }
+
+    /// <summary>
     /// Compresses source data and writes the result to the destination buffer.
     /// </summary>
     /// <param name="source">The data to compress. The entire source buffer will be consumed.</param>
     /// <param name="destination">The buffer to write compressed data to. Must be at least <see cref="GetMaxCompressedLength"/> in size.</param>
-    /// <param name="isFinalBlock">If true, finalizes the frame by writing the end marker and optional checksum.</param>
     /// <returns>The total number of bytes written to the destination buffer, including header (if first call) and frame ending (if final block).</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
     /// <exception cref="LZ4Exception">Thrown when compression fails (e.g., destination buffer too small).</exception>
     /// <remarks>
     /// On first call, automatically writes the LZ4 frame header.
     /// The source data is always entirely consumed - either compressed to destination or buffered internally.
-    /// 
-    /// When <paramref name="isFinalBlock"/> is true:
-    /// - Compresses the provided source data
-    /// - Flushes any internally buffered data
-    /// - Writes the frame end marker and optional content checksum
-    /// - Completes the current frame, making the encoder ready for a new frame
-    /// 
-    /// This design allows for both streaming and single-shot compression:
-    /// - Streaming: Call with isFinalBlock=false for intermediate chunks, true for the last chunk
-    /// - Single-shot: Call once with isFinalBlock=true for complete compression
-    /// 
-    /// After isFinalBlock=true, the encoder can be reused to compress another frame without disposing.
     /// </remarks>
-    public int Compress(ReadOnlySpan<byte> source, Span<byte> destination, bool isFinalBlock)
+    public int Compress(ReadOnlySpan<byte> source, Span<byte> destination)
     {
         ValidateDisposed();
 
         var totalWritten = 0;
 
         // Write header block
-        if (!isWrittenHeader)
+        if (IsWriteHeader && !isWrittenHeader)
         {
             fixed (byte* dest = destination)
             {
-                LZ4F_preferences_t preference;
-                LZ4F_preferences_t* preferencePtr = null;
-                if (header != null)
-                {
-                    var v = header.Value;
-                    preference = Unsafe.As<LZ4FrameOptions, LZ4F_preferences_t>(ref v);
-                    preferencePtr = &preference;
-                }
+                var preferencePtr = header.ToPreferences();
 
                 var writtenOrErrorCode = (compressionDictionary == null)
                     ? LZ4F_compressBegin(context, dest, (nuint)destination.Length, preferencePtr)
@@ -229,12 +196,6 @@ public unsafe partial struct LZ4Encoder : IDisposable
 
             destination = destination.Slice((int)writtenOrErrorCode);
             totalWritten += (int)writtenOrErrorCode; // written size can be zero, meaning input data was just buffered.
-        }
-
-        if (isFinalBlock)
-        {
-            // Close finalizes the frame
-            totalWritten += Close(destination);
         }
 
         return totalWritten;
@@ -274,9 +235,6 @@ public unsafe partial struct LZ4Encoder : IDisposable
     /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
     /// <exception cref="LZ4Exception">Thrown when finalization fails.</exception>
     /// <remarks>
-    /// This method is typically called explicitly when isFinalBlock=false was used in Compress calls.
-    /// If Compress was called with isFinalBlock=true, this method has already been called internally.
-    /// 
     /// After calling this method, the encoder can be reused to compress another frame
     /// by calling Compress again (which will write a new header).
     /// </remarks>
@@ -286,8 +244,9 @@ public unsafe partial struct LZ4Encoder : IDisposable
 
         if (!isWrittenHeader)
         {
-            // This will write header, empty body and footer.
-            return Compress([], destination, isFinalBlock: true);
+            // This will write header, empty body.
+            var written = Compress([], destination);
+            destination = destination.Slice(written);
         }
 
         fixed (byte* dest = destination)
@@ -316,7 +275,7 @@ public unsafe partial struct LZ4Encoder : IDisposable
     /// Sets the header options for the LZ4 frame.
     /// </summary>
     /// <param name="options">The LZ4 frame options to apply. Can be <see langword="null"/> to reset the header to its default state.</param>
-    public void SetHeader(LZ4FrameOptions? options)
+    public void SetHeader(in LZ4FrameOptions options)
     {
         this.header = options;
     }

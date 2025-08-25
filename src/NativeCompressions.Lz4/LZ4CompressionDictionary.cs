@@ -10,18 +10,21 @@ public sealed class LZ4CompressionDictionary : SafeHandle
 
     public override bool IsInvalid => handle == IntPtr.Zero;
 
+    public uint DictionaryId { get; private set; }
+
     // for decompression
     internal ReadOnlySpan<byte> RawDictionary => dictionaryData;
 
     internal unsafe LZ4F_CDict_s* Handle => ((LZ4F_CDict_s*)handle);
 
-    public LZ4CompressionDictionary(ReadOnlySpan<byte> dictionaryData)
+    public LZ4CompressionDictionary(ReadOnlySpan<byte> dictionaryData, uint dictionaryId)
         : base(IntPtr.Zero, true)
     {
         if (dictionaryData.Length == 0) throw new ArgumentException("Dictionary data cannot be empty", nameof(dictionaryData));
 
-        var data = dictionaryData.ToArray(); // diffencive copy
+        this.DictionaryId = dictionaryId;
 
+        var data = dictionaryData.ToArray(); // diffencive copy
         unsafe
         {
             fixed (void* p = data)
