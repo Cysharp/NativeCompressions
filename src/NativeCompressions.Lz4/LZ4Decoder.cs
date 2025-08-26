@@ -17,13 +17,14 @@ namespace NativeCompressions.LZ4;
 public unsafe partial struct LZ4Decoder : IDisposable
 {
     LZ4F_dctx_s* context;
+    LZ4CompressionDictionary? dictionary;
     bool disposed;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LZ4Decoder"/> struct.
     /// </summary>
     /// <exception cref="LZ4Exception">Thrown when the decompression context cannot be created.</exception>
-    public LZ4Decoder()
+    public LZ4Decoder(LZ4CompressionDictionary? dictionary = null)
     {
         // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         LZ4F_dctx_s* ptr = default;
@@ -32,6 +33,7 @@ public unsafe partial struct LZ4Decoder : IDisposable
 
         this.context = ptr;
         this.disposed = false;
+        this.dictionary = dictionary;
     }
 
     /// <summary>
@@ -183,11 +185,21 @@ public unsafe partial struct LZ4Decoder : IDisposable
             var consumed = (nuint)source.Length;
             var written = (nuint)destination.Length;
 
-            // TODO: dictionary support of decoding.
-            // LZ4F_decompress_usingDict
+            nuint hintOrErrorCode;
+            if (dictionary == null)
+            {
+                // LZ4F_decompressOptions_t is currently unused in LZ4 implementation, so we pass null.
+                hintOrErrorCode = LZ4F_decompress(context, dest, &written, src, &consumed, dOptPtr: null);
+            }
+            else
+            {
+                var dict = dictionary.RawDictionary;
+                fixed (void* dictPtr = dict)
+                {
+                    hintOrErrorCode = LZ4F_decompress_usingDict(context, dest, &written, src, &consumed, dictPtr, (nuint)dict.Length, decompressOptionsPtr: null);
+                }
+            }
 
-            // LZ4F_decompressOptions_t is currently unused in LZ4 implementation, so we pass null.
-            var hintOrErrorCode = LZ4F_decompress(context, dest, &written, src, &consumed, dOptPtr: null);
             LZ4.HandleErrorCode(hintOrErrorCode);
 
             bytesConsumed = (int)consumed;

@@ -191,6 +191,9 @@ public static partial class LZ4
             var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
             var capacity = Math.Min(threadCount * 2, 8);
 
+            // TODO: debugging
+            threadCount = 1;
+
             var outputChannel = Channel.CreateBounded<MultithreadCompressionBuffer>(new BoundedChannelOptions(capacity)
             {
                 SingleWriter = false,
@@ -285,7 +288,7 @@ public static partial class LZ4
     }
 
     // use PriorityQueue is better but to support netstandard2.1
-    internal struct MultithreadCompressionBuffer : IComparable<MultithreadCompressionBuffer>
+    struct MultithreadCompressionBuffer : IComparable<MultithreadCompressionBuffer>
     {
         public int Id;
         public byte[] CompressedBuffer;
