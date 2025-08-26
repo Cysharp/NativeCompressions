@@ -40,13 +40,13 @@ public sealed class LZ4Stream : Stream
         }
     }
 
-    public LZ4Stream(Stream stream, in LZ4FrameOptions options, LZ4CompressionDictionary? compressionDictionary, bool leaveOpen = false)
+    public LZ4Stream(Stream stream, in LZ4FrameOptions frameOptions, LZ4CompressionDictionary? compressionDictionary, bool leaveOpen = false)
     {
         this.mode = CompressionMode.Compress;
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.readBufferCount = 0;
-        this.encoder = new LZ4Encoder(options, compressionDictionary);
+        this.encoder = new LZ4Encoder(frameOptions, compressionDictionary);
     }
 
     public override bool CanRead => mode == CompressionMode.Decompress && stream != null && stream.CanRead;
@@ -538,3 +538,4 @@ public sealed class LZ4Stream : Stream
         }
     }
 }
+

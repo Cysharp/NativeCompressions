@@ -15,11 +15,11 @@ public static partial class LZ4
 
     public static byte[] Compress(ReadOnlySpan<byte> source) => Compress(source, LZ4FrameOptions.Default, null);
 
-    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, in LZ4FrameOptions options, LZ4CompressionDictionary? dictionary = null)
+    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, in LZ4FrameOptions frameOptions, LZ4CompressionDictionary? dictionary = null)
     {
         var newOptions = (dictionary == null)
-            ? options.WithContentSize(source.Length)
-            : options.WithContentSizeAndDictionaryId(source.Length, dictionary.DictionaryId);
+            ? frameOptions.WithContentSize(source.Length)
+            : frameOptions.WithContentSizeAndDictionaryId(source.Length, dictionary.DictionaryId);
 
         var pref = newOptions.ToPreferences();
         var maxLength = LZ4F_compressFrameBound((uint)source.Length, pref);
@@ -62,11 +62,11 @@ public static partial class LZ4
 
     public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination) => Compress(source, destination, LZ4FrameOptions.Default, null);
 
-    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in LZ4FrameOptions options, LZ4CompressionDictionary? dictionary = null)
+    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in LZ4FrameOptions frameOptions, LZ4CompressionDictionary? dictionary = null)
     {
         var newOptions = (dictionary == null)
-            ? options.WithContentSize(source.Length)
-            : options.WithContentSizeAndDictionaryId(source.Length, dictionary.DictionaryId);
+            ? frameOptions.WithContentSize(source.Length)
+            : frameOptions.WithContentSizeAndDictionaryId(source.Length, dictionary.DictionaryId);
         var pref = newOptions.ToPreferences();
 
         fixed (byte* src = source)
@@ -97,13 +97,12 @@ public static partial class LZ4
         }
     }
 
-    // TODO: SafeFileHandle
-    // public static async ValueTask CompressAsync(SafeFileHandle source, PipeWriter destination, LZ4FrameOptions options, LZ4CompressionDictionary? dictionary, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default);
-    // public static async ValueTask CompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, LZ4FrameOptions options, LZ4CompressionDictionary? dictionary, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default);
+    // TODO: variation: ReadOnlyMemory<byte>, SafeFileHandle, Stream, ReadOnlySequence<byte>, PipeReader
 
-    public static async ValueTask CompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4FrameOptions options, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static async ValueTask CompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4FrameOptions? frameOptions = null, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
         // TODo: validate computate hash option
+        var options = frameOptions ?? LZ4FrameOptions.Default;
 
         options = options with
         {
@@ -189,10 +188,7 @@ public static partial class LZ4
             };
 
             var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
-            var capacity = Math.Min(threadCount * 2, 8);
-
-            // TODO: debugging
-            threadCount = 1;
+            var capacity = threadCount * 2;
 
             var outputChannel = Channel.CreateBounded<MultithreadCompressionBuffer>(new BoundedChannelOptions(capacity)
             {
@@ -287,7 +283,8 @@ public static partial class LZ4
         }
     }
 
-    // use PriorityQueue is better but to support netstandard2.1
+    // use PriorityQueue is easy to use but not available in netstandard2.1
+    // and reverse-order, id match priority queue is maybe faster in min-size(threadCount)
     struct MultithreadCompressionBuffer : IComparable<MultithreadCompressionBuffer>
     {
         public int Id;
@@ -297,9 +294,12 @@ public static partial class LZ4
         public int CompareTo(MultithreadCompressionBuffer other)
         {
             // reverse-order
-            if (Id < other.Id) return 1;
-            if (Id > other.Id) return -1;
-            return 0;
+            return other.Id.CompareTo(Id);
+        }
+
+        public override string ToString()
+        {
+            return Id.ToString();
         }
     }
 }

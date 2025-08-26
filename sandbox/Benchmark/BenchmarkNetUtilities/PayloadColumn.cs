@@ -1,4 +1,4 @@
-using BenchmarkDotNet.Attributes;
+﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Reports;
 using BenchmarkDotNet.Running;
@@ -47,6 +47,12 @@ public class PayloadColumn : IColumn
             var instance = Activator.CreateInstance(benchmarkCase.Descriptor.Type);
             var result = (int)methodInfo.Invoke(instance, null)!;
             return new SizeValue(result).ToString();
+        }
+        else if (methodInfo.ReturnType == typeof(Task<int>))
+        {
+            var instance = Activator.CreateInstance(benchmarkCase.Descriptor.Type);
+            var result = (Task<int>)methodInfo.Invoke(instance, null)!;
+            return new SizeValue(result.Result).ToString();
         }
         else
         {

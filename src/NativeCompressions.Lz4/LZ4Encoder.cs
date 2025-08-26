@@ -44,17 +44,17 @@ public unsafe partial struct LZ4Encoder : IDisposable
     /// <summary>
     /// Initializes a new instance of the <see cref="LZ4Encoder"/> struct with specified options.
     /// </summary>
-    /// <param name="options">Frame format options such as block size, compression level, and checksums. Pass LZ4FrameOptions.Default for defaults.</param>
+    /// <param name="frameOptions">Frame format options such as block size, compression level, and checksums. Pass LZ4FrameOptions.Default for defaults.</param>
     /// <param name="compressionDictionary">Optional pre-built dictionary for improved compression ratio. Pass null if not using dictionary compression.</param>
     /// <exception cref="LZ4Exception">Thrown when the compression context cannot be created.</exception>
-    public LZ4Encoder(in LZ4FrameOptions options, LZ4CompressionDictionary? compressionDictionary = null)
+    public LZ4Encoder(in LZ4FrameOptions frameOptions, LZ4CompressionDictionary? compressionDictionary = null)
     {
         // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         LZ4F_cctx_s* ptr = default;
         var code = LZ4F_createCompressionContext(&ptr, LZ4.FrameVersion);
         LZ4.HandleErrorCode(code);
         this.context = ptr;
-        this.header = options;
+        this.header = frameOptions;
         this.compressionDictionary = compressionDictionary;
     }
 
