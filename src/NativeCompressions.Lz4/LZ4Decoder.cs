@@ -37,17 +37,6 @@ public unsafe partial struct LZ4Decoder : IDisposable
     }
 
     /// <summary>
-    /// Gets the minimum number of bytes required to determine the LZ4 frame header size.
-    /// </summary>
-    /// <returns>The minimum bytes needed (5 bytes) to identify header size.</returns>
-    /// <remarks>
-    /// This is the smallest amount of data needed to parse the frame's magic number
-    /// and flags to determine the full header size. Use this value to ensure you have
-    /// enough data before calling <see cref="GetHeaderSize"/>.
-    /// </remarks>
-    public int GetMinSizeToKnowHeaderLength() => 5; // LZ4F_MIN_SIZE_TO_KNOW_HEADER_LENGTH
-
-    /// <summary>
     /// Determines the size of an LZ4 frame header from the beginning of a compressed stream.
     /// </summary>
     /// <param name="source">

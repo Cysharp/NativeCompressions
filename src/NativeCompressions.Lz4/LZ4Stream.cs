@@ -142,7 +142,7 @@ public sealed class LZ4Stream : Stream
         }
 
         // Adding headers and footers all the time is redundant, but we prioritize simplicity of implementation.
-        var maxDest = encoder.GetMaxCompressedLength(source.Length, includingHeaderAndFooter: true);
+        var maxDest = encoder.GetMaxCompressedLength(source.Length);
 
         var dest = buffer;
         if (dest == null)
@@ -172,7 +172,7 @@ public sealed class LZ4Stream : Stream
         }
 
         // Adding headers and footers all the time is redundant, but we prioritize simplicity of implementation.
-        var maxDest = encoder.GetMaxCompressedLength(source.Length, includingHeaderAndFooter: true);
+        var maxDest = encoder.GetMaxCompressedLength(source.Length);
 
         var dest = buffer;
         if (dest == null)

@@ -132,6 +132,7 @@ public static partial class LZ4
                 source = source.Slice(bytesConsumed);
                 destination.Advance(bytesWritten);
                 await destination.FlushAsync(cancellationToken);
+                await destination.CompleteAsync();
             }
 
             if (status == OperationStatus.NeedMoreData)
@@ -247,6 +248,9 @@ public static partial class LZ4
                             }
                         }
                     }
+
+                    await destination.FlushAsync(channelToken.Token);
+                    destination.Complete();
                 }
                 finally
                 {
@@ -270,24 +274,6 @@ public static partial class LZ4
                 channelToken.Cancel(); // when any exception, cancel all tasks.
                 throw;
             }
-        }
-    }
-
-    static int GetMaxBlockSize(BlockSizeId id)
-    {
-        switch (id)
-        {
-            case BlockSizeId.Default:
-            case BlockSizeId.Max64KB:
-                return 64 * 1024;
-            case BlockSizeId.Max256KB:
-                return 256 * 1024;
-            case BlockSizeId.Max1MB:
-                return 1024 * 1024;
-            case BlockSizeId.Max4MB:
-                return 4 * 1024 * 1024;
-            default:
-                throw new LZ4Exception("Invalid blockSize");
         }
     }
 

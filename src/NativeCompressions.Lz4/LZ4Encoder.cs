@@ -62,26 +62,34 @@ public unsafe partial struct LZ4Encoder : IDisposable
     /// Calculates the maximum possible compressed size for the given input size.
     /// </summary>
     /// <param name="inputSize">Size of the uncompressed input data in bytes.</param>
-    /// <param name="includingHeaderAndFooter">If true, includes the frame header and footer sizes. Default is true.</param>
+    /// <param name="includingHeader">If true, includes the frame header sizes. Default is true.</param>
+    /// <param name="includingFooter">If true, includes the frame footer sizes. Default is true.</param>
     /// <returns>Maximum possible size of compressed output in bytes (worst-case scenario).</returns>
     /// <remarks>
     /// This method returns the worst-case size assuming no compression. 
     /// The actual compressed size is typically much smaller.
     /// Use this to allocate output buffers that are guaranteed to be large enough.
-    /// When <paramref name="includingHeaderAndFooter"/> is true (default), the returned size includes:
+    /// When includingHeader or/and includingFooter is true (default), the returned size includes:
     /// - Frame header (up to 19 bytes)
     /// - Compressed data with block headers
     /// - Frame footer (4-8 bytes: end mark and optional content checksum)
     /// </remarks>
-    public unsafe int GetMaxCompressedLength(int inputSize, bool includingHeaderAndFooter = true)
+    public unsafe int GetMaxCompressedLength(int inputSize, bool includingHeader = true, bool includingFooter = true)
     {
-        var bound = 0;
         var preferences = header.ToPreferences();
-        bound = (int)LZ4F_compressBound((nuint)inputSize, preferences);
+        var bound = (int)LZ4F_compressBound((nuint)inputSize, preferences);
 
-        if (includingHeaderAndFooter)
+        if (includingHeader && includingFooter)
         {
             return bound + GetActualFrameHeaderLength() + GetActualFrameFooterLength();
+        }
+        else if (includingHeader)
+        {
+            return bound + GetActualFrameHeaderLength();
+        }
+        else if (includingFooter)
+        {
+            return bound + GetActualFrameFooterLength();
         }
         else
         {
@@ -188,6 +196,12 @@ public unsafe partial struct LZ4Encoder : IDisposable
                     totalWritten += (int)writtenOrErrorCode;
                 }
             }
+        }
+
+        // No input data, LZ4F_compressUpdate returns 0 so early return in C#.
+        if (source.Length == 0)
+        {
+            return totalWritten;
         }
 
         // Write body

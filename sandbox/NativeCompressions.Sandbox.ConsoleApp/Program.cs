@@ -17,8 +17,6 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Runtime.ExceptionServices;
 
-
-
 var writer1 = new ArrayBufferPipeWriter();
 
 var path = @"silesia.tar.lz4";
@@ -26,7 +24,7 @@ var src = File.ReadAllBytes(path);
 
 Console.WriteLine(src.Length); // lz4 to lz4...!
 
-await LZ4.CompressAsync(src, writer1, LZ4FrameOptions.Default, null);
+await LZ4.CompressAsync(src, writer1, maxDegreeOfParallelism: 1);
 var dest = writer1.WrittenSpan.ToArray();
 
 
