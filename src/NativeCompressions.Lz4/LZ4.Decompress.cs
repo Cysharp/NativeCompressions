@@ -274,6 +274,183 @@ public static partial class LZ4
         }
     }
 
+    //public static async ValueTask DecompressAsync(PipeReader source, PipeWriter destination, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    //{
+    //    using var decoder = new LZ4Decoder(dictionary);
+
+    //    var result = await source.ReadAtLeastAsync(LZ4.GetMinSizeToKnowFrameHeaderLength(), cancellationToken);
+        
+    //    // Span<byte> headerBuffer = stackalloc byte[decoder.GetHeaderSize
+
+
+    //    var frameInfo = decoder.GetFrameInfo(source.Span, out var bytesConsumed);
+    //    source = source.Slice(bytesConsumed);
+
+    //    var maxBlockSize = GetMaxBlockSize(frameInfo.BlockSizeID);
+
+    //    var checksumSize = (frameInfo.BlockChecksumFlag == BlockChecksum.BlockChecksumEnabled)
+    //        ? 4
+    //        : 0;
+
+    //    var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism == null || maxDegreeOfParallelism > 1);
+
+    //    if (!supportMultithreadDecode)
+    //    {
+    //        var status = OperationStatus.DestinationTooSmall;
+    //        while (status == OperationStatus.DestinationTooSmall && source.Length > 0)
+    //        {
+    //            var dest = destination.GetSpan(maxBlockSize);
+
+    //            status = decoder.Decompress(source.Span, dest, out bytesConsumed, out var bytesWritten);
+    //            if (bytesWritten == 0 && bytesConsumed == 0 && status == OperationStatus.DestinationTooSmall)
+    //            {
+    //                throw new InvalidOperationException("Decoder stuck");
+    //            }
+    //            source = source.Slice(bytesConsumed);
+    //            destination.Advance(bytesWritten);
+    //            await destination.FlushAsync(cancellationToken);
+    //        }
+
+    //        if (status == OperationStatus.NeedMoreData)
+    //        {
+    //            throw new InvalidOperationException("Invalid LZ4 frame.");
+    //        }
+    //    }
+    //    else
+    //    {
+    //        var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
+    //        var capacity = threadCount * 2;
+
+    //        var inputChannel = Channel.CreateBounded<DecompressionInputBuffer>(new BoundedChannelOptions(capacity)
+    //        {
+    //            SingleWriter = true,
+    //            SingleReader = false,
+    //            FullMode = BoundedChannelFullMode.Wait
+    //        });
+
+    //        var outputChannel = Channel.CreateBounded<DecompressionOutputBuffer>(new BoundedChannelOptions(capacity)
+    //        {
+    //            SingleWriter = false,
+    //            SingleReader = true,
+    //            FullMode = BoundedChannelFullMode.Wait
+    //        });
+
+    //        using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+    //        var inputProducer = Task.Run(async () =>
+    //        {
+    //            var id = 0;
+    //            while (source.Length != 0)
+    //            {
+    //                var blockHeader = ReadBlockHeader(source.Span);
+    //                if (blockHeader.IsEndMark)
+    //                {
+    //                    break;
+    //                }
+
+    //                var nextBlockOffset = blockHeader.CompressedSize + checksumSize;
+    //                var item = new DecompressionInputBuffer()
+    //                {
+    //                    Id = id,
+    //                    IsUncompressed = blockHeader.IsUncompressed,
+    //                    CompressedBuffer = source.Slice(4, nextBlockOffset - checksumSize) // skip block header, checksum
+    //                };
+
+    //                await inputChannel.Writer.WriteAsync(item, channelToken.Token);
+
+    //                source = source.Slice(4 + nextBlockOffset);
+    //                id++;
+    //            }
+    //            inputChannel.Writer.Complete();
+    //        });
+
+    //        var inputConsumerOutputProducers = new Task[threadCount];
+    //        for (var i = 0; i < inputConsumerOutputProducers.Length; i++)
+    //        {
+    //            inputConsumerOutputProducers[i] = Task.Run(async () =>
+    //            {
+    //                while (await inputChannel.Reader.WaitToReadAsync(channelToken.Token))
+    //                {
+    //                    while (inputChannel.Reader.TryRead(out var item))
+    //                    {
+    //                        var destination = ArrayPool<byte>.Shared.Rent(maxBlockSize);
+    //                        int written;
+    //                        if (item.IsUncompressed)
+    //                        {
+    //                            item.CompressedBuffer.CopyTo(destination); // we can avoid this copy? (however it is rare case so keep simplicity)
+    //                            written = item.CompressedBuffer.Length;
+    //                        }
+    //                        else
+    //                        {
+    //                            // use LZ4 raw block decompress
+    //                            written = LZ4.Block.Decompress(item.CompressedBuffer.Span, destination, dictionary);
+    //                        }
+
+    //                        var item2 = new DecompressionOutputBuffer
+    //                        {
+    //                            Id = item.Id,
+    //                            DecompressedBuffer = destination,
+    //                            Count = written
+    //                        };
+
+    //                        await outputChannel.Writer.WriteAsync(item2, channelToken.Token);
+    //                    }
+    //                }
+    //            });
+    //        }
+
+    //        var outputConsumer = Task.Run(async () =>
+    //        {
+    //            var reader = outputChannel.Reader;
+    //            var nextId = 0; // id for write
+    //            var buffers = new MiniPriorityQueue<DecompressionOutputBuffer>();
+
+    //            try
+    //            {
+    //                while (await reader.WaitToReadAsync(channelToken.Token))
+    //                {
+    //                    while (reader.TryRead(out var item))
+    //                    {
+    //                        buffers.Enqueue(item);
+
+    //                        while (buffers.Count > 0 && buffers.Peek().Id == nextId)
+    //                        {
+    //                            var source = buffers.Dequeue();
+    //                            nextId++;
+
+    //                            await destination.WriteAsync(source.DecompressedBuffer.AsMemory(0, source.Count), channelToken.Token);
+    //                            ArrayPool<byte>.Shared.Return(source.DecompressedBuffer, clearArray: false);
+    //                        }
+    //                    }
+    //                }
+
+    //                await destination.FlushAsync(channelToken.Token);
+    //            }
+    //            finally
+    //            {
+    //                // if buffer is remained, return to pool.
+    //                foreach (var item in buffers.Values)
+    //                {
+    //                    ArrayPool<byte>.Shared.Return(item.DecompressedBuffer, clearArray: false);
+    //                }
+    //            }
+    //        });
+
+    //        try
+    //        {
+    //            await inputProducer;
+    //            await Task.WhenAll(inputConsumerOutputProducers);
+    //            outputChannel.Writer.Complete();
+    //            await outputConsumer;
+    //        }
+    //        catch
+    //        {
+    //            channelToken.Cancel(); // when any exception, cancel all tasks.
+    //            throw;
+    //        }
+    //    }
+    //}
+
     // need 4 bytes
     static BlockHeader ReadBlockHeader(ReadOnlySpan<byte> source)
     {

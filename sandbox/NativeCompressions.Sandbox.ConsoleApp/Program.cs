@@ -16,42 +16,17 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Buffers;
 
-CancellationTokenSource cts = new();
-var src = new Pipe();
-var dest = new Pipe();
 
+var path = @"silesia.tar";
 
+var handle = File.OpenHandle(path);
 
-
-var t = Task.Run(async () =>
+var sw = Stopwatch.StartNew();
+var cts = new CancellationTokenSource();
+using (var destFile = new FileStream("silesia.tar.lz4", FileMode.Create, FileAccess.Write, FileShare.None, 1, useAsync: true))
 {
-    await LZ4.CompressAsync(src.Reader, dest.Writer);
-});
+    await LZ4.CompressAsync(handle, PipeWriter.Create(destFile), maxDegreeOfParallelism: null);
+}
+Console.WriteLine(sw.ElapsedMilliseconds + "ms");
 
-
-
-await src.Writer.WriteAsync(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 });
-
-//Console.ReadLine();
-await src.Writer.WriteAsync(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 });
-
-//Console.ReadLine();
-
-src.Writer.Complete();
-
-
-await t;
-
-
-var a = await dest.Reader.ReadAsync();
-// dest.Reader.AdvanceTo(a.Buffer.End);
-
-
-
-//var b = dest.Reader.TryRead(out var result2);
-
-var hogemoge = a.Buffer.ToArray();
-
-var hugahgua = LZ4.Decompress(hogemoge);
-
-Console.ReadLine();
+Console.WriteLine("done?");

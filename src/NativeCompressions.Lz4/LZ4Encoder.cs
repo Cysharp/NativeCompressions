@@ -98,30 +98,6 @@ public unsafe partial struct LZ4Encoder : IDisposable
     }
 
     /// <summary>
-    /// Gets the maximum possible size of an LZ4 frame header.
-    /// </summary>
-    /// <returns>Maximum header size in bytes (19 bytes).</returns>
-    /// <remarks>
-    /// The actual header size depends on enabled options:
-    /// - Base header: 7 bytes (magic number, flags, block size)
-    /// - Content size field: +8 bytes (if enabled)
-    /// - Dictionary ID: +4 bytes (if present)
-    /// - Header checksum: +1 byte
-    /// </remarks>
-    public int GetMaxHeaderLength() => 19; // LZ4F_HEADER_SIZE_MAX
-
-    /// <summary>
-    /// Gets the maximum possible size of an LZ4 frame footer.
-    /// </summary>
-    /// <returns>Maximum footer size in bytes (8 bytes).</returns>
-    /// <remarks>
-    /// The footer consists of:
-    /// - End mark: 4 bytes (always present)
-    /// - Content checksum: 4 bytes (if content checksum is enabled)
-    /// </remarks>
-    public static int GetMaxFooterLength() => 8;  // EndMarkSize + ChecksumSize
-
-    /// <summary>
     /// Gets the actual frame header size based on current options.
     /// </summary>
     /// <returns>Actual header size in bytes.</returns>

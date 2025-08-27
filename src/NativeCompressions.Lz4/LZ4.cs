@@ -54,7 +54,31 @@ public static partial class LZ4
     /// and flags to determine the full header size. Use this value to ensure you have
     /// enough data before calling <see cref="GetHeaderSize"/>.
     /// </remarks>
-    public static int GetMinSizeToKnowHeaderLength() => 5; // LZ4F_MIN_SIZE_TO_KNOW_HEADER_LENGTH
+    public static int GetMinSizeToKnowFrameHeaderLength() => 5; // LZ4F_MIN_SIZE_TO_KNOW_HEADER_LENGTH
+
+    /// <summary>
+    /// Gets the maximum possible size of an LZ4 frame header.
+    /// </summary>
+    /// <returns>Maximum header size in bytes (19 bytes).</returns>
+    /// <remarks>
+    /// The actual header size depends on enabled options:
+    /// - Base header: 7 bytes (magic number, flags, block size)
+    /// - Content size field: +8 bytes (if enabled)
+    /// - Dictionary ID: +4 bytes (if present)
+    /// - Header checksum: +1 byte
+    /// </remarks>
+    public static int GetMaxFrameHeaderLength() => 19; // LZ4F_HEADER_SIZE_MAX
+
+    /// <summary>
+    /// Gets the maximum possible size of an LZ4 frame footer.
+    /// </summary>
+    /// <returns>Maximum footer size in bytes (8 bytes).</returns>
+    /// <remarks>
+    /// The footer consists of:
+    /// - End mark: 4 bytes (always present)
+    /// - Content checksum: 4 bytes (if content checksum is enabled)
+    /// </remarks>
+    public static int GetMaxFrameFooterLength() => 8;  // EndMarkSize + ChecksumSize
 
     public static int GetMaxCompressedLength(int inputSize, in LZ4FrameOptions options)
     {
@@ -72,7 +96,7 @@ public static partial class LZ4
     {
         using var decoder = new LZ4Decoder();
         
-        if(source.Length < GetMinSizeToKnowHeaderLength())
+        if(source.Length < GetMinSizeToKnowFrameHeaderLength())
         {
             frameInfo = default;
             return false;
