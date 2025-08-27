@@ -132,7 +132,6 @@ public static partial class LZ4
                 source = source.Slice(bytesConsumed);
                 destination.Advance(bytesWritten);
                 await destination.FlushAsync(cancellationToken);
-                await destination.CompleteAsync();
             }
 
             if (status == OperationStatus.NeedMoreData)
@@ -249,7 +248,6 @@ public static partial class LZ4
                     }
 
                     await destination.FlushAsync(channelToken.Token);
-                    destination.Complete();
                 }
                 finally
                 {

@@ -248,7 +248,7 @@ public unsafe partial struct LZ4Encoder : IDisposable
     /// <summary>
     /// Finalizes the current LZ4 frame by writing the ending marker and optional content checksum.
     /// </summary>
-    /// <param name="destination">The buffer to write the frame ending to.</param>
+    /// <param name="destination">The buffer to write the frame ending to. It is guaranteed to be successful when destination.Length &gt;= GetMaxCompressedLength(0).</param>
     /// <returns>The number of bytes written to the destination buffer (at least 4 bytes for the end marker).</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
     /// <exception cref="LZ4Exception">Thrown when finalization fails.</exception>
@@ -260,11 +260,13 @@ public unsafe partial struct LZ4Encoder : IDisposable
     {
         ValidateDisposed();
 
+        var totalWritten = 0;
         if (!isWrittenHeader)
         {
             // This will write header, empty body.
             var written = Compress([], destination);
             destination = destination.Slice(written);
+            totalWritten += written;
         }
 
         fixed (byte* dest = destination)
@@ -272,13 +274,14 @@ public unsafe partial struct LZ4Encoder : IDisposable
             // LZ4F_compressOptions_t(stableSrc) is currently not used in LZ4 source so always pass null.
             var writtenOrErrorCode = LZ4F_compressEnd(context, dest, (nuint)destination.Length, cOptPtr: null);
             LZ4.HandleErrorCode(writtenOrErrorCode);
+            totalWritten += (int)writtenOrErrorCode;
 
             // secret option, LZ4Encoder can reuse after call Close()
             // beacuse: A successful call to LZ4F_compressEnd() makes `cctx` available again for another compression task.
             isWrittenHeader = false;
-
-            return (int)writtenOrErrorCode;
         }
+
+        return totalWritten;
     }
 
     void ValidateDisposed()
