@@ -1,5 +1,6 @@
 ﻿using Microsoft.Win32.SafeHandles;
 using NativeCompressions.LZ4.Raw;
+using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO.Pipelines;
@@ -241,23 +242,22 @@ public static partial class LZ4
             {
                 var nextId = 0; // id for write
                 var reader = outputChannel.Reader;
-                var buffers = new List<CompressionBuffer>();
+                var buffers = new MiniPriorityQueue<CompressionBuffer>();
                 try
                 {
                     while (await reader.WaitToReadAsync(channelToken.Token))
                     {
                         while (reader.TryRead(out var compressedBuffer))
                         {
-                            buffers.Add(compressedBuffer);
-                            buffers.Sort(); // reverse-order
+                            buffers.Enqueue(compressedBuffer);
 
-                            while (buffers.Count > 0 && buffers[^1].Id == nextId)
+                            while (buffers.Count > 0 && buffers.Peek().Id == nextId)
                             {
-                                var source = buffers[^1];
-                                await destination.WriteAsync(source.CompressedBuffer.AsMemory(0, source.Count), channelToken.Token);
-                                buffers.RemoveAt(buffers.Count - 1); // Remove from last is performant than remove first
-                                ArrayPool<byte>.Shared.Return(source.CompressedBuffer, clearArray: false);
+                                var source = buffers.Dequeue();
                                 nextId++;
+
+                                await destination.WriteAsync(source.CompressedBuffer.AsMemory(0, source.Count), channelToken.Token);
+                                ArrayPool<byte>.Shared.Return(source.CompressedBuffer, clearArray: false);
                             }
                         }
                     }
@@ -265,7 +265,7 @@ public static partial class LZ4
                 finally
                 {
                     // if buffer is remained, return to pool.
-                    foreach (var item in buffers)
+                    foreach (var item in buffers.Values)
                     {
                         ArrayPool<byte>.Shared.Return(item.CompressedBuffer, clearArray: false);
                     }
@@ -335,8 +335,6 @@ public static partial class LZ4
         }
     }
 
-    // use PriorityQueue is easy to use but not available in netstandard2.1
-    // and reverse-order, id match priority queue is maybe faster in min-size(threadCount)
     struct CompressionBuffer : IComparable<CompressionBuffer>
     {
         public int Id;
@@ -345,8 +343,7 @@ public static partial class LZ4
 
         public int CompareTo(CompressionBuffer other)
         {
-            // reverse-order
-            return other.Id.CompareTo(Id);
+            return Id.CompareTo(other.Id);
         }
 
         public override string ToString()

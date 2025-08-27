@@ -227,7 +227,7 @@ public static partial class LZ4
             {
                 var reader = outputChannel.Reader;
                 var nextId = 0; // id for write
-                var buffers = new List<DecompressionOutputBuffer>();
+                var buffers = new MiniPriorityQueue<DecompressionOutputBuffer>();
 
                 try
                 {
@@ -235,16 +235,15 @@ public static partial class LZ4
                     {
                         while (reader.TryRead(out var item))
                         {
-                            buffers.Add(item);
-                            buffers.Sort(); // reverse-order
+                            buffers.Enqueue(item);
 
-                            while (buffers.Count > 0 && buffers[^1].Id == nextId)
+                            while (buffers.Count > 0 && buffers.Peek().Id == nextId)
                             {
-                                var source = buffers[^1];
-                                await destination.WriteAsync(source.DecompressedBuffer.AsMemory(0, source.Count), channelToken.Token);
-                                buffers.RemoveAt(buffers.Count - 1); // Remove from last is performant than remove first
-                                ArrayPool<byte>.Shared.Return(source.DecompressedBuffer, clearArray: false);
+                                var source = buffers.Dequeue();
                                 nextId++;
+
+                                await destination.WriteAsync(source.DecompressedBuffer.AsMemory(0, source.Count), channelToken.Token);
+                                ArrayPool<byte>.Shared.Return(source.DecompressedBuffer, clearArray: false);
                             }
                         }
                     }
@@ -255,7 +254,7 @@ public static partial class LZ4
                 finally
                 {
                     // if buffer is remained, return to pool.
-                    foreach (var item in buffers)
+                    foreach (var item in buffers.Values)
                     {
                         ArrayPool<byte>.Shared.Return(item.DecompressedBuffer, clearArray: false);
                     }
@@ -302,8 +301,7 @@ public static partial class LZ4
 
         public int CompareTo(DecompressionInputBuffer other)
         {
-            // reverse-order
-            return other.Id.CompareTo(Id);
+            return Id.CompareTo(other.Id);
         }
 
         public override string ToString()
@@ -320,8 +318,7 @@ public static partial class LZ4
 
         public int CompareTo(DecompressionOutputBuffer other)
         {
-            // reverse-order
-            return other.Id.CompareTo(Id);
+            return Id.CompareTo(other.Id);
         }
 
         public override string ToString()
