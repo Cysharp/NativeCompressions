@@ -236,7 +236,7 @@ public static partial class LZ4
                 });
             }
 
-            var outputConsumer = RunOutputConsumerAsync(destination, dictionary, options, outputChannel, channelToken);
+            var outputConsumer = StartWriteCompressedBuffer(destination, dictionary, options, outputChannel, channelToken);
 
             try
             {
@@ -399,7 +399,7 @@ public static partial class LZ4
                 });
             }
 
-            var outputConsumer = RunOutputConsumerAsync(destination, dictionary, options, outputChannel, channelToken);
+            var outputConsumer = StartWriteCompressedBuffer(destination, dictionary, options, outputChannel, channelToken);
 
             try
             {
@@ -415,7 +415,12 @@ public static partial class LZ4
         }
     }
 
-    public static async ValueTask CompressAsync(SafeFileHandle source, PipeWriter destination, long offset, LZ4FrameOptions? frameOptions = null, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static ValueTask CompressAsync(SafeFileHandle source, PipeWriter destination, LZ4FrameOptions? frameOptions = null, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    {
+        return CompressAsync(source, 0, destination, frameOptions, dictionary, maxDegreeOfParallelism, cancellationToken);
+    }
+
+    public static async ValueTask CompressAsync(SafeFileHandle source, long offset, PipeWriter destination, LZ4FrameOptions? frameOptions = null, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
         if (source == null || source.IsInvalid || source.IsClosed)
         {
@@ -568,7 +573,7 @@ public static partial class LZ4
                 });
             }
 
-            var outputConsumer = RunOutputConsumerAsync(destination, dictionary, options, outputChannel, channelToken);
+            var outputConsumer = StartWriteCompressedBuffer(destination, dictionary, options, outputChannel, channelToken);
 
             try
             {
@@ -596,7 +601,7 @@ public static partial class LZ4
 
         if (source is FileStream fs && fs.CanSeek)
         {
-            await CompressAsync(fs.SafeFileHandle, destination, fs.Position, frameOptions, dictionary, maxDegreeOfParallelism: 1, cancellationToken);
+            await CompressAsync(fs.SafeFileHandle, fs.Position, destination, frameOptions, dictionary, maxDegreeOfParallelism: 1, cancellationToken);
             return;
         }
 
@@ -655,7 +660,7 @@ public static partial class LZ4
         await destination.FlushAsync(cancellationToken);
     }
 
-    static Task RunOutputConsumerAsync(PipeWriter destination, LZ4CompressionDictionary? dictionary, LZ4FrameOptions options, Channel<CompressionBuffer> outputChannel, CancellationTokenSource channelToken)
+    static Task StartWriteCompressedBuffer(PipeWriter destination, LZ4CompressionDictionary? dictionary, LZ4FrameOptions options, Channel<CompressionBuffer> outputChannel, CancellationTokenSource channelToken)
     {
         // common operation to write compressed buffer to destination
         return Task.Run(async () =>

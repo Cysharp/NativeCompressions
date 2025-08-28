@@ -18,7 +18,9 @@ using System.Buffers;
 
 
 
-
+var linkedCompressed = File.ReadAllBytes("silesia.tar.lz4");
+var original = LZ4.Decompress(linkedCompressed);
+var blockIndependenCompressed = LZ4.Compress(original);
 
 
 
@@ -31,9 +33,7 @@ var dest = new ArrayBufferPipeWriter();
 
 //Console.WriteLine(dest.WrittenCount);
 
-var rawFilePath = "";
 
-var original = File.ReadAllBytes(rawFilePath);
 
 await LZ4.CompressAsync(original, dest, maxDegreeOfParallelism: null);
 
