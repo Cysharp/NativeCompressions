@@ -24,6 +24,7 @@ var blockIndependenCompressed = LZ4.Compress(original);
 
 
 
+
 //using var fs = new FileStream("silesia.tar.lz4", FileMode.Open, FileAccess.Read, FileShare.Read, 1, useAsync: true);
 
 //var filePipe = PipeReader.Create(fs);
@@ -35,15 +36,19 @@ var dest = new ArrayBufferPipeWriter();
 
 
 
-await LZ4.CompressAsync(original, dest, maxDegreeOfParallelism: null);
+await LZ4.CompressAsync(original, dest, maxDegreeOfParallelism: 1);
 
 var compressedBytes = dest.WrittenSpan.ToArray();
 
 
 var memoryPipe = PipeReader.Create(new MemoryStream(compressedBytes));
 
+var readResult = await memoryPipe.ReadAtLeastAsync(compressedBytes.Length);
+var readOnlySequence = readResult.Buffer;
+
+
 var dest2 = new ArrayBufferPipeWriter();
-await LZ4.DecompressAsync(memoryPipe, dest2);
+await LZ4.DecompressAsync(readOnlySequence, dest2);
 
 Console.WriteLine(dest2.WrittenCount);
 Console.WriteLine(dest2.WrittenSpan.SequenceEqual(original));

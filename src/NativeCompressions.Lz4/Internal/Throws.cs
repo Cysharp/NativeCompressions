@@ -12,4 +12,9 @@ internal static class Throws
     {
         throw new ObjectDisposedException("");
     }
+
+    public static void ArgumentOutOfRangeException(string? paramName)
+    {
+        throw new ArgumentOutOfRangeException(paramName);
+    }
 }

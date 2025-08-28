@@ -213,8 +213,134 @@ public static partial class LZ4
 
     public static async ValueTask DecompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-        // TODO: impl
-        throw new NotImplementedException();
+        using var decoder = new LZ4Decoder(dictionary);
+
+        Span<byte> temp = stackalloc byte[GetMaxFrameHeaderLength()];
+        source.Slice(0, Math.Min(source.Length, temp.Length)).CopyTo(temp);
+
+        var frameInfo = decoder.GetFrameInfo(temp, out var bytesConsumed); // if temp is too small, LZ4F_getFrameInfo returns error.
+        source = source.Slice(bytesConsumed);
+
+        var maxBlockSize = GetMaxBlockSize(frameInfo.BlockSizeID);
+
+        var checksumSize = (frameInfo.BlockChecksumFlag == BlockChecksum.BlockChecksumEnabled)
+            ? 4
+            : 0;
+
+        var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism == null || maxDegreeOfParallelism > 1);
+
+        if (!supportMultithreadDecode)
+        {
+            var status = OperationStatus.DestinationTooSmall;
+            var destWritten = 0;
+            var dest = destination.GetSpan(maxBlockSize); // decompress per block
+            foreach (var srcBuffer in source)
+            {
+                var src = srcBuffer;
+                while (src.Length > 0)
+                {
+                    status = decoder.Decompress(src.Span, dest, out bytesConsumed, out var bytesWritten);
+                    if (bytesWritten == 0 && bytesConsumed == 0 && status == OperationStatus.DestinationTooSmall)
+                    {
+                        throw new InvalidOperationException("Decoder stuck");
+                    }
+                    src = src.Slice(bytesConsumed);
+                    dest = dest.Slice(bytesWritten);
+                    destWritten += bytesWritten;
+
+                    if (dest.Length == 0)
+                    {
+                        destination.Advance(destWritten);
+                        await destination.FlushAsync(cancellationToken);
+                        dest = destination.GetSpan(maxBlockSize);
+                        destWritten = 0;
+                    }
+                    if (status == OperationStatus.Done)
+                    {
+                        goto END;
+                    }
+                }
+            }
+
+        END:
+            if (destWritten > 0)
+            {
+                destination.Advance(destWritten);
+                await destination.FlushAsync(cancellationToken);
+            }
+
+            if (status == OperationStatus.NeedMoreData)
+            {
+                throw new InvalidOperationException("Invalid LZ4 frame.");
+            }
+        }
+        else
+        {
+            var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
+            var capacity = threadCount * 2;
+
+            var inputChannel = Channel.CreateBounded<DecompressionInputBuffer>(new BoundedChannelOptions(capacity)
+            {
+                SingleWriter = true,
+                SingleReader = false,
+                FullMode = BoundedChannelFullMode.Wait
+            });
+
+            var outputChannel = Channel.CreateBounded<DecompressionOutputBuffer>(new BoundedChannelOptions(capacity)
+            {
+                SingleWriter = false,
+                SingleReader = true,
+                FullMode = BoundedChannelFullMode.Wait
+            });
+
+            using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            var inputProducer = Task.Run(async () =>
+            {
+                var id = 0;
+                while (source.Length != 0)
+                {
+                    var blockHeader = ReadBlockHeader(source);
+                    if (blockHeader.IsEndMark)
+                    {
+                        break;
+                    }
+
+                    var compressedBuffer = ArrayPool<byte>.Shared.Rent(blockHeader.CompressedSize);
+                    source.Slice(4, blockHeader.CompressedSize).CopyTo(compressedBuffer); // skip header
+
+                    var item = new DecompressionInputBuffer()
+                    {
+                        Id = id,
+                        IsUncompressed = blockHeader.IsUncompressed,
+                        CompressedBuffer = compressedBuffer.AsMemory(0, blockHeader.CompressedSize),
+                        IsBufferRentFromPool = true
+                    };
+
+                    await inputChannel.Writer.WriteAsync(item, channelToken.Token);
+
+                    source = source.Slice(4 + blockHeader.CompressedSize + checksumSize); // header + data + footer
+                    id++;
+                }
+                inputChannel.Writer.Complete();
+            });
+
+            Task[] inputConsumerOutputProducers = StartDecompressBlock(dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
+            Task outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, channelToken);
+
+            try
+            {
+                await inputProducer;
+                await Task.WhenAll(inputConsumerOutputProducers);
+                outputChannel.Writer.Complete();
+                await outputConsumer;
+            }
+            catch
+            {
+                channelToken.Cancel(); // when any exception, cancel all tasks.
+                throw;
+            }
+        }
     }
 
     public static ValueTask DecompressAsync(SafeFileHandle source, PipeWriter destination, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
@@ -298,6 +424,7 @@ public static partial class LZ4
                 result = await source.ReadAsync(cancellationToken);
                 if (result.IsCanceled) throw new OperationCanceledException();
 
+                var consumedInBuffer = 0;
                 foreach (var sequenceBuffer in result.Buffer) // Read(Buffer) Loop
                 {
                     var src = sequenceBuffer;
@@ -311,6 +438,7 @@ public static partial class LZ4
 
                         src = src.Slice(bytesConsumed);
                         dest = dest.Slice(bytesWritten);
+                        consumedInBuffer += bytesConsumed;
                         writtenCount += bytesWritten;
 
                         if (dest.Length == 0)
@@ -320,11 +448,17 @@ public static partial class LZ4
                             dest = destination.GetMemory(maxBlockSize);
                             writtenCount = 0;
                         }
+                        if (status == OperationStatus.Done)
+                        {
+                            source.AdvanceTo(result.Buffer.GetPosition(consumedInBuffer));
+                            goto END;
+                        }
                     }
                 }
-
+                consumedInBuffer = 0;
                 source.AdvanceTo(result.Buffer.End);
             }
+        END:
 
             // flush final bytes
             if (writtenCount > 0)
@@ -500,8 +634,29 @@ public static partial class LZ4
     static BlockHeader ReadBlockHeader(ReadOnlySpan<byte> source)
     {
         // need 4 bytes
+        if (source.Length < 4) Throws.ArgumentOutOfRangeException(nameof(source));
+
         var header = BinaryPrimitives.ReadUInt32LittleEndian(source);
         return new BlockHeader(header);
+    }
+
+    static BlockHeader ReadBlockHeader(ReadOnlySequence<byte> source)
+    {
+        // need 4 bytes
+        if (source.Length < 4) Throws.ArgumentOutOfRangeException(nameof(source));
+
+        if (source.FirstSpan.Length >= 4)
+        {
+            var header = BinaryPrimitives.ReadUInt32LittleEndian(source.FirstSpan);
+            return new BlockHeader(header);
+        }
+        else
+        {
+            Span<byte> temp = stackalloc byte[4];
+            source.Slice(0, 4).CopyTo(temp);
+            var header = BinaryPrimitives.ReadUInt32LittleEndian(temp);
+            return new BlockHeader(header);
+        }
     }
 
     static async ValueTask<BlockHeader> ReadBlockHeaderAsync(PipeReader source, CancellationToken cancellationToken)
