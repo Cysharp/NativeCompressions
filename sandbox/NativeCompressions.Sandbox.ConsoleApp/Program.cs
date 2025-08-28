@@ -30,3 +30,8 @@ using (var destFile = new FileStream("silesia.tar.lz4", FileMode.Create, FileAcc
 Console.WriteLine(sw.ElapsedMilliseconds + "ms");
 
 Console.WriteLine("done?");
+
+
+
+FileStream stream;
+
