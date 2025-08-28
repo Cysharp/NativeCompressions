@@ -17,21 +17,34 @@ using System.Threading;
 using System.Buffers;
 
 
-var path = @"silesia.tar";
-
-var handle = File.OpenHandle(path);
-
-var sw = Stopwatch.StartNew();
-var cts = new CancellationTokenSource();
-using (var destFile = new FileStream("silesia.tar.lz4", FileMode.Create, FileAccess.Write, FileShare.None, 1, useAsync: true))
-{
-    await LZ4.CompressAsync(handle, PipeWriter.Create(destFile), maxDegreeOfParallelism: null);
-}
-Console.WriteLine(sw.ElapsedMilliseconds + "ms");
-
-Console.WriteLine("done?");
 
 
 
-FileStream stream;
+
+
+//using var fs = new FileStream("silesia.tar.lz4", FileMode.Open, FileAccess.Read, FileShare.Read, 1, useAsync: true);
+
+//var filePipe = PipeReader.Create(fs);
+var dest = new ArrayBufferPipeWriter();
+
+//await LZ4.DecompressAsync(filePipe, dest);
+
+//Console.WriteLine(dest.WrittenCount);
+
+var rawFilePath = "";
+
+var original = File.ReadAllBytes(rawFilePath);
+
+await LZ4.CompressAsync(original, dest, maxDegreeOfParallelism: null);
+
+var compressedBytes = dest.WrittenSpan.ToArray();
+
+
+var memoryPipe = PipeReader.Create(new MemoryStream(compressedBytes));
+
+var dest2 = new ArrayBufferPipeWriter();
+await LZ4.DecompressAsync(memoryPipe, dest2);
+
+Console.WriteLine(dest2.WrittenCount);
+Console.WriteLine(dest2.WrittenSpan.SequenceEqual(original));
 

@@ -2,6 +2,7 @@
 using NativeCompressions.LZ4.Raw;
 using System.Buffers;
 using System.IO.Pipelines;
+using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using static NativeCompressions.LZ4.Raw.NativeMethods;
 
@@ -740,6 +741,7 @@ public static partial class LZ4
         }
     }
 
+    [StructLayout(LayoutKind.Auto)]
     struct CompressionBuffer : IComparable<CompressionBuffer>
     {
         public int Id;
