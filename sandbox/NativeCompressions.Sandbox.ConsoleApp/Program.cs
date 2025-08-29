@@ -15,6 +15,7 @@ using System;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Buffers;
+using Microsoft.Win32.SafeHandles;
 
 
 
@@ -22,13 +23,16 @@ var linkedCompressed = File.ReadAllBytes("silesia.tar.lz4");
 var original = LZ4.Decompress(linkedCompressed);
 var blockIndependenCompressed = LZ4.Compress(original);
 
+var linkedCompressedHandle = File.OpenRead("silesia.tar.lz4");
+var dest = new ArrayBufferPipeWriter();
 
+await LZ4.DecompressAsync(linkedCompressedHandle, dest);
 
+Console.WriteLine(dest.WrittenCount);
 
 //using var fs = new FileStream("silesia.tar.lz4", FileMode.Open, FileAccess.Read, FileShare.Read, 1, useAsync: true);
 
 //var filePipe = PipeReader.Create(fs);
-var dest = new ArrayBufferPipeWriter();
 
 //await LZ4.DecompressAsync(filePipe, dest);
 
@@ -36,20 +40,20 @@ var dest = new ArrayBufferPipeWriter();
 
 
 
-await LZ4.CompressAsync(original, dest, maxDegreeOfParallelism: 1);
+//await LZ4.CompressAsync(original, dest, maxDegreeOfParallelism: 1);
 
-var compressedBytes = dest.WrittenSpan.ToArray();
-
-
-var memoryPipe = PipeReader.Create(new MemoryStream(compressedBytes));
-
-var readResult = await memoryPipe.ReadAtLeastAsync(compressedBytes.Length);
-var readOnlySequence = readResult.Buffer;
+//var compressedBytes = dest.WrittenSpan.ToArray();
 
 
-var dest2 = new ArrayBufferPipeWriter();
-await LZ4.DecompressAsync(readOnlySequence, dest2);
+//var memoryPipe = PipeReader.Create(new MemoryStream(compressedBytes));
 
-Console.WriteLine(dest2.WrittenCount);
-Console.WriteLine(dest2.WrittenSpan.SequenceEqual(original));
+//var readResult = await memoryPipe.ReadAtLeastAsync(compressedBytes.Length);
+//var readOnlySequence = readResult.Buffer;
+
+
+//var dest2 = new ArrayBufferPipeWriter();
+//await LZ4.DecompressAsync(readOnlySequence, dest2);
+
+//Console.WriteLine(dest2.WrittenCount);
+//Console.WriteLine(dest2.WrittenSpan.SequenceEqual(original));
 

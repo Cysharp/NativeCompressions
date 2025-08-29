@@ -3,6 +3,8 @@ using NativeCompressions.LZ4.Raw;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using static NativeCompressions.LZ4.Raw.NativeMethods;
+using static System.Net.Mime.MediaTypeNames;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace NativeCompressions.LZ4;
 
@@ -166,6 +168,59 @@ public unsafe partial struct LZ4Decoder : IDisposable
     /// </remarks>
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten)
     {
+        return Decompress(source, destination, out bytesConsumed, out bytesWritten, out _);
+    }
+
+    /// <summary>
+    /// Decompresses compressed data from the source buffer to the destination buffer.
+    /// </summary>
+    /// <param name="source">
+    /// The compressed data to decompress. Can be partial frame data for streaming scenarios.
+    /// </param>
+    /// <param name="destination">
+    /// The buffer to write decompressed data to. Must be large enough to hold the decompressed output.
+    /// </param>
+    /// <param name="bytesConsumed">
+    /// When this method returns, contains the number of bytes consumed from the source buffer.
+    /// </param>
+    /// <param name="bytesWritten">
+    /// When this method returns, contains the number of bytes written to the destination buffer.
+    /// </param>
+    /// <param name="hintOfNextSrcSize">
+    ///  An hint of how many `source` bytes expects for next call.
+    ///  Schematically, it's the size of the current (or remaining) compressed block + header of next block.
+    ///  Respecting the hint provides some small speed benefit, because it skips intermediate buffers.
+    ///  This is just a hint though, it's always possible to provide any srcSize.
+    /// </param>
+    /// <returns>
+    /// <see cref="OperationStatus.Done"/> if the current frame is completely decompressed;
+    /// <see cref="OperationStatus.NeedMoreData"/> if more compressed data is needed to continue;
+    /// <see cref="OperationStatus.DestinationTooSmall"/> if the destination buffer is likely too small.
+    /// </returns>
+    /// <exception cref="ObjectDisposedException">
+    /// Thrown when the decoder has been disposed.
+    /// </exception>
+    /// <exception cref="LZ4Exception">
+    /// Thrown when decompression fails due to data corruption, invalid format, or other errors.
+    /// After this exception, the decoder is in an undefined state and must be disposed and recreated.
+    /// </exception>
+    /// <remarks>
+    /// This method supports streaming decompression and can be called multiple times with sequential
+    /// chunks of compressed data. The decoder maintains internal state between calls.
+    /// 
+    /// When <see cref="OperationStatus.Done"/> is returned, the current frame has been completely
+    /// decompressed and the decoder is ready to process a new frame.
+    /// 
+    /// The distinction between <see cref="OperationStatus.NeedMoreData"/> and 
+    /// <see cref="OperationStatus.DestinationTooSmall"/> is heuristic-based:
+    /// - If the destination buffer was completely filled, it's likely too small
+    /// - Otherwise, more source data is needed
+    /// 
+    /// For optimal performance, provide destination buffers of at least 64KB or use
+    /// the content size from <see cref="GetFrameInfo"/> if available.
+    /// </remarks>
+    public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, out int hintOfNextSrcSize)
+    {
         ValidateDisposed();
 
         fixed (byte* src = source)
@@ -193,6 +248,7 @@ public unsafe partial struct LZ4Decoder : IDisposable
 
             bytesConsumed = (int)consumed;
             bytesWritten = (int)written;
+            hintOfNextSrcSize = (int)hintOrErrorCode;
 
             if (hintOrErrorCode == 0)
             {

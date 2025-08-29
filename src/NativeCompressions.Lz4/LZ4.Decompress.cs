@@ -352,31 +352,13 @@ public static partial class LZ4
     {
         using var decoder = new LZ4Decoder(dictionary);
 
-        LZ4FrameInfo frameInfo;
+        var sourceLength = RandomAccess.GetLength(source);
 
-        // get header.
-        {
-            Span<byte> headerBuffer = stackalloc byte[LZ4.GetMaxFrameHeaderLength()];
+        Span<byte> headerBuffer = stackalloc byte[LZ4.GetMaxFrameHeaderLength()];
+        var headerRead = RandomAccess.Read(source, headerBuffer.Slice(0, LZ4.GetMaxFrameHeaderLength()), offset); // read(oversize)
 
-            var written = RandomAccess.Read(source, headerBuffer.Slice(0, LZ4.GetMinSizeToKnowFrameHeaderLength()), offset); // use Read
-
-            var result = await source.ReadAtLeastAsync(LZ4.GetMinSizeToKnowFrameHeaderLength(), cancellationToken);
-
-            // to simplify implementation, always copy to working buffer from ReadOnlySpan<byte>
-            result.Buffer.Slice(0, LZ4.GetMinSizeToKnowFrameHeaderLength()).CopyTo(headerBuffer);
-            source.AdvanceTo(result.Buffer.Start); // no-advance
-
-            var headerSize = decoder.GetHeaderSize(headerBuffer);
-
-            // pick actual frame-header
-            result = await source.ReadAtLeastAsync(headerSize, cancellationToken);
-
-            Span<byte> headerBuffer2 = stackalloc byte[LZ4.GetMaxFrameHeaderLength()]; // don't trust headerSize for untrusted data
-            result.Buffer.Slice(0, headerSize).CopyTo(headerBuffer2);
-
-            frameInfo = decoder.GetFrameInfo(headerBuffer2, out var consumed);
-            source.AdvanceTo(result.Buffer.GetPosition(consumed));
-        }
+        var frameInfo = decoder.GetFrameInfo(headerBuffer.Slice(0, headerRead), out var bytesConsumed); // if short size, LZ4F_getFrameInfo returns error
+        offset += bytesConsumed;
 
         var maxBlockSize = GetMaxBlockSize(frameInfo.BlockSizeID);
 
@@ -388,19 +370,49 @@ public static partial class LZ4
 
         if (!supportMultithreadDecode)
         {
-            var status = OperationStatus.DestinationTooSmall;
-            while (status == OperationStatus.DestinationTooSmall && source.Length > 0)
-            {
-                var dest = destination.GetSpan(maxBlockSize);
+            var remains = sourceLength - offset;
 
-                status = decoder.Decompress(source.Span, dest, out bytesConsumed, out var bytesWritten);
-                if (bytesWritten == 0 && bytesConsumed == 0 && status == OperationStatus.DestinationTooSmall)
+            var sourceBuffer = ArrayPool<byte>.Shared.Rent(4 + maxBlockSize + checksumSize);
+            var dest = destination.GetMemory(maxBlockSize);
+            var destWritten = 0;
+
+            var status = OperationStatus.DestinationTooSmall;
+            while (remains > 0)
+            {
+                var read = await RandomAccess.ReadAsync(source, sourceBuffer, offset, cancellationToken);
+                if (read == 0) break;
+
+                offset += read;
+                var src = sourceBuffer.AsMemory(0, read);
+
+                while (src.Length > 0 && remains > 0)
                 {
-                    throw new InvalidOperationException("Decoder stuck");
+                    status = decoder.Decompress(src.Span, dest.Span, out bytesConsumed, out var bytesWritten, out var sizeHint);
+                    if (bytesWritten == 0 && bytesConsumed == 0 && status == OperationStatus.DestinationTooSmall)
+                    {
+                        throw new InvalidOperationException("Decoder stuck");
+                    }
+
+                    src = src.Slice(bytesConsumed);
+                    dest = dest.Slice(bytesWritten);
+                    remains -= bytesConsumed;
+                    destWritten += bytesWritten;
+
+                    if (dest.Length == 0)
+                    {
+                        destination.Advance(destWritten);
+                        await destination.FlushAsync(cancellationToken);
+                        dest = destination.GetMemory(maxBlockSize);
+                        destWritten = 0;
+                    }
                 }
-                source = source.Slice(bytesConsumed);
-                destination.Advance(bytesWritten);
+            }
+
+            if (dest.Length > 0)
+            {
+                destination.Advance(destWritten);
                 await destination.FlushAsync(cancellationToken);
+                dest = destination.GetMemory(maxBlockSize);
             }
 
             if (status == OperationStatus.NeedMoreData)
@@ -429,23 +441,47 @@ public static partial class LZ4
 
             using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
+            var remains = sourceLength - offset;
+
             var inputProducer = Task.Run(async () =>
             {
                 var id = 0;
-                while (source.Length != 0)
+                var sourceBuffer = ArrayPool<byte>.Shared.Rent(4 + maxBlockSize + checksumSize);
+                var src = Memory<byte>.Empty;
+                while (remains != 0)
                 {
-                    var blockHeader = ReadBlockHeader(source.Span);
+                    // TODO:wip...
+                    if (src.Length <= 3) // need to read header
+                    {
+                        if (src.Length == 0)
+                        {
+                            var read = await RandomAccess.ReadAsync(source, sourceBuffer, offset, cancellationToken);
+                            src = sourceBuffer.AsMemory(0, read);
+                        }
+                        else
+                        {
+                            // need to concat block
+                            var temp = new byte[4];
+
+                        }
+                    }
+
+                    var blockHeader = ReadBlockHeader(src.Span);
                     if (blockHeader.IsEndMark)
                     {
                         break;
                     }
+
+                    var compressedBuffer = ArrayPool<byte>.Shared.Rent(blockHeader.CompressedSize);
+
+
 
                     var nextBlockOffset = blockHeader.CompressedSize + checksumSize;
                     var item = new DecompressionInputBuffer()
                     {
                         Id = id,
                         IsUncompressed = blockHeader.IsUncompressed,
-                        CompressedBuffer = source.Slice(4, nextBlockOffset - checksumSize), // skip block header, checksum
+                        CompressedBuffer = src.Slice(4, nextBlockOffset - checksumSize), // skip block header, checksum
                         IsBufferRentFromPool = false // slice from original
                     };
 
