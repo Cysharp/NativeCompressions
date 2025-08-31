@@ -3,89 +3,149 @@ name: Build-LZ4
 on: workflow_dispatch
 
 jobs:
-  build-win-and-linux-on-linux:
-    runs-on: ubuntu-latest
+  build-windows:
+    runs-on: windows-latest
     strategy:
       matrix:
+        arch: [x64, arm64]
         include:
-          # Linux targets
-          - target: linux-x64
-            cc: gcc
-            cflags: "-fPIC"
-            output: "liblz4.so"
-
-          - target: linux-arm64
-            cc: aarch64-linux-gnu-gcc
-            cflags: "-fPIC"
-            output: "liblz4.so"
-            packages: gcc-aarch64-linux-gnu
-          
-          # Windows targets (MinGW-w64)
-          - target: win-x64
-            cc: x86_64-w64-mingw32-gcc
-            cflags: "-D_WIN32_WINNT=0x0601"
-            output: "lz4.dll"
-            packages: mingw-w64
-
-          - target: win-arm64
-            cc: aarch64-w64-mingw32-gcc
-            cflags: "-D_WIN32_WINNT=0x0A00"
-            output: "lz4.dll"
-            packages: gcc-mingw-w64-aarch64-win32
-
+          - arch: x64
+            platform: x64
+            msys_env: MINGW64
+          - arch: arm64
+            platform: ARM64
+            msys_env: CLANGARM64
+    
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-    - name: Install cross-compilation tools
-      if: matrix.packages
+        fetch-depth: 1
+    - name: Setup MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: ${{ matrix.msys_env }}
+        update: true
+        install: >-
+          ${{ matrix.arch == 'x64' && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-make' || 'mingw-w64-clang-aarch64-gcc mingw-w64-clang-aarch64-make' }}
+          make
+    
+    - name: Build DLL
+      shell: msys2 {0}
+      run: |
+        cd lz4/lib
+        make BUILD_STATIC=no BUILD_SHARED=yes \
+             SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+        ls -la *.dll
+        file *.dll
+    
+    - name: Prepare artifacts
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force -Path "artifacts/win-${{ matrix.arch }}"
+        Copy-Item "lz4/lib/*.dll" -Destination "artifacts/win-${{ matrix.arch }}/lz4.dll"
+    
+    - name: Upload Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: lz4-win-${{ matrix.arch }}
+        path: artifacts/win-${{ matrix.arch }}/*
+
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+        include:
+          - arch: x64
+            cc: gcc
+          - arch: arm64
+            cc: aarch64-linux-gnu-gcc
+            packages: gcc-aarch64-linux-gnu
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 1
+    
+    - name: Install ARM64 cross-compiler
+      if: matrix.arch == 'arm64'
       run: |
         sudo apt-get update
         sudo apt-get install -y ${{ matrix.packages }}
     
-    - name: Install Windows ARM64 toolchain
-      if: matrix.target == 'win-arm64'
-      run: |
-        sudo add-apt-repository ppa:tobijk/ppa -y
-        sudo apt-get update
-        sudo apt-get install -y gcc-mingw-w64-aarch64-win32 || echo "ARM64 toolchain not available"
-    
-    - name: Build library
+    - name: Build shared library
       run: |
         cd lz4/lib
-        if [[ "${{ matrix.target }}" == win-* ]]; then
-          export CFLAGS="${{ matrix.cflags }} -O3"
-          export CC="${{ matrix.cc }}"
-          ${{ matrix.cc }} -O3 ${{ matrix.cflags }} -shared -fvisibility=hidden \
-            -DLZ4_DLL_EXPORT=1 \
-            lz4.c lz4hc.c lz4frame.c xxhash.c \
-            -o ${{ matrix.output }} \
-            -Wl,--out-implib,liblz4.dll.a
-        else
-          make BUILD_STATIC=no \
-               BUILD_SHARED=yes \
-               CC="${{ matrix.cc }}" \
-               CFLAGS="${{ matrix.cflags }} -O3" \
-               SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
-        fi
-        
-        mkdir -p ../../artifacts/${{ matrix.target }}
-        if [[ "${{ matrix.target }}" == win-* ]]; then
-          cp ${{ matrix.output }} ../../artifacts/${{ matrix.target }}/
-          if [ -f liblz4.dll.a ]; then
-            cp liblz4.dll.a ../../artifacts/${{ matrix.target }}/
-          fi
-        else
-          cp liblz4.so* ../../artifacts/${{ matrix.target }}/
-        fi
+        make BUILD_STATIC=no BUILD_SHARED=yes \
+             CC="${{ matrix.cc }}" \
+             SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+        ls -la *.so*
+        file liblz4.so*
     
-    - name: Verify architecture
+    - name: Prepare artifacts
       run: |
-        cd artifacts/${{ matrix.target }}
-        file ${{ matrix.output }} || true
+        mkdir -p artifacts/linux-${{ matrix.arch }}
+        cp lz4/lib/liblz4.so* artifacts/linux-${{ matrix.arch }}/
+        cd artifacts/linux-${{ matrix.arch }}
+        if [ -L liblz4.so ]; then
+          cp -L liblz4.so liblz4.so.tmp
+          mv liblz4.so.tmp liblz4.so
+        fi
     
-    - name: Upload artifacts
+    - name: Upload Linux artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: lz4-${{ matrix.target }}
-        path: artifacts/${{ matrix.target }}/*
+        name: lz4-linux-${{ matrix.arch }}
+        path: artifacts/linux-${{ matrix.arch }}/*
+
+  package-all:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+    
+    - name: Create .NET runtime structure
+      run: |
+        mkdir -p release/runtimes/{win-x64,win-arm64}/native
+        mkdir -p release/runtimes/{linux-x64,linux-arm64}/native
+        mkdir -p release/runtimes/{osx-x64,osx-arm64}/native
+        
+        # Windows
+        cp artifacts/lz4-win-x64/*.dll release/runtimes/win-x64/native/lz4.dll 2>/dev/null || true
+        cp artifacts/lz4-win-arm64/*.dll release/runtimes/win-arm64/native/lz4.dll 2>/dev/null || true
+        
+        # Linux
+        if [ -f artifacts/lz4-linux-x64/liblz4.so ]; then
+          cp artifacts/lz4-linux-x64/liblz4.so release/runtimes/linux-x64/native/
+        fi
+        if [ -f artifacts/lz4-linux-arm64/liblz4.so ]; then
+          cp artifacts/lz4-linux-arm64/liblz4.so release/runtimes/linux-arm64/native/
+        fi
+        
+        # macOS
+        for file in artifacts/lz4-osx-x64/*.dylib; do
+          [ -f "$file" ] && cp "$file" release/runtimes/osx-x64/native/liblz4.dylib && break
+        done
+        for file in artifacts/lz4-osx-arm64/*.dylib; do
+          [ -f "$file" ] && cp "$file" release/runtimes/osx-arm64/native/liblz4.dylib && break
+        done
+        
+    - name: Create archives
+      run: |
+        cd release
+        tar czf ../lz4-native-libraries.tar.gz .
+        zip -r ../lz4-native-libraries.zip .
+    
+    - name: Upload package
+      uses: actions/upload-artifact@v4
+      with:
+        name: lz4-native-package
+        path: |
+          lz4-native-libraries.tar.gz
+          lz4-native-libraries.zip
