@@ -1,4 +1,4 @@
-name: Build-LZ4
+name: Build-Native-LZ4
 
 on: workflow_dispatch
 
