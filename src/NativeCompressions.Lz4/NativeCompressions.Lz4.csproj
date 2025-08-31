@@ -9,7 +9,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<None Include="runtimes\win-x64\native\liblz4.dll">
+		<None Include="runtimes\win-x64\native\lz4.dll">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
 		<!-- <None Include="runtimes\linux-arm64\native\liblz4.so">
