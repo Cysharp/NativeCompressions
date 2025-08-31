@@ -128,8 +128,51 @@ jobs:
         name: lz4-linux-${{ matrix.arch }}
         path: artifacts/linux-${{ matrix.arch }}/*
 
+ build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+        include:
+          - arch: x64
+            flags: "-arch x86_64"
+          - arch: arm64
+            flags: "-arch arm64"
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Build dynamic library
+      run: |
+        cd lz4/lib
+        make BUILD_STATIC=no BUILD_SHARED=yes \
+             CFLAGS="${{ matrix.flags }} -O3" \
+             SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+        
+        lipo -info *.dylib
+    
+    - name: Prepare artifacts
+      run: |
+        mkdir -p artifacts/osx-${{ matrix.arch }}
+        cp lz4/lib/*.dylib artifacts/osx-${{ matrix.arch }}/
+        cd artifacts/osx-${{ matrix.arch }}
+        for file in *.dylib; do
+          if [ -L "$file" ]; then
+            cp -L "$file" "$file.tmp"
+            mv "$file.tmp" "$file"
+          fi
+        done
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: lz4-osx-${{ matrix.arch }}
+        path: artifacts/osx-${{ matrix.arch }}/*
+
   package-all:
-    needs: [build-windows, build-windows-arm64, build-linux]
+    needs: [build-windows, build-windows-arm64, build-linux, build-macos]
     runs-on: ubuntu-latest
     
     steps:
