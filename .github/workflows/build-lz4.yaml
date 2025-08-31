@@ -7,14 +7,11 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        arch: [x64, arm64]
+        arch: [x64]
         include:
           - arch: x64
             platform: x64
             msys_env: MINGW64
-          - arch: arm64
-            platform: ARM64
-            msys_env: CLANGARM64
     
     steps:
     - uses: actions/checkout@v4
@@ -50,6 +47,39 @@ jobs:
       with:
         name: lz4-win-${{ matrix.arch }}
         path: artifacts/win-${{ matrix.arch }}/*
+
+  build-windows-arm64-on-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install LLVM and Windows SDK
+      run: |
+        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+        sudo add-apt-repository "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-17 main"
+        sudo apt-get update
+        sudo apt-get install -y clang-17 lld-17 llvm-17
+        
+    - name: Build Windows ARM64 DLL
+      run: |
+        cd lz4/lib
+        clang-17 -target aarch64-pc-windows-gnu -O3 -shared \
+          -DLZ4_DLL_EXPORT=1 -DXXH_NAMESPACE=LZ4_ \
+          -fvisibility=hidden \
+          lz4.c lz4hc.c lz4frame.c xxhash.c \
+          -o lz4.dll \
+          -fuse-ld=lld-17
+        
+        file lz4.dll
+        
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: lz4-win-arm64
+        path: lz4/lib/lz4.dll
 
   build-linux:
     runs-on: ubuntu-latest
@@ -101,7 +131,7 @@ jobs:
         path: artifacts/linux-${{ matrix.arch }}/*
 
   package-all:
-    needs: [build-windows, build-linux]
+    needs: [build-windows, build-windows-arm64-on-linux, build-linux]
     runs-on: ubuntu-latest
     
     steps:
