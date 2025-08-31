@@ -127,8 +127,7 @@ jobs:
       with:
         name: lz4-linux-${{ matrix.arch }}
         path: artifacts/linux-${{ matrix.arch }}/*
-
- build-macos:
+  build-macos:
     runs-on: macos-latest
     strategy:
       matrix:
