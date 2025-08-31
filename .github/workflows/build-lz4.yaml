@@ -13,6 +13,7 @@ jobs:
             cc: gcc
             cflags: "-fPIC"
             output: "liblz4.so"
+
           - target: linux-arm64
             cc: aarch64-linux-gnu-gcc
             cflags: "-fPIC"
@@ -25,13 +26,17 @@ jobs:
             cflags: "-D_WIN32_WINNT=0x0601"
             output: "lz4.dll"
             packages: mingw-w64
+
           - target: win-arm64
             cc: aarch64-w64-mingw32-gcc
             cflags: "-D_WIN32_WINNT=0x0A00"
             output: "lz4.dll"
             packages: gcc-mingw-w64-aarch64-win32
+
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: recursive
     - name: Install cross-compilation tools
       if: matrix.packages
       run: |
@@ -47,7 +52,7 @@ jobs:
     
     - name: Build library
       run: |
-        cd lib
+        cd lz4/lib
         if [[ "${{ matrix.target }}" == win-* ]]; then
           export CFLAGS="${{ matrix.cflags }} -O3"
           export CC="${{ matrix.cc }}"
@@ -64,14 +69,14 @@ jobs:
                SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
         fi
         
-        mkdir -p ../artifacts/${{ matrix.target }}
+        mkdir -p ../../artifacts/${{ matrix.target }}
         if [[ "${{ matrix.target }}" == win-* ]]; then
-          cp ${{ matrix.output }} ../artifacts/${{ matrix.target }}/
+          cp ${{ matrix.output }} ../../artifacts/${{ matrix.target }}/
           if [ -f liblz4.dll.a ]; then
-            cp liblz4.dll.a ../artifacts/${{ matrix.target }}/
+            cp liblz4.dll.a ../../artifacts/${{ matrix.target }}/
           fi
         else
-          cp liblz4.so* ../artifacts/${{ matrix.target }}/
+          cp liblz4.so* ../../artifacts/${{ matrix.target }}/
         fi
     
     - name: Verify architecture
