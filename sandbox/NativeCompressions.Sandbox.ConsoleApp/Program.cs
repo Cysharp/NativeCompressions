@@ -23,12 +23,14 @@ var linkedCompressed = File.ReadAllBytes("silesia.tar.lz4");
 var original = LZ4.Decompress(linkedCompressed);
 var blockIndependenCompressed = LZ4.Compress(original);
 
-var linkedCompressedHandle = File.OpenRead("silesia.tar.lz4");
+
+var parallelCompressedHandle = File.OpenRead("silesia.tar.lz4.p");
 var dest = new ArrayBufferPipeWriter();
 
-await LZ4.DecompressAsync(linkedCompressedHandle, dest);
+await LZ4.DecompressAsync(parallelCompressedHandle, dest);
 
 Console.WriteLine(dest.WrittenCount);
+Console.WriteLine(original.Length);
 
 //using var fs = new FileStream("silesia.tar.lz4", FileMode.Open, FileAccess.Read, FileShare.Read, 1, useAsync: true);
 
