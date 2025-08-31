@@ -1,0 +1,86 @@
+name: Build-LZ4
+
+on: workflow_dispatch
+
+jobs:
+  build-win-and-linux-on-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Linux targets
+          - target: linux-x64
+            cc: gcc
+            cflags: "-fPIC"
+            output: "liblz4.so"
+          - target: linux-arm64
+            cc: aarch64-linux-gnu-gcc
+            cflags: "-fPIC"
+            output: "liblz4.so"
+            packages: gcc-aarch64-linux-gnu
+          
+          # Windows targets (MinGW-w64)
+          - target: win-x64
+            cc: x86_64-w64-mingw32-gcc
+            cflags: "-D_WIN32_WINNT=0x0601"
+            output: "lz4.dll"
+            packages: mingw-w64
+          - target: win-arm64
+            cc: aarch64-w64-mingw32-gcc
+            cflags: "-D_WIN32_WINNT=0x0A00"
+            output: "lz4.dll"
+            packages: gcc-mingw-w64-aarch64-win32
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install cross-compilation tools
+      if: matrix.packages
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ${{ matrix.packages }}
+    
+    - name: Install Windows ARM64 toolchain
+      if: matrix.target == 'win-arm64'
+      run: |
+        sudo add-apt-repository ppa:tobijk/ppa -y
+        sudo apt-get update
+        sudo apt-get install -y gcc-mingw-w64-aarch64-win32 || echo "ARM64 toolchain not available"
+    
+    - name: Build library
+      run: |
+        cd lib
+        if [[ "${{ matrix.target }}" == win-* ]]; then
+          export CFLAGS="${{ matrix.cflags }} -O3"
+          export CC="${{ matrix.cc }}"
+          ${{ matrix.cc }} -O3 ${{ matrix.cflags }} -shared -fvisibility=hidden \
+            -DLZ4_DLL_EXPORT=1 \
+            lz4.c lz4hc.c lz4frame.c xxhash.c \
+            -o ${{ matrix.output }} \
+            -Wl,--out-implib,liblz4.dll.a
+        else
+          make BUILD_STATIC=no \
+               BUILD_SHARED=yes \
+               CC="${{ matrix.cc }}" \
+               CFLAGS="${{ matrix.cflags }} -O3" \
+               SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+        fi
+        
+        mkdir -p ../artifacts/${{ matrix.target }}
+        if [[ "${{ matrix.target }}" == win-* ]]; then
+          cp ${{ matrix.output }} ../artifacts/${{ matrix.target }}/
+          if [ -f liblz4.dll.a ]; then
+            cp liblz4.dll.a ../artifacts/${{ matrix.target }}/
+          fi
+        else
+          cp liblz4.so* ../artifacts/${{ matrix.target }}/
+        fi
+    
+    - name: Verify architecture
+      run: |
+        cd artifacts/${{ matrix.target }}
+        file ${{ matrix.output }} || true
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: lz4-${{ matrix.target }}
+        path: artifacts/${{ matrix.target }}/*
