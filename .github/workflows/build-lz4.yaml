@@ -48,7 +48,7 @@ jobs:
         name: lz4-win-${{ matrix.arch }}
         path: artifacts/win-${{ matrix.arch }}/*
 
-  build-windows-arm64-on-linux:
+  build-windows-arm64:
     runs-on: ubuntu-latest
     
     steps:
@@ -56,30 +56,28 @@ jobs:
       with:
         submodules: recursive
     
-    - name: Install LLVM and Windows SDK
+    - name: Build using Docker
       run: |
-        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-        sudo add-apt-repository "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-17 main"
-        sudo apt-get update
-        sudo apt-get install -y clang-17 lld-17 llvm-17
+        docker run --rm -v $PWD:/work \
+          mstorsjo/llvm-mingw:latest \
+          bash -c "cd /work/lz4/lib && \
+            aarch64-w64-mingw32-gcc -O3 -shared \
+            -DLZ4_DLL_EXPORT=1 -DXXH_NAMESPACE=LZ4_ \
+            lz4.c lz4hc.c lz4frame.c xxhash.c \
+            -o lz4.dll"
         
-    - name: Build Windows ARM64 DLL
+        file lz4/lib/lz4.dll
+    
+    - name: Prepare artifacts
       run: |
-        cd lz4/lib
-        clang-17 -target aarch64-pc-windows-gnu -O3 -shared \
-          -DLZ4_DLL_EXPORT=1 -DXXH_NAMESPACE=LZ4_ \
-          -fvisibility=hidden \
-          lz4.c lz4hc.c lz4frame.c xxhash.c \
-          -o lz4.dll \
-          -fuse-ld=lld-17
-        
-        file lz4.dll
-        
-    - name: Upload artifact
+        mkdir -p artifacts/win-arm64
+        cp lz4/lib/lz4.dll artifacts/win-arm64/
+    
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: lz4-win-arm64
-        path: lz4/lib/lz4.dll
+        path: artifacts/win-arm64/*
 
   build-linux:
     runs-on: ubuntu-latest
@@ -131,7 +129,7 @@ jobs:
         path: artifacts/linux-${{ matrix.arch }}/*
 
   package-all:
-    needs: [build-windows, build-windows-arm64-on-linux, build-linux]
+    needs: [build-windows, build-windows-arm64, build-linux]
     runs-on: ubuntu-latest
     
     steps:
