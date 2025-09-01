@@ -8,31 +8,4 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 
-	<ItemGroup>
-		<!-- <None Include="runtimes\linux-arm64\native\liblz4.so">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Include="runtimes\linux-x64\native\liblz4.so">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Include="runtimes\osx-arm64\native\liblz4.dylib">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Include="runtimes\osx-x64\native\liblz4.dylib">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None> -->
-	</ItemGroup>
-
-	<!-- for debug perpose, if exists in debug, copy it -->
-	<!-- <ItemGroup Condition="'$(Configuration)' == 'Debug' and Exists('../../target/debug/lz4.dll')">
-		<None Include="../../target/debug/lz4.dll">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-			<Link>liblz4.dll</Link>
-		</None>
-		<None Include="../../target/debug/lz4.pdb">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-			<Link>liblz4.pdb</Link>
-		</None>
-	</ItemGroup> -->
-
 </Project>
