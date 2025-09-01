@@ -1,20 +1,23 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>netstandard2.1</TargetFramework>
+		<TargetFramework>net9.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<!-- Not include this dll, only native dlls. -->
 		<IncludeBuildOutput>false</IncludeBuildOutput>
 		<IncludeContentInPack>true</IncludeContentInPack>
 		<NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
-		<Description>LZ4 native runtime for linux-x64.</Description>
+		<Description>Native LZ4/ZStandard high-performance streaming compression for .NET.</Description>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<None Remove="runtimes\**" />
-		<None Include="runtimes\linux-x64\native\liblz4.so" PackagePath="runtimes\linux-x64\native\" Pack="true">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
+		<None Remove="**" />
+		<Compile Remove="**" />
+		<EmbededResources Remove="**" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="NativeCompressions.LZ4.csproj" />
 	</ItemGroup>
 
 </Project>

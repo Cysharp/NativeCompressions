@@ -6,7 +6,8 @@
 		<!-- Not include this dll, only native dlls. -->
 		<IncludeBuildOutput>false</IncludeBuildOutput>
 		<IncludeContentInPack>true</IncludeContentInPack>
-		<NoWarn>$(NoWarn);NU5128</NoWarn>
+		<NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
+		<Description>LZ4 native runtimes for NativeCompressions.LZ4.</Description>
 	</PropertyGroup>
 
 	<ItemGroup>

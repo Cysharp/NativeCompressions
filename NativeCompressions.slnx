@@ -1,21 +1,27 @@
 <Solution>
+  <Folder Name="/build/">
+    <File Path="Directory.Build.props" />
+  </Folder>
   <Folder Name="/sandbox/">
     <Project Path="sandbox/Benchmark/Benchmark.csproj" />
     <Project Path="sandbox/NativeCompressions.Sandbox.ConsoleApp/NativeCompressions.Sandbox.ConsoleApp.csproj" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/NativeCompressions.LZ4.csproj" />
     <Project Path="src/NativeCompressions.LZ4.Core/NativeCompressions.LZ4.Core.csproj" />
     <Project Path="src/NativeCompressions.ZStandard/NativeCompressions.ZStandard.csproj" />
   </Folder>
+  <Folder Name="/src/meta/">
+    <Project Path="src/NativeCompressions.csproj" />
+    <Project Path="src/NativeCompressions.LZ4.csproj" />
+  </Folder>
   <Folder Name="/src/runtimes/">
     <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.csproj" />
-    <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.win-x64.csproj" />
-    <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.win-arm64.csproj" />
-    <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.linux-x64.csproj" />
     <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.linux-arm64.csproj" />
-    <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.osx-x64.csproj" />
+    <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.linux-x64.csproj" />
     <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.osx-arm64.csproj" />
+    <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.osx-x64.csproj" />
+    <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.win-arm64.csproj" />
+    <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.win-x64.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/NativeCompressions.Tests/NativeCompressions.Tests.csproj" />

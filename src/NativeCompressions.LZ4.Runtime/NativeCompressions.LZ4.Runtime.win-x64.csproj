@@ -6,12 +6,13 @@
 		<!-- Not include this dll, only native dlls. -->
 		<IncludeBuildOutput>false</IncludeBuildOutput>
 		<IncludeContentInPack>true</IncludeContentInPack>
-		<NoWarn>$(NoWarn);NU5128</NoWarn>
+		<NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
+		<Description>LZ4 native runtime for win-x64.</Description>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<None Remove="runtimes\**" />
-		<None Include="runtimes\win-x64\native\lz4.dll" Pack="true">
+		<None Include="runtimes\win-x64\native\lz4.dll" PackagePath="runtimes\win-x64\native\" Pack="true">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
 	</ItemGroup>
