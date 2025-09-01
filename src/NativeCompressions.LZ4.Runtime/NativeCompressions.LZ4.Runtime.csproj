@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.1</TargetFramework>
+		<Nullable>enable</Nullable>
+		<!-- Not include this dll, only native dlls. -->
+		<IncludeBuildOutput>false</IncludeBuildOutput>
+		<IncludeContentInPack>true</IncludeContentInPack>
+		<NoWarn>$(NoWarn);NU5128</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Remove="runtimes\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="NativeCompressions.LZ4.Runtime.linux-arm64.csproj" />
+		<ProjectReference Include="NativeCompressions.LZ4.Runtime.linux-x64.csproj" />
+		<ProjectReference Include="NativeCompressions.LZ4.Runtime.osx-arm64.csproj" />
+		<ProjectReference Include="NativeCompressions.LZ4.Runtime.osx-x64.csproj" />
+		<ProjectReference Include="NativeCompressions.LZ4.Runtime.win-arm64.csproj" />
+		<ProjectReference Include="NativeCompressions.LZ4.Runtime.win-x64.csproj" />
+	</ItemGroup>
+
+</Project>

@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.1</TargetFramework>
+		<Nullable>enable</Nullable>
+		<!-- Not include this dll, only native dlls. -->
+		<IncludeBuildOutput>false</IncludeBuildOutput>
+		<IncludeContentInPack>true</IncludeContentInPack>
+		<NoWarn>$(NoWarn);NU5128</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Remove="runtimes\**" />
+		<None Include="runtimes\osx-x64\native\liblz4.dylib" Pack="true">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+</Project>

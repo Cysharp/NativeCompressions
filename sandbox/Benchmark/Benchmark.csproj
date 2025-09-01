@@ -42,7 +42,7 @@
 		<PackageReference Include="System.IO.Pipelines" Version="9.0.8" />
 	</ItemGroup>
 	<ItemGroup>
-		<ProjectReference Include="..\..\src\NativeCompressions.Lz4\NativeCompressions.Lz4.csproj" />
+		<ProjectReference Include="..\..\src\NativeCompressions.LZ4\NativeCompressions.LZ4.Core.csproj" />
 		<ProjectReference Include="..\..\src\NativeCompressions.ZStandard\NativeCompressions.ZStandard.csproj" />
 	</ItemGroup>
 

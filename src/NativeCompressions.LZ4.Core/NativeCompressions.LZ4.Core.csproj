@@ -9,9 +9,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<None Include="runtimes\win-x64\native\lz4.dll">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
 		<!-- <None Include="runtimes\linux-arm64\native\liblz4.so">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
@@ -25,7 +22,7 @@
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None> -->
 	</ItemGroup>
-	
+
 	<!-- for debug perpose, if exists in debug, copy it -->
 	<!-- <ItemGroup Condition="'$(Configuration)' == 'Debug' and Exists('../../target/debug/lz4.dll')">
 		<None Include="../../target/debug/lz4.dll">

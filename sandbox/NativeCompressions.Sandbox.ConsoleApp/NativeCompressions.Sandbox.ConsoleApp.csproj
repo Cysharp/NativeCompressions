@@ -12,17 +12,16 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <None Include="..\..\resources\silesia.tar.lz4" Link="silesia.tar.lz4">
-	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	  </None>
+		<None Include="..\..\resources\silesia.tar.lz4" Link="silesia.tar.lz4">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="K4os.Compression.LZ4" Version="1.3.5" />
-		<PackageReference Include="K4os.Compression.LZ4.Streams" Version="1.3.5" />
-		<PackageReference Include="ZstdNet" Version="1.4.5" />
-		<ProjectReference Include="..\..\src\NativeCompressions.LZ4\NativeCompressions.LZ4.csproj" />
-		<ProjectReference Include="..\..\src\NativeCompressions.ZStandard\NativeCompressions.ZStandard.csproj" />
+		<ProjectReference Include="..\..\src\NativeCompressions.LZ4.csproj" />
 	</ItemGroup>
 
+	<!--<PackageReference Include="K4os.Compression.LZ4" Version="1.3.5" />
+		<PackageReference Include="K4os.Compression.LZ4.Streams" Version="1.3.5" />-->
+	<!--<PackageReference Include="ZstdNet" Version="1.4.5" />-->
 </Project>

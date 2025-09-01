@@ -1,5 +1,4 @@
 ﻿//using K4os.Compression.LZ4.Streams;
-using NativeCompressions.ZStandard;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.IO;
@@ -8,7 +7,6 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using ZstdNet;
 using NativeCompressions.LZ4;
 using System.IO.Pipelines;
 using System;
@@ -24,13 +22,15 @@ var original = LZ4.Decompress(linkedCompressed);
 var blockIndependenCompressed = LZ4.Compress(original);
 
 
-var parallelCompressedHandle = File.OpenRead("silesia.tar.lz4.p");
-var dest = new ArrayBufferPipeWriter();
+//var parallelCompressedHandle = File.OpenRead("silesia.tar.lz4.p");
+//var dest = new ArrayBufferPipeWriter();
 
-await LZ4.DecompressAsync(parallelCompressedHandle, dest);
+//await LZ4.DecompressAsync(parallelCompressedHandle, dest);
 
-Console.WriteLine(dest.WrittenCount);
-Console.WriteLine(original.Length);
+//Console.WriteLine(dest.WrittenCount);
+//Console.WriteLine(original.Length);
+
+Console.WriteLine(LZ4.Version);
 
 //using var fs = new FileStream("silesia.tar.lz4", FileMode.Open, FileAccess.Read, FileShare.Read, 1, useAsync: true);
 

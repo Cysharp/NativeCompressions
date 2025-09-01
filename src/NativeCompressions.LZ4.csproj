@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<!-- Not include this dll, only native dlls. -->
+		<IncludeBuildOutput>false</IncludeBuildOutput>
+		<IncludeContentInPack>true</IncludeContentInPack>
+		<NoWarn>$(NoWarn);NU5128</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Remove="**" />
+		<Compile Remove="**" />
+		<EmbededResources Remove="**" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="NativeCompressions.LZ4.Core\NativeCompressions.LZ4.Core.csproj" />
+		<ProjectReference Include="NativeCompressions.LZ4.Runtime\NativeCompressions.LZ4.Runtime.csproj" />
+	</ItemGroup>
+
+</Project>
