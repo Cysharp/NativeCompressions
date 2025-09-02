@@ -1,4 +1,4 @@
-NativeCompressions
+﻿NativeCompressions
 ===
 <!-- [![CI](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml/badge.svg)](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml)
 [![NuGet](https://img.shields.io/nuget/v/NativeCompressions)](https://www.nuget.org/packages/NativeCompressions) -->
@@ -16,7 +16,7 @@ We chose native bindings over Pure C# implementation because compression library
 LZ4 and ZStandard are created by the same author [Cyan4973](https://github.com/Cyan4973), showing high performance against competitors in their respective domains (LZ4 vs Snappy / Brotli vs ZStandard), and are widely used as industry standards.
 
 > [!NOTE]
-> This library is currently in preview. It supports only .NET 9, win-x64/arm64, linux-x64/arm64, osx-x64/arm64. Currently only LZ4 compression algorithm is available. We will sequentially add ZStandard support and support for .NET Standard 2.1, .NET 8. Unity support (including iOS IL2CPP builds) is also planned.
+> This library is currently in preview. Currently supports netstandard2.1;net5.0;net6.0;net7.0;net8.0;net9.0 and platforms are win-x64/arm64, linux-x64/arm64, osx-x64/arm64. Currently only LZ4 compression algorithm is available. We will sequentially add ZStandard support. Unity support (including iOS IL2CPP builds) is also planned.
 
 LZ4 API implementation is complete. We are collecting feedback during this preview period.
 
@@ -98,7 +98,7 @@ var finalWritten = encoder.Close(finalBytes);
 bufferWriter.Advance(finalWritten);
 ```
 
-It returns `Compress` not `TryCompress`, and returns size not `OperationStatus` because LZ4's native API differs from Brotli. The source is fully consumed, requiring destination to be at least MaxCompressedLength relative to source. On failure, the internal context state is corrupted, so it cannot be a Try... API and throws `LZ4Exception` on failure.
+Method name is `Compress` not `TryCompress`, and returns size not `OperationStatus` because LZ4's native API differs from Brotli. The source is fully consumed, requiring destination to be at least MaxCompressedLength relative to source. On failure, the internal context state is corrupted, so it cannot be a Try... API and throws `LZ4Exception` on failure.
 
 For decompression, use `LZ4Decoder`.
 
