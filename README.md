@@ -1,11 +1,13 @@
 NativeCompressions
 ===
-[![CI](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml/badge.svg)](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml)
-[![NuGet](https://img.shields.io/nuget/v/NativeCompressions)](https://www.nuget.org/packages/NativeCompressions)
+<!-- [![CI](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml/badge.svg)](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml)
+[![NuGet](https://img.shields.io/nuget/v/NativeCompressions)](https://www.nuget.org/packages/NativeCompressions) -->
 
 NativeCompressions provides native library bindings, streaming processing, and multi-threading support for [LZ4](https://github.com/lz4/lz4) with its excellent decompression speed, and [ZStandard](https://github.com/facebook/zstd) with its superior balance of compression ratio and performance.
 
+![](https://github.com/user-attachments/assets/5ab559ef-86ca-42ba-add7-b6904a335409)
 
+> Encode [silesia.tar](https://en.wikipedia.org/wiki/Silesia_corpus) corpus(200MB) with default LZ4 options. We will add benchmark for ZStandard, Brotli.
 
 Compression is crucial for any application, but .NET has had limited options. NativeCompressions builds state-of-the-art algorithms (LZ4, ZStandard) with allocation-free, stream-less streaming APIs. Furthermore, by leveraging modern C# APIs (`Span<T>`, `RandomAccess`, `PipeReader/Writer`) to provide high-level multi-threading APIs, we achieve high-performance compression in any environment.
 
