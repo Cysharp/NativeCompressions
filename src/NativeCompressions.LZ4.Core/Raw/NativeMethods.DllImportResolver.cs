@@ -1,4 +1,6 @@
-﻿using System.Reflection;
+﻿#if !NETSTANDARD2_1
+
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace NativeCompressions.LZ4.Raw
@@ -60,3 +62,5 @@ namespace NativeCompressions.LZ4.Raw
         }
     }
 }
+
+#endif

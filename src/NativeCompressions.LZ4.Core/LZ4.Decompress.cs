@@ -74,7 +74,11 @@ public static partial class LZ4
                 throw new InvalidOperationException("Invalid LZ4 frame.");
             }
 
+#if NETSTANDARD2_1
+            var result = new byte[arrayProvider.Count];
+#else
             var result = GC.AllocateUninitializedArray<byte>(arrayProvider.Count);
+#endif
             arrayProvider.CopyToAndClear(result);
             return result;
         }
@@ -350,6 +354,15 @@ public static partial class LZ4
 
     public static async ValueTask DecompressAsync(SafeFileHandle source, long offset, PipeWriter destination, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
+#if NETSTANDARD2_1 || NET5_0
+        var fs = new FileStream(source, FileAccess.Read, 4096, isAsync: true);
+        if (offset != 0)
+        {
+            fs.Seek(offset, SeekOrigin.Begin);
+        }
+        await DecompressAsync(fs, destination, dictionary, maxDegreeOfParallelism, cancellationToken);
+        return;
+#else
         using var decoder = new LZ4Decoder(dictionary);
 
         var sourceLength = RandomAccess.GetLength(source);
@@ -538,6 +551,7 @@ public static partial class LZ4
                 throw;
             }
         }
+#endif
     }
 
     public static async ValueTask DecompressAsync(Stream source, PipeWriter destination, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
@@ -550,11 +564,13 @@ public static partial class LZ4
             return;
         }
 
+#if !(NETSTANDARD2_1 || NET5_0)
         if (source is FileStream fs && fs.CanSeek)
         {
             await DecompressAsync(fs.SafeFileHandle, fs.Position, destination, dictionary, maxDegreeOfParallelism, cancellationToken);
             return;
         }
+#endif
 
         var pipeReader = PipeReader.Create(source, LeaveOpenPipeReaderOptions);
         await DecompressAsync(pipeReader, destination, dictionary, maxDegreeOfParallelism, cancellationToken);

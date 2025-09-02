@@ -1,10 +1,10 @@
-﻿// Shim of TaskToAsyncResult(.NET 8)
+﻿#if !NET8_0_OR_GREATER
 
 using System.Diagnostics;
 
 namespace System.Threading.Tasks
 {
-    internal static class TaskToAsyncResultShim
+    internal static class TaskToAsyncResult
     {
         public static IAsyncResult Begin(Task task, AsyncCallback? callback, object? state)
         {
@@ -83,3 +83,5 @@ namespace System.Threading.Tasks
         }
     }
 }
+
+#endif

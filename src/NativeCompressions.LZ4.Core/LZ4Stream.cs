@@ -81,13 +81,13 @@ public sealed class LZ4Stream : Stream
     public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback? callback, object? state)
     {
         ValidateDisposed();
-        return TaskToAsyncResultShim.Begin(WriteAsync(buffer, offset, count, CancellationToken.None), callback, state);
+        return TaskToAsyncResult.Begin(WriteAsync(buffer, offset, count, CancellationToken.None), callback, state);
     }
 
     public override void EndWrite(IAsyncResult asyncResult)
     {
         ValidateDisposed();
-        TaskToAsyncResultShim.End(asyncResult);
+        TaskToAsyncResult.End(asyncResult);
     }
 
     public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
@@ -100,7 +100,11 @@ public sealed class LZ4Stream : Stream
     {
         ValidateDisposed();
         return cancellationToken.IsCancellationRequested
+#if NETSTANDARD2_1
+            ? new ValueTask(Task.FromCanceled(cancellationToken))
+#else
             ? ValueTask.FromCanceled(cancellationToken)
+#endif
             : WriteCoreAsync(buffer, cancellationToken);
     }
 
@@ -193,7 +197,7 @@ public sealed class LZ4Stream : Stream
         }
     }
 
-    #endregion
+#endregion
 
     #region Decode
 
@@ -220,13 +224,13 @@ public sealed class LZ4Stream : Stream
     public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback? callback, object? state)
     {
         ValidateDisposed();
-        return TaskToAsyncResultShim.Begin(ReadAsync(buffer, offset, count, CancellationToken.None), callback, state);
+        return TaskToAsyncResult.Begin(ReadAsync(buffer, offset, count, CancellationToken.None), callback, state);
     }
 
     public override int EndRead(IAsyncResult asyncResult)
     {
         ValidateDisposed();
-        return TaskToAsyncResultShim.End<int>(asyncResult);
+        return TaskToAsyncResult.End<int>(asyncResult);
     }
 
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)

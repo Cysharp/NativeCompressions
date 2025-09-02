@@ -3,8 +3,6 @@ using NativeCompressions.LZ4.Raw;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using static NativeCompressions.LZ4.Raw.NativeMethods;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace NativeCompressions.LZ4;
 

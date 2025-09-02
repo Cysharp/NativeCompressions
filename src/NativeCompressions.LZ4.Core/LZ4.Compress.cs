@@ -426,7 +426,15 @@ public static partial class LZ4
         {
             throw new ArgumentException("Invalid file handle", nameof(source));
         }
-
+#if NETSTANDARD2_1 || NET5_0
+        var fs = new FileStream(source, FileAccess.Read, 1, true);
+        if (offset != 0)
+        {
+            fs.Position = offset;
+        }
+        await CompressAsync(fs, destination, frameOptions, dictionary, cancellationToken);
+        return;
+#else
         var options = frameOptions ?? LZ4FrameOptions.Default;
         long sourceLength = RandomAccess.GetLength(source) - offset; // we can accept `long` length(over 2GB file), don't cast to int.
 
@@ -587,6 +595,7 @@ public static partial class LZ4
                 throw;
             }
         }
+#endif
     }
 
     public static async ValueTask CompressAsync(Stream source, PipeWriter destination, LZ4FrameOptions? frameOptions = null, LZ4CompressionDictionary? dictionary = null, CancellationToken cancellationToken = default)
@@ -599,11 +608,13 @@ public static partial class LZ4
             return;
         }
 
+#if !(NETSTANDARD2_1 || NET5_0)
         if (source is FileStream fs && fs.CanSeek)
         {
             await CompressAsync(fs.SafeFileHandle, fs.Position, destination, frameOptions, dictionary, maxDegreeOfParallelism: 1, cancellationToken);
             return;
         }
+#endif
 
         var pipeReader = PipeReader.Create(source, LeaveOpenPipeReaderOptions);
         await CompressAsync(pipeReader, destination, frameOptions, dictionary, cancellationToken);
