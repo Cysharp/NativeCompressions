@@ -4,7 +4,8 @@
 		<LangVersion>latest</LangVersion>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
-
+		<UseArtifactsOutput>true</UseArtifactsOutput>
+		
 		<!-- NuGet Package Information -->
 		<PackageVersion>$(Version)</PackageVersion>
 		<Company>Cysharp</Company>
