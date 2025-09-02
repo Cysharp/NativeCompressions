@@ -129,3 +129,4 @@ _tmp
 # include target
 !src/NativeCompressions.Lz4/runtimes/**
 !src/NativeCompressions.ZStandard/runtimes/**
+binding/target/.rustc_info.json
