@@ -19,14 +19,6 @@ namespace NativeCompressions.LZ4.Raw
         {
             if (libraryName == __DllName)
             {
-#if DEBUG
-                var combinedPath = Path.Combine(AppContext.BaseDirectory, libraryName);
-                if (File.Exists(combinedPath) || File.Exists(combinedPath + ".dll"))
-                {
-                    return NativeLibrary.Load(combinedPath, assembly, searchPath);
-                }
-#endif
-
                 var path = "runtimes/";
                 var extension = "";
 

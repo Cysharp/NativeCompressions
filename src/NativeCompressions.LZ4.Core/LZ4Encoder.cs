@@ -97,6 +97,8 @@ public unsafe partial struct LZ4Encoder : IDisposable
         }
     }
 
+    public int GetMaxFlushBufferLength(bool includingFooter = false) => GetMaxCompressedLength(0, includingHeader: false, includingFooter: includingFooter);
+
     /// <summary>
     /// Gets the actual frame header size based on current options.
     /// </summary>
@@ -139,7 +141,7 @@ public unsafe partial struct LZ4Encoder : IDisposable
     /// </summary>
     /// <param name="source">The data to compress. The entire source buffer will be consumed.</param>
     /// <param name="destination">The buffer to write compressed data to. Must be at least <see cref="GetMaxCompressedLength"/> in size.</param>
-    /// <returns>The total number of bytes written to the destination buffer, including header (if first call) and frame ending (if final block).</returns>
+    /// <returns>The total number of bytes written to the destination buffer, including header (if first call).</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
     /// <exception cref="LZ4Exception">Thrown when compression fails (e.g., destination buffer too small).</exception>
     /// <remarks>

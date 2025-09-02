@@ -1,19 +1,55 @@
 ﻿//using K4os.Compression.LZ4.Streams;
+using Microsoft.Win32.SafeHandles;
+using NativeCompressions.LZ4;
+using System;
+using System.Buffers;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.IO.Pipelines;
 using System.Linq;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using NativeCompressions.LZ4;
-using System.IO.Pipelines;
-using System;
-using System.Threading.Tasks;
 using System.Threading;
-using System.Buffers;
-using Microsoft.Win32.SafeHandles;
+using System.Threading.Tasks;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+
+
+//var source = new byte[] { 1, 2, 3, 4, 5 };
+//byte[][] dataChunks = [source, source, source];
+
+//// Streaming Compression
+//IBufferWriter<byte> bufferWriter = default!;
+
+//using var encoder = new LZ4Encoder();
+
+//// Compress chunks(invoke Compress multiple times)
+//foreach (var chunk in dataChunks)
+//{
+//    // get max size per streaming compress
+//    var size = encoder.GetMaxCompressedLength(chunk.Length);
+
+//    var buffer = bufferWriter.GetSpan(size);
+
+//    // written size can be zero, meaning input data was just buffered.
+//    var written = encoder.Compress(chunk, buffer);
+
+//    bufferWriter.Advance(written);
+//}
+
+//// Finalize frame(need to get size of footer with buffered-data)
+//var fotterWithBufferdDataSize = encoder.GetMaxCompressedLength(0);
+//var finalBytes = bufferWriter.GetSpan(fotterWithBufferdDataSize);
+
+//// need to call `Close` to write LZ4 frame footer
+//int finalWritten = encoder.Close(finalBytes);
+
+//bufferWriter.Advance(finalWritten);
+
+
 
 
 
@@ -39,8 +75,24 @@ Console.WriteLine(LZ4.Version);
 //await LZ4.DecompressAsync(filePipe, dest);
 
 //Console.WriteLine(dest.WrittenCount);
+// Socket socket = default!;
+
+var source = ReadOnlyMemory<byte>.Empty;
 
 
+// Parallel Compression from File to File
+//using SafeFileHandle sourceHandle = File.OpenHandle("foo.bin");
+//using var dest = new FileStream("foo.lz4", FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
+//await LZ4.CompressAsync(sourceHandle, PipeWriter.Create(dest), maxDegreeOfParallelism: null);
+
+
+
+
+using var ms = new MemoryStream();
+using SafeFileHandle sourceHandle = File.OpenHandle("foo.lz4");
+await LZ4.DecompressAsync(source, PipeWriter.Create(ms));
+
+var decompressed = ms.ToArray();
 
 //await LZ4.CompressAsync(original, dest, maxDegreeOfParallelism: 1);
 

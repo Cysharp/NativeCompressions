@@ -80,6 +80,8 @@ public static partial class LZ4
     /// </remarks>
     public static int GetMaxFrameFooterLength() => 8;  // EndMarkSize + ChecksumSize
 
+    public static int GetMaxCompressedLength(int inputSize) => GetMaxCompressedLength(inputSize, LZ4FrameOptions.Default);
+
     public static int GetMaxCompressedLength(int inputSize, in LZ4FrameOptions options)
     {
         ref var preferences_t = ref Unsafe.As<LZ4FrameOptions, LZ4F_preferences_t>(ref Unsafe.AsRef(in options));
@@ -95,8 +97,8 @@ public static partial class LZ4
     public static bool TryGetFrameInfo(ReadOnlySpan<byte> source, out LZ4FrameInfo frameInfo)
     {
         using var decoder = new LZ4Decoder();
-        
-        if(source.Length < GetMinSizeToKnowFrameHeaderLength())
+
+        if (source.Length < GetMinSizeToKnowFrameHeaderLength())
         {
             frameInfo = default;
             return false;
