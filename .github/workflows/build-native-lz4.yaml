@@ -21,7 +21,7 @@ jobs:
         submodules: recursive
         fetch-depth: 1
     - name: Setup MSYS2
-      uses: msys2/setup-msys2@v2
+      uses: msys2/setup-msys2@fb197b72ce45fb24f17bf3f807a388985654d1f2 # v2.29.0
       with:
         msystem: ${{ matrix.msys_env }}
         update: true
