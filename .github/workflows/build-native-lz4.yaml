@@ -265,8 +265,127 @@ jobs:
           name: lz4-osx-${{ matrix.arch }}
           path: artifacts/osx-${{ matrix.arch }}/*
 
+  build-ios:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+    runs-on: macos-15
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+        include:
+          - arch: arm64
+            sdk: iphoneos
+            target: aarch64-apple-ios11.0
+            cflags: "-arch arm64 -mios-version-min=11.0"
+          - arch: x86_64
+            sdk: iphonesimulator
+            target: x86_64-apple-ios11.0-simulator
+            cflags: "-arch x86_64 -mios-simulator-version-min=11.0"
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd lz4
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      - name: Build static library for iOS
+        run: |
+          SDK_PATH=$(xcrun --sdk ${{ matrix.sdk }} --show-sdk-path)
+
+          # Build static library (iOS App Store requires static linking)
+          cd lz4/lib
+          make BUILD_STATIC=yes BUILD_SHARED=no \
+            CC="clang" \
+            CFLAGS="${{ matrix.cflags }} -O3 -isysroot $SDK_PATH -DXXH_NAMESPACE=LZ4_" \
+            SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+
+          ls -la liblz4.a
+          file liblz4.a
+          lipo -info liblz4.a
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/ios-${{ matrix.arch }}
+          cp lz4/lib/liblz4.a artifacts/ios-${{ matrix.arch }}/
+      - name: Upload iOS artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: lz4-ios-${{ matrix.arch }}
+          path: artifacts/ios-${{ matrix.arch }}/*
+
+  build-android:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        abi: [armeabi-v7a, arm64-v8a, x86_64]
+        include:
+          - abi: armeabi-v7a
+            arch: arm # Unity require this for mobile app
+            target: armv7a-linux-androideabi21
+            cc: armv7a-linux-androideabi21-clang
+          - abi: arm64-v8a
+            arch: arm64 # Most mobile app
+            target: aarch64-linux-android21
+            cc: aarch64-linux-android21-clang
+          - abi: x86_64
+            arch: x86_64 # Chromebook and Google Play for PC (not emulation)
+            target: x86_64-linux-android21
+            cc: x86_64-linux-android21-clang
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd lz4
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@afb4c9964b521afb97c864b7d40b11e6911bd410 # v1.5.0
+        id: setup-ndk
+        with:
+          ndk-version: r26d
+          add-to-path: false
+      - name: Build shared library for Android
+        run: |
+          export PATH="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+
+          cd lz4/lib
+          make BUILD_STATIC=no BUILD_SHARED=yes \
+            CC="${{ matrix.cc }}" CFLAGS="-O3 -fPIC -DXXH_NAMESPACE=LZ4_" \
+            SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+          ls -la liblz4.so*
+          file liblz4.so*
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/android-${{ matrix.arch }}
+          cp lz4/lib/liblz4.so artifacts/android-${{ matrix.arch }}/
+      - name: Upload Android artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: lz4-android-${{ matrix.arch }}
+          path: artifacts/android-${{ matrix.arch }}/*
+
   package-all:
-    needs: [check_new_release, build-windows, build-windows-arm64, build-linux, build-macos]
+    needs: [check_new_release, build-windows, build-windows-arm64, build-linux, build-macos, build-ios, build-android]
     if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: write
@@ -282,6 +401,8 @@ jobs:
           mkdir -p release/runtimes/{win-x64,win-arm64}/native
           mkdir -p release/runtimes/{linux-x64,linux-arm64}/native
           mkdir -p release/runtimes/{osx-x64,osx-arm64}/native
+          mkdir -p release/runtimes/{android-arm,android-arm64,android-x64}/native
+          mkdir -p release/runtimes/{ios-arm64,ios-x64}/native
 
           # Windows
           cp artifacts/lz4-win-x64/*.dll release/runtimes/win-x64/native/lz4.dll 2>/dev/null || true
@@ -302,6 +423,25 @@ jobs:
           for file in artifacts/lz4-osx-arm64/*.dylib; do
             [ -f "$file" ] && cp "$file" release/runtimes/osx-arm64/native/liblz4.dylib && break
           done
+
+          # iOS
+          if [ -f artifacts/lz4-ios-arm64/liblz4.a ]; then
+            cp artifacts/lz4-ios-arm64/liblz4.a release/runtimes/ios-arm64/native/
+          fi
+          if [ -f artifacts/lz4-ios-x86_64/liblz4.a ]; then
+            cp artifacts/lz4-ios-x86_64/liblz4.a release/runtimes/ios-x64/native/
+          fi
+
+          # Android
+          if [ -f artifacts/lz4-android-arm/liblz4.so ]; then
+            cp artifacts/lz4-android-arm/liblz4.so release/runtimes/android-arm/native/
+          fi
+          if [ -f artifacts/lz4-android-arm64/liblz4.so ]; then
+            cp artifacts/lz4-android-arm64/liblz4.so release/runtimes/android-arm64/native/
+          fi
+          if [ -f artifacts/lz4-android-x86_64/liblz4.so ]; then
+            cp artifacts/lz4-android-x86_64/liblz4.so release/runtimes/android-x64/native/
+          fi
       - name: Create archives
         run: |
           cd release
@@ -361,6 +501,8 @@ jobs:
           mkdir -p "${DEST_BASE_PATH}/{linux-x64,linux-arm64}/native"
           mkdir -p "${DEST_BASE_PATH}/{osx-arm64,osx-x64}/native"
           mkdir -p "${DEST_BASE_PATH}/{win-arm64,win-x64}/native"
+          mkdir -p "${DEST_BASE_PATH}/{ios-arm64,ios-x64}/native"
+          mkdir -p "${DEST_BASE_PATH}/{android-arm,android-arm64,android-x64}/native"
 
           # Windows
           if [ -f artifacts/lz4-win-x64/lz4.dll ]; then
@@ -386,6 +528,25 @@ jobs:
             cp -f artifacts/lz4-osx-arm64/liblz4.dylib "${DEST_BASE_PATH}/osx-arm64/native/liblz4.dylib"
           fi
 
+          # iOS
+          if [ -f artifacts/lz4-ios-arm64/liblz4.a ]; then
+            cp -f artifacts/lz4-ios-arm64/liblz4.a "${DEST_BASE_PATH}/ios-arm64/native/liblz4.a"
+          fi
+          if [ -f artifacts/lz4-ios-x86_64/liblz4.a ]; then
+            cp -f artifacts/lz4-ios-x86_64/liblz4.a "${DEST_BASE_PATH}/ios-x64/native/liblz4.a"
+          fi
+
+          # Android
+          if [ -f artifacts/lz4-android-arm/liblz4.so ]; then
+            cp -f artifacts/lz4-android-arm/liblz4.so "${DEST_BASE_PATH}/android-arm/native/liblz4.so"
+          fi
+          if [ -f artifacts/lz4-android-arm64/liblz4.so ]; then
+            cp -f artifacts/lz4-android-arm64/liblz4.so "${DEST_BASE_PATH}/android-arm64/native/liblz4.so"
+          fi
+          if [ -f artifacts/lz4-android-x86_64/liblz4.so ]; then
+            cp -f artifacts/lz4-android-x86_64/liblz4.so "${DEST_BASE_PATH}/android-x64/native/liblz4.so"
+          fi
+
           # Commit runtime updates
           git add "${DEST_BASE_PATH}"
           git commit -m "automate: Update LZ4 native libraries to ${LATEST_TAG}"
@@ -402,7 +563,12 @@ jobs:
 
           ## Changes
           - Updated LZ4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}
-          - Updated native libraries for all platforms (Windows x64/ARM64, Linux x64/ARM64, macOS x64/ARM64)
+          - Updated native libraries for all platforms:
+            - Windows x64/ARM64
+            - Linux x64/ARM64
+            - macOS x64/ARM64
+            - Android ARM/ARM64/x64
+            - iOS ARM64/x64 (device/simulator)
 
           ## Build artifacts
           All native libraries have been built and tested in CI.
