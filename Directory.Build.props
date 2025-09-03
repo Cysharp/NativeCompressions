@@ -12,7 +12,7 @@
 		<Authors>Cysharp</Authors>
 		<Copyright>© Cysharp, Inc.</Copyright>
 		<PackageTags>compression, native</PackageTags>
-		<PackageProjectUrl>https://github.com/Cysharp/NativeCompression</PackageProjectUrl>
+		<PackageProjectUrl>https://github.com/Cysharp/NativeCompressions</PackageProjectUrl>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<RepositoryUrl>$(PackageProjectUrl)</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
