@@ -4,7 +4,6 @@ on: workflow_dispatch
 
 jobs:
   build-windows:
-    runs-on: windows-2025
     strategy:
       matrix:
         arch: [x64]
@@ -12,7 +11,10 @@ jobs:
           - arch: x64
             platform: x64
             msys_env: MINGW64
-
+    permissions:
+      contents: read
+    runs-on: windows-2025
+    timeout-minutes: 5
     steps:
     - uses: Cysharp/Actions/.github/actions/checkout@main
       with:
@@ -26,7 +28,6 @@ jobs:
         install: >-
           ${{ matrix.arch == 'x64' && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-make' || 'mingw-w64-clang-aarch64-gcc mingw-w64-clang-aarch64-make' }}
           make
-
     - name: Build DLL
       shell: msys2 {0}
       run: |
@@ -35,13 +36,11 @@ jobs:
              SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
         ls -la *.dll
         file *.dll
-
     - name: Prepare artifacts
       shell: pwsh
       run: |
         New-Item -ItemType Directory -Force -Path "artifacts/win-${{ matrix.arch }}"
         Copy-Item "lz4/lib/*.dll" -Destination "artifacts/win-${{ matrix.arch }}/lz4.dll"
-
     - name: Upload Windows artifacts
       uses: Cysharp/Actions/.github/actions/upload-artifact@main
       with:
@@ -49,13 +48,14 @@ jobs:
         path: artifacts/win-${{ matrix.arch }}/*
 
   build-windows-arm64:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
-
+    timeout-minutes: 5
     steps:
     - uses: Cysharp/Actions/.github/actions/checkout@main
       with:
         submodules: recursive
-
     - name: Build using Docker
       run: |
         docker run --rm -v $PWD:/work \
@@ -65,14 +65,11 @@ jobs:
             -DLZ4_DLL_EXPORT=1 -DXXH_NAMESPACE=LZ4_ \
             lz4.c lz4hc.c lz4frame.c xxhash.c \
             -o lz4.dll"
-
         file lz4/lib/lz4.dll
-
     - name: Prepare artifacts
       run: |
         mkdir -p artifacts/win-arm64
         cp lz4/lib/lz4.dll artifacts/win-arm64/
-
     - name: Upload artifacts
       uses: Cysharp/Actions/.github/actions/upload-artifact@main
       with:
@@ -80,7 +77,10 @@ jobs:
         path: artifacts/win-arm64/*
 
   build-linux:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     strategy:
       matrix:
         arch: [x64, arm64]
@@ -90,19 +90,16 @@ jobs:
           - arch: arm64
             cc: aarch64-linux-gnu-gcc
             packages: gcc-aarch64-linux-gnu
-
     steps:
     - uses: Cysharp/Actions/.github/actions/checkout@main
       with:
         submodules: recursive
         fetch-depth: 1
-
     - name: Install ARM64 cross-compiler
       if: matrix.arch == 'arm64'
       run: |
         sudo apt-get update
         sudo apt-get install -y ${{ matrix.packages }}
-
     - name: Build shared library
       run: |
         cd lz4/lib
@@ -111,7 +108,6 @@ jobs:
              SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
         ls -la *.so*
         file liblz4.so*
-
     - name: Prepare artifacts
       run: |
         mkdir -p artifacts/linux-${{ matrix.arch }}
@@ -121,14 +117,15 @@ jobs:
           cp -L liblz4.so liblz4.so.tmp
           mv liblz4.so.tmp liblz4.so
         fi
-
     - name: Upload Linux artifacts
       uses: Cysharp/Actions/.github/actions/upload-artifact@main
       with:
         name: lz4-linux-${{ matrix.arch }}
         path: artifacts/linux-${{ matrix.arch }}/*
+
   build-macos:
-    runs-on: macos-15
+    permissions:
+      contents: read
     strategy:
       matrix:
         arch: [x64, arm64]
@@ -137,12 +134,12 @@ jobs:
             flags: "-arch x86_64"
           - arch: arm64
             flags: "-arch arm64"
-
+    runs-on: macos-15
+    timeout-minutes: 5
     steps:
     - uses: Cysharp/Actions/.github/actions/checkout@main
       with:
         submodules: recursive
-
     - name: Build dynamic library
       run: |
         cd lz4/lib
@@ -151,7 +148,6 @@ jobs:
              SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
 
         lipo -info *.dylib
-
     - name: Prepare artifacts
       run: |
         mkdir -p artifacts/osx-${{ matrix.arch }}
@@ -163,7 +159,6 @@ jobs:
             mv "$file.tmp" "$file"
           fi
         done
-
     - name: Upload artifacts
       uses: Cysharp/Actions/.github/actions/upload-artifact@main
       with:
@@ -172,14 +167,15 @@ jobs:
 
   package-all:
     needs: [build-windows, build-windows-arm64, build-linux, build-macos]
+    permissions:
+      contents: write
     runs-on: ubuntu-24.04
-
+    timeout-minutes: 5
     steps:
     - name: Download all artifacts
       uses: Cysharp/Actions/.github/actions/download-artifact@main
       with:
         path: artifacts
-
     - name: Create .NET runtime structure
       run: |
         mkdir -p release/runtimes/{win-x64,win-arm64}/native
@@ -205,13 +201,11 @@ jobs:
         for file in artifacts/lz4-osx-arm64/*.dylib; do
           [ -f "$file" ] && cp "$file" release/runtimes/osx-arm64/native/liblz4.dylib && break
         done
-
     - name: Create archives
       run: |
         cd release
         tar czf ../lz4-native-libraries.tar.gz .
         zip -r ../lz4-native-libraries.zip .
-
     - name: Upload package
       uses: Cysharp/Actions/.github/actions/upload-artifact@main
       with:

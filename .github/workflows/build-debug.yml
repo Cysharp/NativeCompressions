@@ -11,6 +11,8 @@ on:
 
 jobs:
   # win-x64:
+  #   permissions:
+  #     contents: read
   #   runs-on: windows-2025
   #   timeout-minutes: 10
   #   steps:
@@ -22,6 +24,8 @@ jobs:
   #     - run: dotnet test -c Debug --no-build
 
   linux-x64:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -34,6 +38,8 @@ jobs:
       - run: dotnet pack -c Release --no-build
 
 #   linux-arm64:
+#     permissions:
+#       contents: read
 #     runs-on: buildjet-2vcpu-ubuntu-2204-arm
 #     timeout-minutes: 10
 #     steps:
@@ -44,14 +50,16 @@ jobs:
 #       - run: dotnet build -c Debug
 #       - run: dotnet test -c Debug --no-build
 
-  # osx-x64:
-  #   runs-on: macos-15
-  #   timeout-minutes: 10
-  #   steps:
-  #     - uses: Cysharp/Actions/.github/actions/checkout@main
-  #     - uses: Cysharp/Actions/.github/actions/setup-dotnet@main
-  #       with:
-  #         dotnet-version: 7.0.x
-  #     - run: brew uninstall --ignore-dependencies zstd
-  #     - run: dotnet build -c Debug
-  #     - run: dotnet test -c Debug --no-build
+#   osx-x64:
+#     permissions:
+#       contents: read
+#     runs-on: macos-15
+#     timeout-minutes: 10
+#     steps:
+#       - uses: Cysharp/Actions/.github/actions/checkout@main
+#       - uses: Cysharp/Actions/.github/actions/setup-dotnet@main
+#         with:
+#           dotnet-version: 7.0.x
+#       - run: brew uninstall --ignore-dependencies zstd
+#       - run: dotnet build -c Debug
+#       - run: dotnet test -c Debug --no-build
