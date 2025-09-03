@@ -11,7 +11,7 @@ on:
 
 jobs:
   # win-x64:
-  #   runs-on: windows-latest
+  #   runs-on: windows-2025
   #   timeout-minutes: 10
   #   steps:
   #     - uses: Cysharp/Actions/.github/actions/checkout@main
@@ -45,7 +45,7 @@ jobs:
 #       - run: dotnet test -c Debug --no-build
 
   # osx-x64:
-  #   runs-on: macos-latest
+  #   runs-on: macos-15
   #   timeout-minutes: 10
   #   steps:
   #     - uses: Cysharp/Actions/.github/actions/checkout@main

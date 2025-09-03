@@ -4,7 +4,7 @@ on: workflow_dispatch
 
 jobs:
   build-windows:
-    runs-on: windows-latest
+    runs-on: windows-2025
     strategy:
       matrix:
         arch: [x64]
@@ -128,7 +128,7 @@ jobs:
         name: lz4-linux-${{ matrix.arch }}
         path: artifacts/linux-${{ matrix.arch }}/*
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-15
     strategy:
       matrix:
         arch: [x64, arm64]
