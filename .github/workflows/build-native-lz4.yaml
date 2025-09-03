@@ -394,11 +394,13 @@ jobs:
           This PR updates LZ4 to the latest release `${{ needs.check_new_release.outputs.latest_tag }}` ([${{ needs.check_new_release.outputs.latest_commit }}](https://github.com/lz4/lz4/commit/${{ needs.check_new_release.outputs.latest_commit }}))
 
           ## Changes
-          - Updated LZ4 submodule to ${LATEST_TAG}
+          - Updated LZ4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}
           - Updated native libraries for all platforms (Windows x64/ARM64, Linux x64/ARM64, macOS x64/ARM64)
 
           ## Build artifacts
           All native libraries have been built and tested in CI.
+
+          @neuecc
           EOF
 
           # Create PR
