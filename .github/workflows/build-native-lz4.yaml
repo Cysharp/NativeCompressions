@@ -16,36 +16,36 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 5
     steps:
-    - uses: Cysharp/Actions/.github/actions/checkout@main
-      with:
-        submodules: recursive
-        fetch-depth: 1
-    - name: Setup MSYS2
-      uses: msys2/setup-msys2@fb197b72ce45fb24f17bf3f807a388985654d1f2 # v2.29.0
-      with:
-        msystem: ${{ matrix.msys_env }}
-        update: true
-        install: >-
-          ${{ matrix.arch == 'x64' && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-make' || 'mingw-w64-clang-aarch64-gcc mingw-w64-clang-aarch64-make' }}
-          make
-    - name: Build DLL
-      shell: msys2 {0}
-      run: |
-        cd lz4/lib
-        make BUILD_STATIC=no BUILD_SHARED=yes \
-             SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
-        ls -la *.dll
-        file *.dll
-    - name: Prepare artifacts
-      shell: pwsh
-      run: |
-        New-Item -ItemType Directory -Force -Path "artifacts/win-${{ matrix.arch }}"
-        Copy-Item "lz4/lib/*.dll" -Destination "artifacts/win-${{ matrix.arch }}/lz4.dll"
-    - name: Upload Windows artifacts
-      uses: Cysharp/Actions/.github/actions/upload-artifact@main
-      with:
-        name: lz4-win-${{ matrix.arch }}
-        path: artifacts/win-${{ matrix.arch }}/*
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@fb197b72ce45fb24f17bf3f807a388985654d1f2 # v2.29.0
+        with:
+          msystem: ${{ matrix.msys_env }}
+          update: true
+          install: >-
+            ${{ matrix.arch == 'x64' && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-make' || 'mingw-w64-clang-aarch64-gcc mingw-w64-clang-aarch64-make' }}
+            make
+      - name: Build DLL
+        shell: msys2 {0}
+        run: |
+          cd lz4/lib
+          make BUILD_STATIC=no BUILD_SHARED=yes \
+              SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+          ls -la *.dll
+          file *.dll
+      - name: Prepare artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "artifacts/win-${{ matrix.arch }}"
+          Copy-Item "lz4/lib/*.dll" -Destination "artifacts/win-${{ matrix.arch }}/lz4.dll"
+      - name: Upload Windows artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: lz4-win-${{ matrix.arch }}
+          path: artifacts/win-${{ matrix.arch }}/*
 
   build-windows-arm64:
     permissions:
@@ -53,28 +53,28 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-    - uses: Cysharp/Actions/.github/actions/checkout@main
-      with:
-        submodules: recursive
-    - name: Build using Docker
-      run: |
-        docker run --rm -v $PWD:/work \
-          mstorsjo/llvm-mingw:latest \
-          bash -c "cd /work/lz4/lib && \
-            aarch64-w64-mingw32-gcc -O3 -shared \
-            -DLZ4_DLL_EXPORT=1 -DXXH_NAMESPACE=LZ4_ \
-            lz4.c lz4hc.c lz4frame.c xxhash.c \
-            -o lz4.dll"
-        file lz4/lib/lz4.dll
-    - name: Prepare artifacts
-      run: |
-        mkdir -p artifacts/win-arm64
-        cp lz4/lib/lz4.dll artifacts/win-arm64/
-    - name: Upload artifacts
-      uses: Cysharp/Actions/.github/actions/upload-artifact@main
-      with:
-        name: lz4-win-arm64
-        path: artifacts/win-arm64/*
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+      - name: Build using Docker
+        run: |
+          docker run --rm -v $PWD:/work \
+            mstorsjo/llvm-mingw:latest \
+            bash -c "cd /work/lz4/lib && \
+              aarch64-w64-mingw32-gcc -O3 -shared \
+              -DLZ4_DLL_EXPORT=1 -DXXH_NAMESPACE=LZ4_ \
+              lz4.c lz4hc.c lz4frame.c xxhash.c \
+              -o lz4.dll"
+          file lz4/lib/lz4.dll
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/win-arm64
+          cp lz4/lib/lz4.dll artifacts/win-arm64/
+      - name: Upload artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: lz4-win-arm64
+          path: artifacts/win-arm64/*
 
   build-linux:
     permissions:
@@ -91,37 +91,37 @@ jobs:
             cc: aarch64-linux-gnu-gcc
             packages: gcc-aarch64-linux-gnu
     steps:
-    - uses: Cysharp/Actions/.github/actions/checkout@main
-      with:
-        submodules: recursive
-        fetch-depth: 1
-    - name: Install ARM64 cross-compiler
-      if: matrix.arch == 'arm64'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ${{ matrix.packages }}
-    - name: Build shared library
-      run: |
-        cd lz4/lib
-        make BUILD_STATIC=no BUILD_SHARED=yes \
-             CC="${{ matrix.cc }}" \
-             SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
-        ls -la *.so*
-        file liblz4.so*
-    - name: Prepare artifacts
-      run: |
-        mkdir -p artifacts/linux-${{ matrix.arch }}
-        cp lz4/lib/liblz4.so* artifacts/linux-${{ matrix.arch }}/
-        cd artifacts/linux-${{ matrix.arch }}
-        if [ -L liblz4.so ]; then
-          cp -L liblz4.so liblz4.so.tmp
-          mv liblz4.so.tmp liblz4.so
-        fi
-    - name: Upload Linux artifacts
-      uses: Cysharp/Actions/.github/actions/upload-artifact@main
-      with:
-        name: lz4-linux-${{ matrix.arch }}
-        path: artifacts/linux-${{ matrix.arch }}/*
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Install ARM64 cross-compiler
+        if: matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.packages }}
+      - name: Build shared library
+        run: |
+          cd lz4/lib
+          make BUILD_STATIC=no BUILD_SHARED=yes \
+              CC="${{ matrix.cc }}" \
+              SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+          ls -la *.so*
+          file liblz4.so*
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/linux-${{ matrix.arch }}
+          cp lz4/lib/liblz4.so* artifacts/linux-${{ matrix.arch }}/
+          cd artifacts/linux-${{ matrix.arch }}
+          if [ -L liblz4.so ]; then
+            cp -L liblz4.so liblz4.so.tmp
+            mv liblz4.so.tmp liblz4.so
+          fi
+      - name: Upload Linux artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: lz4-linux-${{ matrix.arch }}
+          path: artifacts/linux-${{ matrix.arch }}/*
 
   build-macos:
     permissions:
@@ -137,33 +137,33 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 5
     steps:
-    - uses: Cysharp/Actions/.github/actions/checkout@main
-      with:
-        submodules: recursive
-    - name: Build dynamic library
-      run: |
-        cd lz4/lib
-        make BUILD_STATIC=no BUILD_SHARED=yes \
-             CFLAGS="${{ matrix.flags }} -O3" \
-             SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+      - name: Build dynamic library
+        run: |
+          cd lz4/lib
+          make BUILD_STATIC=no BUILD_SHARED=yes \
+              CFLAGS="${{ matrix.flags }} -O3" \
+              SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
 
-        lipo -info *.dylib
-    - name: Prepare artifacts
-      run: |
-        mkdir -p artifacts/osx-${{ matrix.arch }}
-        cp lz4/lib/*.dylib artifacts/osx-${{ matrix.arch }}/
-        cd artifacts/osx-${{ matrix.arch }}
-        for file in *.dylib; do
-          if [ -L "$file" ]; then
-            cp -L "$file" "$file.tmp"
-            mv "$file.tmp" "$file"
-          fi
-        done
-    - name: Upload artifacts
-      uses: Cysharp/Actions/.github/actions/upload-artifact@main
-      with:
-        name: lz4-osx-${{ matrix.arch }}
-        path: artifacts/osx-${{ matrix.arch }}/*
+          lipo -info *.dylib
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/osx-${{ matrix.arch }}
+          cp lz4/lib/*.dylib artifacts/osx-${{ matrix.arch }}/
+          cd artifacts/osx-${{ matrix.arch }}
+          for file in *.dylib; do
+            if [ -L "$file" ]; then
+              cp -L "$file" "$file.tmp"
+              mv "$file.tmp" "$file"
+            fi
+          done
+      - name: Upload artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: lz4-osx-${{ matrix.arch }}
+          path: artifacts/osx-${{ matrix.arch }}/*
 
   package-all:
     needs: [build-windows, build-windows-arm64, build-linux, build-macos]
@@ -172,44 +172,44 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-    - name: Download all artifacts
-      uses: Cysharp/Actions/.github/actions/download-artifact@main
-      with:
-        path: artifacts
-    - name: Create .NET runtime structure
-      run: |
-        mkdir -p release/runtimes/{win-x64,win-arm64}/native
-        mkdir -p release/runtimes/{linux-x64,linux-arm64}/native
-        mkdir -p release/runtimes/{osx-x64,osx-arm64}/native
+      - name: Download all artifacts
+        uses: Cysharp/Actions/.github/actions/download-artifact@main
+        with:
+          path: artifacts
+      - name: Create .NET runtime structure
+        run: |
+          mkdir -p release/runtimes/{win-x64,win-arm64}/native
+          mkdir -p release/runtimes/{linux-x64,linux-arm64}/native
+          mkdir -p release/runtimes/{osx-x64,osx-arm64}/native
 
-        # Windows
-        cp artifacts/lz4-win-x64/*.dll release/runtimes/win-x64/native/lz4.dll 2>/dev/null || true
-        cp artifacts/lz4-win-arm64/*.dll release/runtimes/win-arm64/native/lz4.dll 2>/dev/null || true
+          # Windows
+          cp artifacts/lz4-win-x64/*.dll release/runtimes/win-x64/native/lz4.dll 2>/dev/null || true
+          cp artifacts/lz4-win-arm64/*.dll release/runtimes/win-arm64/native/lz4.dll 2>/dev/null || true
 
-        # Linux
-        if [ -f artifacts/lz4-linux-x64/liblz4.so ]; then
-          cp artifacts/lz4-linux-x64/liblz4.so release/runtimes/linux-x64/native/
-        fi
-        if [ -f artifacts/lz4-linux-arm64/liblz4.so ]; then
-          cp artifacts/lz4-linux-arm64/liblz4.so release/runtimes/linux-arm64/native/
-        fi
+          # Linux
+          if [ -f artifacts/lz4-linux-x64/liblz4.so ]; then
+            cp artifacts/lz4-linux-x64/liblz4.so release/runtimes/linux-x64/native/
+          fi
+          if [ -f artifacts/lz4-linux-arm64/liblz4.so ]; then
+            cp artifacts/lz4-linux-arm64/liblz4.so release/runtimes/linux-arm64/native/
+          fi
 
-        # macOS
-        for file in artifacts/lz4-osx-x64/*.dylib; do
-          [ -f "$file" ] && cp "$file" release/runtimes/osx-x64/native/liblz4.dylib && break
-        done
-        for file in artifacts/lz4-osx-arm64/*.dylib; do
-          [ -f "$file" ] && cp "$file" release/runtimes/osx-arm64/native/liblz4.dylib && break
-        done
-    - name: Create archives
-      run: |
-        cd release
-        tar czf ../lz4-native-libraries.tar.gz .
-        zip -r ../lz4-native-libraries.zip .
-    - name: Upload package
-      uses: Cysharp/Actions/.github/actions/upload-artifact@main
-      with:
-        name: lz4-native-package
-        path: |
-          lz4-native-libraries.tar.gz
-          lz4-native-libraries.zip
+          # macOS
+          for file in artifacts/lz4-osx-x64/*.dylib; do
+            [ -f "$file" ] && cp "$file" release/runtimes/osx-x64/native/liblz4.dylib && break
+          done
+          for file in artifacts/lz4-osx-arm64/*.dylib; do
+            [ -f "$file" ] && cp "$file" release/runtimes/osx-arm64/native/liblz4.dylib && break
+          done
+      - name: Create archives
+        run: |
+          cd release
+          tar czf ../lz4-native-libraries.tar.gz .
+          zip -r ../lz4-native-libraries.zip .
+      - name: Upload package
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: lz4-native-package
+          path: |
+            lz4-native-libraries.tar.gz
+            lz4-native-libraries.zip
