@@ -1,9 +1,71 @@
 name: Build-Native-LZ4
 
-on: workflow_dispatch
+# Follow LZ4 latest release by cron update
+# 1.  Check for LZ4 updates - compare submodule commit ID with latest release commit
+# 2.  If no changes, checkout in each build job, build and upload artifacts.
+# 2". If changes exist, update submodule after checkout in each build job, build and upload artifacts
+# 3.  Upload packages to GitHub Actions summary
+# 4.  If changes exist, Create a branch and PR. Separate PRs for each LZ4 release are preferred (avoid updating in a single PR)
+#     PR includes following changes.
+#     - Commit that updates the submodule
+#     - Commit that lz4 dynamic lib artifacts placed in src/NativeCompressions.LZ4.Runtime/runtimes/{platform_name}/native/{lib}
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *' # Every day at 3:00 AM (UTC)
 
 jobs:
+  check_new_release:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      needs_update: ${{ steps.check.outputs.needs_update }}
+      latest_tag: ${{ steps.check.outputs.latest_tag }}
+      latest_commit: ${{ steps.check.outputs.latest_commit }}
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Check lz4 latest release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: lz4/lz4
+        run: |
+          # Get latest release tag
+          LATEST_TAG=$(gh release view --json tagName -q '.tagName')
+          LATEST_COMMIT=$(gh api "repos/${GH_REPO}/git/refs/tags/$LATEST_TAG" --jq '.object.sha')
+
+          # Get current submodule tag (if exists)
+          cd lz4
+            CURRENT_TAG=$(git describe --tags --exact-match HEAD 2>/dev/null || echo "")
+            CURRENT_COMMIT=$(git rev-parse HEAD)
+          cd ..
+
+          echo "latest_tag=$LATEST_TAG" | tee -a "$GITHUB_OUTPUT"
+          echo "latest_commit=$LATEST_COMMIT" | tee -a "$GITHUB_OUTPUT"
+
+          echo "Current: $CURRENT_TAG ($CURRENT_COMMIT)"
+          echo "Latest:  $LATEST_TAG ($LATEST_COMMIT)"
+
+          # Compare by tag first, fallback to commit
+          if [ "$CURRENT_TAG" = "$LATEST_TAG" ]; then
+            echo "needs_update=false" | tee -a "$GITHUB_OUTPUT"
+            echo "Already up to date: $CURRENT_TAG"
+          elif [ "$CURRENT_COMMIT" != "$LATEST_COMMIT" ]; then
+            echo "needs_update=true" | tee -a "$GITHUB_OUTPUT"
+            echo "Update needed: $CURRENT_TAG -> $LATEST_TAG"
+          else
+            echo "needs_update=false" | tee -a "$GITHUB_OUTPUT"
+            echo "Already up to date: $CURRENT_COMMIT"
+          fi
+
   build-windows:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
     strategy:
       matrix:
         arch: [x64]
@@ -20,6 +82,14 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd lz4
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Setup MSYS2
         uses: msys2/setup-msys2@fb197b72ce45fb24f17bf3f807a388985654d1f2 # v2.29.0
         with:
@@ -48,6 +118,8 @@ jobs:
           path: artifacts/win-${{ matrix.arch }}/*
 
   build-windows-arm64:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: read
     runs-on: ubuntu-24.04
@@ -56,9 +128,17 @@ jobs:
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
           submodules: recursive
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd lz4
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build using Docker
         run: |
-          docker run --rm -v $PWD:/work \
+          docker run --rm -v "$PWD:/work" \
             mstorsjo/llvm-mingw:latest \
             bash -c "cd /work/lz4/lib && \
               aarch64-w64-mingw32-gcc -O3 -shared \
@@ -77,6 +157,8 @@ jobs:
           path: artifacts/win-arm64/*
 
   build-linux:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: read
     runs-on: ubuntu-24.04
@@ -95,6 +177,14 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd lz4
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Install ARM64 cross-compiler
         if: matrix.arch == 'arm64'
         run: |
@@ -104,9 +194,9 @@ jobs:
         run: |
           cd lz4/lib
           make BUILD_STATIC=no BUILD_SHARED=yes \
-              CC="${{ matrix.cc }}" \
-              SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
-          ls -la *.so*
+            CC="${{ matrix.cc }}" \
+            SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+          ls -la ./*.so*
           file liblz4.so*
       - name: Prepare artifacts
         run: |
@@ -124,6 +214,8 @@ jobs:
           path: artifacts/linux-${{ matrix.arch }}/*
 
   build-macos:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: read
     strategy:
@@ -140,6 +232,14 @@ jobs:
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
           submodules: recursive
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd lz4
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build dynamic library
         run: |
           cd lz4/lib
@@ -147,7 +247,7 @@ jobs:
               CFLAGS="${{ matrix.flags }} -O3" \
               SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
 
-          lipo -info *.dylib
+          lipo -info ./*.dylib
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/osx-${{ matrix.arch }}
@@ -166,7 +266,8 @@ jobs:
           path: artifacts/osx-${{ matrix.arch }}/*
 
   package-all:
-    needs: [build-windows, build-windows-arm64, build-linux, build-macos]
+    needs: [check_new_release, build-windows, build-windows-arm64, build-linux, build-macos]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: write
     runs-on: ubuntu-24.04
@@ -213,3 +314,101 @@ jobs:
           path: |
             lz4-native-libraries.tar.gz
             lz4-native-libraries.zip
+
+  create-pr:
+    needs: [check_new_release, package-all]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      NEW_BRANCH_NAME: "automate/lz4-${{ needs.check_new_release.outputs.latest_tag }}"
+      LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+      - name: Configure Git
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+      - name: Create new branch
+        run: git checkout -b "${NEW_BRANCH_NAME}"
+      # update submodule
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          echo "Updated lz4 submodule to ${LATEST_TAG}"
+          cd lz4
+            git fetch --tags
+            git checkout "${LATEST_TAG}"
+          cd ..
+          git add lz4
+          git commit -m "automate: Update LZ4 submodule to ${LATEST_TAG}"
+      # update runtimes
+      - name: Download all artifacts
+        uses: Cysharp/Actions/.github/actions/download-artifact@main
+        with:
+          path: artifacts
+      - name: Place new runtimes
+        env:
+          DEST_BASE_PATH: src/NativeCompressions.LZ4.Runtime/runtimes
+        run: |
+          echo "Updated lz4 runtimes to ${LATEST_TAG}"
+
+          mkdir -p "${DEST_BASE_PATH}/{linux-x64,linux-arm64}/native"
+          mkdir -p "${DEST_BASE_PATH}/{osx-arm64,osx-x64}/native"
+          mkdir -p "${DEST_BASE_PATH}/{win-arm64,win-x64}/native"
+
+          # Windows
+          if [ -f artifacts/lz4-win-x64/lz4.dll ]; then
+            cp -f artifacts/lz4-win-x64/lz4.dll "${DEST_BASE_PATH}/win-x64/native/lz4.dll"
+          fi
+          if [ -f artifacts/lz4-win-arm64/lz4.dll ]; then
+            cp -f artifacts/lz4-win-arm64/lz4.dll "${DEST_BASE_PATH}/win-arm64/native/lz4.dll"
+          fi
+
+          # Linux
+          if [ -f artifacts/lz4-linux-x64/liblz4.so ]; then
+            cp -f artifacts/lz4-linux-x64/liblz4.so "${DEST_BASE_PATH}/linux-x64/native/liblz4.so"
+          fi
+          if [ -f artifacts/lz4-linux-arm64/liblz4.so ]; then
+            cp -f artifacts/lz4-linux-arm64/liblz4.so "${DEST_BASE_PATH}/linux-arm64/native/liblz4.so"
+          fi
+
+          # macOS
+          if [ -f artifacts/lz4-osx-x64/liblz4.dylib ]; then
+            cp -f artifacts/lz4-osx-x64/liblz4.dylib "${DEST_BASE_PATH}/osx-x64/native/liblz4.dylib"
+          fi
+          if [ -f artifacts/lz4-osx-arm64/liblz4.dylib ]; then
+            cp -f artifacts/lz4-osx-arm64/liblz4.dylib "${DEST_BASE_PATH}/osx-arm64/native/liblz4.dylib"
+          fi
+
+          # Commit runtime updates
+          git add "${DEST_BASE_PATH}"
+          git commit -m "automate: Update LZ4 native libraries to ${LATEST_TAG}"
+      # create PR
+      - name: Push branch and create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Push the branch
+          git push origin "${NEW_BRANCH_NAME}"
+
+          cat <<'EOF' > artifacts/pr_body.txt
+          This PR updates LZ4 to the latest release `${{ needs.check_new_release.outputs.latest_tag }}` ([${{ needs.check_new_release.outputs.latest_commit }}](https://github.com/lz4/lz4/commit/${{ needs.check_new_release.outputs.latest_commit }}))
+
+          ## Changes
+          - Updated LZ4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}
+          - Updated native libraries for all platforms (Windows x64/ARM64, Linux x64/ARM64, macOS x64/ARM64)
+
+          ## Build artifacts
+          All native libraries have been built and tested in CI.
+
+          @neuecc
+          EOF
+
+          # Create PR
+          gh pr create --title "automate: Update LZ4 to ${LATEST_TAG}" --base main --head "${NEW_BRANCH_NAME}" --body-file artifacts/pr_body.txt
