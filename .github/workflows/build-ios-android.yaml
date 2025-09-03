@@ -4,81 +4,91 @@ on: workflow_dispatch
 
 jobs:
   liblz4-ios-x64:
-    runs-on: macos-latest
+    permissions:
+      contents: read
+    runs-on: macos-15
     timeout-minutes: 30
     defaults:
       run:
         working-directory: ./src/liblz4
     steps:
-      - uses: actions/checkout@v3
+      - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
           submodules: 'true'
       - run: rustup target add x86_64-apple-ios
       - run: cargo build --target x86_64-apple-ios --release
-      - uses: actions/upload-artifact@v3
+      - uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
           name: ios-x86_64-lz4
           path: ./target/x86_64-apple-ios/release/liblz4.a
           retention-days: 1
 
   liblz4-ios-arm64:
-    runs-on: macos-latest
+    permissions:
+      contents: read
+    runs-on: macos-15
     timeout-minutes: 30
     defaults:
       run:
         working-directory: ./src/liblz4
     steps:
-      - uses: actions/checkout@v3
+      - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
           submodules: 'true'
       - run: rustup target add aarch64-apple-ios
       - run: cargo build --target aarch64-apple-ios --release
-      - uses: actions/upload-artifact@v3
+      - uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
           name: ios-arm64-lz4
           path: ./target/aarch64-apple-ios/release/liblz4.a
           retention-days: 1
 
   liblz4-android-arm64:
-    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
       run:
         working-directory: ./src/liblz4
     steps:
-      - uses: actions/checkout@v3
+      - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
           submodules: 'true'
       - run: sudo apt-get install gcc-multilib
       - run: rustup target add aarch64-linux-android
       - run: cargo install cargo-ndk
       - run: cargo ndk -t arm64-v8a build --release
-      - uses: actions/upload-artifact@v3
+      - uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
           name: android-arm64-lz4
           path: ./target/aarch64-linux-android/release/liblz4.so
           retention-days: 1
 
   libzstd-ios-arm64:
-    runs-on: macos-latest
+    permissions:
+      contents: read
+    runs-on: macos-15
     timeout-minutes: 30
     defaults:
       run:
         working-directory: ./src/libzstd
     steps:
-      - uses: actions/checkout@v3
+      - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
           submodules: 'true'
       - run: rustup target add aarch64-apple-ios
       - run: cargo build --target aarch64-apple-ios --release
-      - uses: actions/upload-artifact@v3
+      - uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
           name: ios-arm64-zstd
           path: ./target/aarch64-apple-ios/release/libzstd.a
           retention-days: 1
 
   libzstd-android-arm64:
-    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
       run:
@@ -86,13 +96,13 @@ jobs:
     env:
       ANDROID_API_LEVEL: 21
     steps:
-      - uses: actions/checkout@v3
+      - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
           submodules: 'true'
       - run: rustup target add aarch64-linux-android
       - run: cargo install cargo-ndk
       - run: cargo ndk --platform ${{ env.ANDROID_API_LEVEL }} --target arm64-v8a --bindgen build --release
-      - uses: actions/upload-artifact@v3
+      - uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
           name: android-arm64-zstd
           path: ./target/aarch64-linux-android/release/libzstd.so
