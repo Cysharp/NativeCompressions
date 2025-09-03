@@ -5,6 +5,8 @@ on: workflow_dispatch
 jobs:
   # win-x64
   win-x64-lz4:
+    permissions:
+      contents: read
     runs-on: windows-2019
     timeout-minutes: 30
     defaults:
@@ -23,6 +25,8 @@ jobs:
           retention-days: 1
 
   win-x64-zstd:
+    permissions:
+      contents: read
     runs-on: windows-2019
     timeout-minutes: 30
     defaults:
@@ -42,6 +46,8 @@ jobs:
 
   # linux-x64
   linux-x64-lz4:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -60,6 +66,8 @@ jobs:
           retention-days: 1
 
   linux-x64-zstd:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -79,6 +87,8 @@ jobs:
 
   # linux-arm64
   linux-arm64-lz4:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     container: ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge
     timeout-minutes: 30
@@ -102,6 +112,8 @@ jobs:
           retention-days: 1
 
   linux-arm64-zstd:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     container: ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge
     timeout-minutes: 30
@@ -126,6 +138,8 @@ jobs:
 
   # osx-x64
   osx-x64-lz4:
+    permissions:
+      contents: read
     runs-on: macos-15
     timeout-minutes: 30
     defaults:
@@ -144,6 +158,8 @@ jobs:
           retention-days: 1
 
   osx-x64-zstd:
+    permissions:
+      contents: read
     runs-on: macos-15
     timeout-minutes: 30
     defaults:
@@ -163,6 +179,8 @@ jobs:
 
   # osx-arm64
   osx-arm64-lz4:
+    permissions:
+      contents: read
     runs-on: macos-15
     timeout-minutes: 30
     defaults:
@@ -181,6 +199,8 @@ jobs:
           retention-days: 1
 
   osx-arm64-zstd:
+    permissions:
+      contents: read
     runs-on: macos-15
     timeout-minutes: 30
     defaults:
@@ -201,6 +221,8 @@ jobs:
   # download binary and git push
 
   git-push:
+    permissions:
+      contents: write
     needs: [win-x64-lz4, win-x64-zstd, linux-x64-lz4, linux-x64-zstd, linux-arm64-lz4, linux-arm64-zstd, osx-x64-lz4, osx-x64-zstd, osx-arm64-lz4, osx-arm64-zstd]
     runs-on: ubuntu-24.04
     timeout-minutes: 10

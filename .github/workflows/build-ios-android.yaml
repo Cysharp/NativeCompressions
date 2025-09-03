@@ -4,6 +4,8 @@ on: workflow_dispatch
 
 jobs:
   liblz4-ios-x64:
+    permissions:
+      contents: read
     runs-on: macos-15
     timeout-minutes: 30
     defaults:
@@ -22,6 +24,8 @@ jobs:
           retention-days: 1
 
   liblz4-ios-arm64:
+    permissions:
+      contents: read
     runs-on: macos-15
     timeout-minutes: 30
     defaults:
@@ -40,6 +44,8 @@ jobs:
           retention-days: 1
 
   liblz4-android-arm64:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -60,6 +66,8 @@ jobs:
           retention-days: 1
 
   libzstd-ios-arm64:
+    permissions:
+      contents: read
     runs-on: macos-15
     timeout-minutes: 30
     defaults:
@@ -78,6 +86,8 @@ jobs:
           retention-days: 1
 
   libzstd-android-arm64:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:

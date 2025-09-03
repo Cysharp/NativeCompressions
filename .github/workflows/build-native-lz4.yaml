@@ -11,6 +11,8 @@ jobs:
           - arch: x64
             platform: x64
             msys_env: MINGW64
+    permissions:
+      contents: read
     runs-on: windows-2025
     timeout-minutes: 5
     steps:
@@ -46,6 +48,8 @@ jobs:
         path: artifacts/win-${{ matrix.arch }}/*
 
   build-windows-arm64:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -73,6 +77,8 @@ jobs:
         path: artifacts/win-arm64/*
 
   build-linux:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     strategy:
@@ -118,6 +124,8 @@ jobs:
         path: artifacts/linux-${{ matrix.arch }}/*
 
   build-macos:
+    permissions:
+      contents: read
     strategy:
       matrix:
         arch: [x64, arm64]
@@ -159,6 +167,8 @@ jobs:
 
   package-all:
     needs: [build-windows, build-windows-arm64, build-linux, build-macos]
+    permissions:
+      contents: write
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
