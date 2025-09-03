@@ -13,6 +13,54 @@ jobs:
   #   - サブモジュールを更新したコミット
   #   - ビルドした成果物をsrc/NativeCompressions.LZ4.Runtime/runtimesに配置
 
+  check_new_release:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      needs_update: ${{ steps.check.outputs.needs_update }}
+      latest_tag: ${{ steps.check.outputs.latest_tag }}
+      latest_commit: ${{ steps.check.outputs.latest_commit }}
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Check lz4 latest release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: lz4/lz4
+        run: |
+          # Get latest release tag
+          LATEST_TAG=$(gh release view --json tagName -q '.tagName')
+          LATEST_COMMIT=$(gh api "repos/${GH_REPO}/git/refs/tags/$LATEST_TAG" --jq '.object.sha')
+
+          # Get current submodule tag (if exists)
+          cd lz4
+            CURRENT_TAG=$(git describe --tags --exact-match HEAD 2>/dev/null || echo "")
+            CURRENT_COMMIT=$(git rev-parse HEAD)
+          cd ..
+
+          echo "latest_tag=$LATEST_TAG" | tee -a "$GITHUB_OUTPUT"
+          echo "latest_commit=$LATEST_COMMIT" | tee -a "$GITHUB_OUTPUT"
+
+          echo "Current: $CURRENT_TAG ($CURRENT_COMMIT)"
+          echo "Latest:  $LATEST_TAG ($LATEST_COMMIT)"
+
+          # Compare by tag first, fallback to commit
+          if [ "$CURRENT_TAG" = "$LATEST_TAG" ]; then
+            echo "needs_update=false" | tee -a "$GITHUB_OUTPUT"
+            echo "Already up to date: $CURRENT_TAG"
+          elif [ "$CURRENT_COMMIT" != "$LATEST_COMMIT" ]; then
+            echo "needs_update=true" | tee -a "$GITHUB_OUTPUT"
+            echo "Update needed: $CURRENT_TAG -> $LATEST_TAG"
+          else
+            echo "needs_update=false" | tee -a "$GITHUB_OUTPUT"
+            echo "Already up to date: $CURRENT_COMMIT"
+          fi
+
   build-windows:
     strategy:
       matrix:
