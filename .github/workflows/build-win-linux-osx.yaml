@@ -126,7 +126,7 @@ jobs:
 
   # osx-x64
   osx-x64-lz4:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 30
     defaults:
       run:
@@ -144,7 +144,7 @@ jobs:
           retention-days: 1
 
   osx-x64-zstd:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 30
     defaults:
       run:
@@ -163,7 +163,7 @@ jobs:
 
   # osx-arm64
   osx-arm64-lz4:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 30
     defaults:
       run:
@@ -181,7 +181,7 @@ jobs:
           retention-days: 1
 
   osx-arm64-zstd:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 30
     defaults:
       run:

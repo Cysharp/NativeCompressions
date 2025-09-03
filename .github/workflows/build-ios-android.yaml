@@ -4,7 +4,7 @@ on: workflow_dispatch
 
 jobs:
   liblz4-ios-x64:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 30
     defaults:
       run:
@@ -22,7 +22,7 @@ jobs:
           retention-days: 1
 
   liblz4-ios-arm64:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 30
     defaults:
       run:
@@ -60,7 +60,7 @@ jobs:
           retention-days: 1
 
   libzstd-ios-arm64:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 30
     defaults:
       run:
