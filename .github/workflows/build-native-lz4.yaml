@@ -1,8 +1,18 @@
+# Follow LZ4 latest release by cron update
 name: Build-Native-LZ4
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
 
 jobs:
+  # LZ4の更新をチェック - submoduleのcommit id を見て、最新リリースのコミットと比較
+  # 変化なければシカト
+  # 変化あれば、各ビルドジョブにてcheckout後にsubmoduleを更新、ビルドして成果物をアップロード
+  # ブランチを切って、PRを作成する。LZ4のリリースごとに別のPRが望ましい。(1つのPRにして更新するのは避ける)
+  # PRは以下を含む
+  #   - サブモジュールを更新したコミット
+  #   - ビルドした成果物をsrc/NativeCompressions.LZ4.Runtime/runtimesに配置
+
   build-windows:
     strategy:
       matrix:
