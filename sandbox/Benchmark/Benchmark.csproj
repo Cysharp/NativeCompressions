@@ -12,6 +12,10 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <Compile Include="..\..\tests\NativeCompressions.Tests\NativeMethodsLoader.cs" Link="NativeMethodsLoader.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <None Include="..\..\resources\silesia.tar.lz4" Link="silesia.tar.lz4">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </None>

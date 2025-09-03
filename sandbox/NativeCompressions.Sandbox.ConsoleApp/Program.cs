@@ -17,8 +17,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
-
-
+Console.WriteLine(LZ4.Version);
 
 var linkedCompressed = File.ReadAllBytes("silesia.tar.lz4");
 var original = LZ4.Decompress(linkedCompressed);
