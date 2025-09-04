@@ -12,7 +12,7 @@ internal static class NativeMethodsLoader
     // win => __DllName, __DllName.dll
     // linux, osx => __DllName.so, __DllName.dylib
 
-    const string __DllName = "lz4";
+    const string __DllName = "lz4"; // osx, linux = liblz4
 
     [ModuleInitializer]
     public static void Initialize()
@@ -24,41 +24,39 @@ internal static class NativeMethodsLoader
     {
         if (libraryName == __DllName)
         {
-            var path = "runtimes/";
-            var extension = "";
+            var name = __DllName;
+            var ext = "";
+            var prefix = "";
+            var platform = "";
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                path += "win-";
-                extension = ".dll";
+                platform = "win";
+                prefix = "";
+                ext = ".dll";
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                path += "osx-";
-                extension = ".dylib";
+                platform = "osx";
+                prefix = "lib";
+                ext = ".dylib";
             }
             else
             {
-                path += "linux-";
-                extension = ".so";
+                platform = "linux";
+                prefix = "lib";
+                ext = ".so";
             }
 
-            if (RuntimeInformation.OSArchitecture == Architecture.X86)
+            var arch = RuntimeInformation.OSArchitecture switch
             {
-                path += "x86";
-            }
-            else if (RuntimeInformation.OSArchitecture == Architecture.X64)
-            {
-                path += "x64";
-            }
-            else if (RuntimeInformation.OSArchitecture == Architecture.Arm64)
-            {
-                path += "arm64";
-            }
+                Architecture.Arm64 => "arm64",
+                Architecture.X64 => "x64",
+                Architecture.X86 => "x86",
+                _ => throw new NotSupportedException(),
+            };
 
-            path += "/native/" + __DllName + extension;
-
-            return NativeLibrary.Load(Path.Combine(AppContext.BaseDirectory, path), assembly, searchPath);
+            return NativeLibrary.Load(Path.Combine($"runtimes/{platform}-{arch}/native/{prefix}{name}{ext}"));
         }
 
         return IntPtr.Zero;

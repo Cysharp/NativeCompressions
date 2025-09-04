@@ -1,6 +1,8 @@
 ﻿using Microsoft.Win32.SafeHandles;
+using NativeCompressions.LZ4.Internal;
 using NativeCompressions.LZ4.Raw;
 using System.Buffers;
+using System.Diagnostics;
 using System.IO.Pipelines;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
@@ -204,34 +206,39 @@ public static partial class LZ4
             var outputProducers = new Task[threadCount];
             for (int i = 0; i < outputProducers.Length; i++)
             {
+                var producerId = i;
                 outputProducers[i] = Task.Run(async () =>
                 {
-                    using var encoder = new LZ4Encoder(options, dictionary) { IsWriteHeader = false };
-
-                    while (true)
+                    using (LZ4ActivitySource.Start("InputCompressLoop", tagKey: "LoopId", tagValue: producerId))
                     {
-                        var id = Interlocked.Increment(ref bufferId);
-                        var offset = unchecked(id * actualChunkSize);
-                        if (offset < 0) break; // overflow
-
-                        var remaining = source.Length - offset;
-                        if (remaining <= 0)
+                        ActivityContext? linkContext = null;
+                        using var encoder = new LZ4Encoder(options, dictionary) { IsWriteHeader = false };
+                        while (true)
                         {
-                            break;
+                            var id = Interlocked.Increment(ref bufferId);
+                            var offset = unchecked(id * actualChunkSize);
+                            if (offset < 0) break; // overflow
+
+                            var remaining = source.Length - offset;
+                            if (remaining <= 0) break;
+
+                            var src = source.Span.Slice(offset, Math.Min(remaining, actualChunkSize));
+                            var bufferLength = encoder.GetMaxCompressedLength(src.Length, includingHeader: false, includingFooter: false);
+                            var dest = ArrayPool<byte>.Shared.Rent(bufferLength);
+
+                            int written;
+                            using (LZ4ActivitySource.Start("Compress", ref linkContext))
+                            {
+                                written = encoder.Compress(src, dest);
+                            }
+
+                            await outputChannel.Writer.WriteAsync(new CompressionBuffer
+                            {
+                                CompressedBuffer = dest,
+                                Count = written,
+                                Id = id
+                            }, channelToken.Token);
                         }
-
-                        var src = source.Span.Slice(offset, Math.Min(remaining, actualChunkSize));
-                        var bufferLength = encoder.GetMaxCompressedLength(src.Length, includingHeader: false, includingFooter: false);
-                        var dest = ArrayPool<byte>.Shared.Rent(bufferLength);
-
-                        var written = encoder.Compress(src, dest);
-
-                        await outputChannel.Writer.WriteAsync(new CompressionBuffer
-                        {
-                            CompressedBuffer = dest,
-                            Count = written,
-                            Id = id
-                        }, channelToken.Token);
                     }
                 });
             }
@@ -676,11 +683,14 @@ public static partial class LZ4
         // common operation to write compressed buffer to destination
         return Task.Run(async () =>
         {
+            using var _ = LZ4ActivitySource.Start("WriteToDestinationLoop");
+
             var nextId = 0; // id for write
             var reader = outputChannel.Reader;
             var buffers = new MiniPriorityQueue<CompressionBuffer>();
             try
             {
+                ActivityContext? linkContext = null;
                 while (await reader.WaitToReadAsync(channelToken.Token))
                 {
                     while (reader.TryRead(out var compressedBuffer))
@@ -692,8 +702,11 @@ public static partial class LZ4
                             var source = buffers.Dequeue();
                             nextId++;
 
-                            await destination.WriteAsync(source.CompressedBuffer.AsMemory(0, source.Count), channelToken.Token); // write directly(don't use GetSpan/Advance API)
-                            ArrayPool<byte>.Shared.Return(source.CompressedBuffer, clearArray: false);
+                            using (LZ4ActivitySource.Start("WriteCompressedBuffer", ref linkContext))
+                            {
+                                await destination.WriteAsync(source.CompressedBuffer.AsMemory(0, source.Count), channelToken.Token); // write directly(don't use GetSpan/Advance API)
+                                ArrayPool<byte>.Shared.Return(source.CompressedBuffer, clearArray: false);
+                            }
                         }
                     }
                 }

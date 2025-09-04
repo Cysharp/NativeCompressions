@@ -5,6 +5,7 @@
   <Folder Name="/sandbox/">
     <Project Path="sandbox/Benchmark/Benchmark.csproj" />
     <Project Path="sandbox/NativeCompressions.Sandbox.ConsoleApp/NativeCompressions.Sandbox.ConsoleApp.csproj" />
+    <Project Path="sandbox/Profiling/Profiling.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/NativeCompressions.LZ4.Core/NativeCompressions.LZ4.Core.csproj" />

@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace NativeCompressions.LZ4;
+namespace NativeCompressions.LZ4.Internal;
 
 // use PriorityQueue<,> is easy to use but not available in netstandard2.1
 // this simple implementation should be effective in a small size.
