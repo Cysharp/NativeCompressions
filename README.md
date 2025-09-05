@@ -16,7 +16,7 @@ We chose native bindings over Pure C# implementation because compression library
 LZ4 and ZStandard are created by the same author [Cyan4973](https://github.com/Cyan4973), showing high performance against competitors in their respective domains (LZ4 vs Snappy / Brotli vs ZStandard), and are widely used as industry standards.
 
 > [!NOTE]
-> This library is currently in preview. Currently supports netstandard2.1;net5.0;net6.0;net7.0;net8.0;net9.0 and platforms are win-x64/arm64, linux-x64/arm64, osx-x64/arm64. Currently only LZ4 compression algorithm is available. We will sequentially add ZStandard support. Unity support (including iOS IL2CPP builds) is also planned.
+> This library is currently in preview. Currently only LZ4 compression algorithm is available. We will sequentially add ZStandard support. Currently supports netstandard2.1, all target-platforms(win-x64/arm64, osx-x64/arm64, linux-x64/arm64, ios-x64/arm64, android-x64/arm/arm64) and Unity.
 
 LZ4 API implementation is complete. We are collecting feedback during this preview period.
 
@@ -35,6 +35,8 @@ using NativeCompressions.LZ4;
 byte[] compressed = LZ4.Compress(sourceData);
 byte[] decompressed = LZ4.Decompress(compressed);
 ```
+
+Install for Unity, see [Unity](#unity) section.
 
 NOTE: As of v0.1, the API is only `NativeCompressions.LZ4`, but ZStandard will be added soon.
 
@@ -250,9 +252,13 @@ ZStandard
 ---
 Work in progress.
 
+Telemetry
+---
+TODO
+
 Unity
 ---
-Work in progress.
+TODO
 
 License
 ---
