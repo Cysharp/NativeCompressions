@@ -21,6 +21,11 @@
 		<ProjectReference Include="NativeCompressions.LZ4.Runtime.osx-x64.csproj" />
 		<ProjectReference Include="NativeCompressions.LZ4.Runtime.win-arm64.csproj" />
 		<ProjectReference Include="NativeCompressions.LZ4.Runtime.win-x64.csproj" />
+    <ProjectReference Include="NativeCompressions.LZ4.Runtime.android-arm.csproj" />
+    <ProjectReference Include="NativeCompressions.LZ4.Runtime.android-arm64.csproj" />
+    <ProjectReference Include="NativeCompressions.LZ4.Runtime.android-x64.csproj" />
+    <ProjectReference Include="NativeCompressions.LZ4.Runtime.ios-arm64.csproj" />
+    <ProjectReference Include="NativeCompressions.LZ4.Runtime.ios-x64.csproj" />
 	</ItemGroup>
 
 </Project>

@@ -116,6 +116,12 @@ nuget/*.unitypackage
 .idea/
 
 # Unity
+sandbox/UnityApp/Logs
+sandbox/UnityApp/Temp
+sandbox/UnityApp/Library
+sandbox/UnityApp/UserSettings
+sandbox/UnityApp/*.sln
+sandbox/UnityApp/*.csproj
 
 # native build
 _tmp
