@@ -1,0 +1,74 @@
+fileFormatVersion: 2
+guid: 5afb5e5129754b98baa47a7ca1cc60f1
+labels:
+- NuGetForUnity
+PluginImporter:
+  externalObjects: {}
+  serializedVersion: 3
+  iconMap: {}
+  executionOrder: {}
+  defineConstraints: []
+  isPreloaded: 0
+  isOverridable: 0
+  isExplicitlyReferenced: 0
+  validateReferences: 1
+  platformData:
+    Android:
+      enabled: 0
+      settings:
+        Is16KbAligned: false
+    Any:
+      enabled: 0
+      settings:
+        'Exclude ': 1
+        Exclude Android: 1
+        Exclude Bratwurst: 1
+        Exclude CloudRendering: 1
+        Exclude Editor: 1
+        Exclude EmbeddedLinux: 1
+        Exclude GameCoreScarlett: 1
+        Exclude GameCoreXboxOne: 1
+        Exclude Kepler: 1
+        Exclude Linux64: 1
+        Exclude OSXUniversal: 1
+        Exclude PS4: 1
+        Exclude PS5: 1
+        Exclude QNX: 1
+        Exclude ReservedCFE: 1
+        Exclude Switch: 1
+        Exclude VisionOS: 1
+        Exclude WebGL: 1
+        Exclude Win: 1
+        Exclude Win64: 1
+        Exclude WindowsStoreApps: 1
+        Exclude XboxOne: 1
+        Exclude iOS: 1
+        Exclude tvOS: 1
+    Editor:
+      enabled: 1
+      settings:
+        CPU: x86_64
+        DefaultValueInitialized: true
+        OS: Linux
+    Linux64:
+      enabled: 1
+      settings:
+        CPU: x86_64
+    OSXUniversal:
+      enabled: 0
+      settings: {}
+    Win:
+      enabled: 0
+      settings: {}
+    Win64:
+      enabled: 0
+      settings: {}
+    WindowsStoreApps:
+      enabled: 0
+      settings: {}
+    iOS:
+      enabled: 0
+      settings: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

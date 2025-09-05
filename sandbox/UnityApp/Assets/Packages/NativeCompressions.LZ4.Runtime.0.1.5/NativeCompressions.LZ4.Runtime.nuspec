@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>NativeCompressions.LZ4.Runtime</id>
+    <version>0.1.5</version>
+    <authors>Cysharp</authors>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <icon>Icon.png</icon>
+    <readme>README.md</readme>
+    <projectUrl>https://github.com/Cysharp/NativeCompressions</projectUrl>
+    <description>LZ4 native runtimes for NativeCompressions.LZ4.</description>
+    <copyright>© Cysharp, Inc.</copyright>
+    <tags>compression, native</tags>
+    <repository type="git" url="https://github.com/Cysharp/NativeCompressions" commit="b65f33d2aae67ba54e79095b8834a2441a50d2ad" />
+    <dependencies>
+      <group targetFramework=".NETStandard2.1">
+        <dependency id="NativeCompressions.LZ4.Runtime.android-arm" version="0.1.5" exclude="Build,Analyzers" />
+        <dependency id="NativeCompressions.LZ4.Runtime.android-arm64" version="0.1.5" exclude="Build,Analyzers" />
+        <dependency id="NativeCompressions.LZ4.Runtime.android-x64" version="0.1.5" exclude="Build,Analyzers" />
+        <dependency id="NativeCompressions.LZ4.Runtime.ios-arm64" version="0.1.5" exclude="Build,Analyzers" />
+        <dependency id="NativeCompressions.LZ4.Runtime.ios-x64" version="0.1.5" exclude="Build,Analyzers" />
+        <dependency id="NativeCompressions.LZ4.Runtime.linux-arm64" version="0.1.5" exclude="Build,Analyzers" />
+        <dependency id="NativeCompressions.LZ4.Runtime.linux-x64" version="0.1.5" exclude="Build,Analyzers" />
+        <dependency id="NativeCompressions.LZ4.Runtime.osx-arm64" version="0.1.5" exclude="Build,Analyzers" />
+        <dependency id="NativeCompressions.LZ4.Runtime.osx-x64" version="0.1.5" exclude="Build,Analyzers" />
+        <dependency id="NativeCompressions.LZ4.Runtime.win-arm64" version="0.1.5" exclude="Build,Analyzers" />
+        <dependency id="NativeCompressions.LZ4.Runtime.win-x64" version="0.1.5" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>

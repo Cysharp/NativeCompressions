@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>NativeCompressions.LZ4</id>
+    <version>0.1.5</version>
+    <authors>Cysharp</authors>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <icon>Icon.png</icon>
+    <readme>README.md</readme>
+    <projectUrl>https://github.com/Cysharp/NativeCompressions</projectUrl>
+    <description>Native LZ4 high-performance streaming compression for .NET.</description>
+    <copyright>© Cysharp, Inc.</copyright>
+    <tags>compression, native</tags>
+    <repository type="git" url="https://github.com/Cysharp/NativeCompressions" commit="b65f33d2aae67ba54e79095b8834a2441a50d2ad" />
+    <dependencies>
+      <group targetFramework="net8.0">
+        <dependency id="NativeCompressions.LZ4.Core" version="0.1.5" exclude="Build,Analyzers" />
+        <dependency id="NativeCompressions.LZ4.Runtime" version="0.1.5" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework="net9.0">
+        <dependency id="NativeCompressions.LZ4.Core" version="0.1.5" exclude="Build,Analyzers" />
+        <dependency id="NativeCompressions.LZ4.Runtime" version="0.1.5" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework=".NETStandard2.1">
+        <dependency id="NativeCompressions.LZ4.Core" version="0.1.5" exclude="Build,Analyzers" />
+        <dependency id="NativeCompressions.LZ4.Runtime" version="0.1.5" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>

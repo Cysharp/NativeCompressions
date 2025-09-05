@@ -55,10 +55,28 @@
             ]
         },
         {
+            "cpuArchitecture": "ARM",
+            "editorCpuArchitecture": "",
+            "editorOperatingSystem": "Windows",
+            "runtime": "win-arm64",
+            "supportedPlatformTargets": [
+                "StandaloneWindows64"
+            ]
+        },
+        {
             "cpuArchitecture": "x86_64",
             "editorCpuArchitecture": "x86_64",
             "editorOperatingSystem": "Linux",
             "runtime": "linux-x64",
+            "supportedPlatformTargets": [
+                "StandaloneLinux64"
+            ]
+        },
+        {
+            "cpuArchitecture": "ARM",
+            "editorCpuArchitecture": "",
+            "editorOperatingSystem": "Linux",
+            "runtime": "linux-arm64",
             "supportedPlatformTargets": [
                 "StandaloneLinux64"
             ]
@@ -73,6 +91,15 @@
             ]
         },
         {
+            "cpuArchitecture": "ARM",
+            "editorCpuArchitecture": "",
+            "editorOperatingSystem": "",
+            "runtime": "android-arm",
+            "supportedPlatformTargets": [
+                "Android"
+            ]
+        },
+        {
             "cpuArchitecture": "ARM64",
             "editorCpuArchitecture": "",
             "editorOperatingSystem": "",
@@ -82,10 +109,28 @@
             ]
         },
         {
+            "cpuArchitecture": "x86_64",
+            "editorCpuArchitecture": "",
+            "editorOperatingSystem": "",
+            "runtime": "android-x64",
+            "supportedPlatformTargets": [
+                "Android"
+            ]
+        },
+        {
             "cpuArchitecture": "",
             "editorCpuArchitecture": "",
             "editorOperatingSystem": "",
             "runtime": "ios",
+            "supportedPlatformTargets": [
+                "iOS"
+            ]
+        },
+        {
+            "cpuArchitecture": "x86_64",
+            "editorCpuArchitecture": "",
+            "editorOperatingSystem": "",
+            "runtime": "ios-x64",
             "supportedPlatformTargets": [
                 "iOS"
             ]
