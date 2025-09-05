@@ -55,7 +55,7 @@
             ]
         },
         {
-            "cpuArchitecture": "ARM",
+            "cpuArchitecture": "ARM64",
             "editorCpuArchitecture": "",
             "editorOperatingSystem": "Windows",
             "runtime": "win-arm64",
@@ -73,7 +73,7 @@
             ]
         },
         {
-            "cpuArchitecture": "ARM",
+            "cpuArchitecture": "ARM64",
             "editorCpuArchitecture": "",
             "editorOperatingSystem": "Linux",
             "runtime": "linux-arm64",
