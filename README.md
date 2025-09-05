@@ -258,7 +258,13 @@ TODO
 
 Unity
 ---
-TODO
+Install `NativeCompressions` from NuGet using [NuGetForUnity](https://github.com/GlitchEnzo/NuGetForUnity). Open Window from NuGet -> Manage NuGet Packages, Search "NativeCompressions" and Press Install.
+
+The `NativeCompressions` package includes all runtimes. If you want to install only specific runtimes, please install the `Core` package and `Runtime.***` packages separately.
+
+NuGetForUnity basically handles native runtimes correctly, but there are some that are not currently supported. For example, win-arm64, linux-arm64, android-arm, android-x64, and ios-x64 cannot be imported. As a workaround, you can replace `ProjectSettings/Packages/com.github-glitchenzo.nugetforunity/NativeRuntimeSettings.json` with this [NativeRuntimeSettings.json](https://github.com/Cysharp/NativeCompressions/blob/edf63c2/sandbox/UnityApp/ProjectSettings/Packages/com.github-glitchenzo.nugetforunity/NativeRuntimeSettings.json) to enable import support. I have submitted a PR to NuGetForUnity to support this by default, but until that is released, please use the above workaround.
+
+The current preview does not support IL2CPP builds for iOS. We plan to support this in the official release. It works without issues on all other platforms.
 
 License
 ---

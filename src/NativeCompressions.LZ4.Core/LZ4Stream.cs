@@ -74,7 +74,8 @@ public sealed class LZ4Stream : Stream
     public override void WriteByte(byte value)
     {
         ValidateDisposed();
-        Span<byte> span = [value];
+        Span<byte> span = stackalloc byte[1];
+        span[0] = value;
         WriteCore(span);
     }
 
