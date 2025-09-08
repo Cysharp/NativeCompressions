@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NativeCompressions.LZ4;
+using OpenTelemetry;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -13,6 +14,7 @@ using System.Diagnostics;
 // git clone https://github.com/SigNoz/signoz.git
 // cd signoz/deploy/docker
 // docker compose up
+Environment.SetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"); // 4317 or 4318
 
 // args = ["--max-degree-of-parallelism", "4"];
 
@@ -29,26 +31,23 @@ builder.Logging.AddOpenTelemetry(logging =>
 
 // AddOpenTelemetryExporters
 builder.Services.AddOpenTelemetry()
+    .UseOtlpExporter()
     .ConfigureResource(resource =>
     {
         resource.AddService("NativeCompressions Profiling App");
     })
     .WithMetrics(metrics =>
     {
-        metrics.AddRuntimeInstrumentation()
-            .AddOtlpExporter(options => options.Endpoint = endPoint);
+        metrics.AddRuntimeInstrumentation();
     })
     .WithTracing(tracing =>
     {
         tracing.SetSampler(new AlwaysOnSampler())
             .AddSource("NativeCompressions.LZ4")
-            .AddSource("ProfilingApp")
-            .AddOtlpExporter(options => options.Endpoint = endPoint);
-        // .AddConsoleExporter(); // debug
+            .AddSource("ProfilingApp");
     })
     .WithLogging(logging =>
     {
-        logging.AddOtlpExporter(options => options.Endpoint = endPoint);
     });
 
 // Use ConsoleAppFramework
@@ -69,10 +68,4 @@ app.Add("", async ([FromServices] IServiceProvider serviceProvider, [FromService
     logger.LogInformation("Multithreading Compress Count:" + count + "B");
 });
 
-// Quic hack to start opentelemetly host initialize...
-var services = ConsoleApp.ServiceProvider!.GetRequiredService<IEnumerable<IHostedService>>();
-foreach (var item in services) await item.StartAsync(CancellationToken.None);
-
 await app.RunAsync(args);
-
-foreach (var item in services) await item.StopAsync(CancellationToken.None);
