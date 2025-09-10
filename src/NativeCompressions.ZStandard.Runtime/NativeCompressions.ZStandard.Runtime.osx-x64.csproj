@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.1</TargetFramework>
+		<Nullable>enable</Nullable>
+		<!-- Not include this dll, only native dlls. -->
+		<IncludeBuildOutput>false</IncludeBuildOutput>
+		<IncludeContentInPack>true</IncludeContentInPack>
+		<NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
+		<Description>ZStandard native runtime for osx-x64.</Description>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Remove="runtimes\**" />
+		<None Include="runtimes\osx-x64\native\libzstd.dylib" PackagePath="runtimes\osx-x64\native\" Pack="true">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+</Project>

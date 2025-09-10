@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.1</TargetFramework>
+		<Nullable>enable</Nullable>
+		<!-- Not include this dll, only native dlls. -->
+		<IncludeBuildOutput>false</IncludeBuildOutput>
+		<IncludeContentInPack>true</IncludeContentInPack>
+		<NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
+		<Description>ZStandard native runtimes for NativeCompressions.ZStandard.</Description>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Remove="runtimes\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="NativeCompressions.ZStandard.Runtime.linux-arm64.csproj" />
+		<ProjectReference Include="NativeCompressions.ZStandard.Runtime.linux-x64.csproj" />
+		<ProjectReference Include="NativeCompressions.ZStandard.Runtime.osx-arm64.csproj" />
+		<ProjectReference Include="NativeCompressions.ZStandard.Runtime.osx-x64.csproj" />
+		<ProjectReference Include="NativeCompressions.ZStandard.Runtime.win-arm64.csproj" />
+		<ProjectReference Include="NativeCompressions.ZStandard.Runtime.win-x64.csproj" />
+    <ProjectReference Include="NativeCompressions.ZStandard.Runtime.android-arm.csproj" />
+    <ProjectReference Include="NativeCompressions.ZStandard.Runtime.android-arm64.csproj" />
+    <ProjectReference Include="NativeCompressions.ZStandard.Runtime.android-x64.csproj" />
+    <ProjectReference Include="NativeCompressions.ZStandard.Runtime.ios-arm64.csproj" />
+    <ProjectReference Include="NativeCompressions.ZStandard.Runtime.ios-x64.csproj" />
+	</ItemGroup>
+
+</Project>

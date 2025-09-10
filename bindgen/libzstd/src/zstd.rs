@@ -680,3 +680,132 @@ extern "C" {
 extern "C" {
     pub fn ZSTD_sizeof_DDict(ddict: *const ZSTD_DDict) -> usize;
 }
+extern "C" {
+    #[doc = " ZDICT_trainFromBuffer():\n  Train a dictionary from an array of samples.\n  Redirect towards ZDICT_optimizeTrainFromBuffer_fastCover() single-threaded, with d=8, steps=4,\n  f=20, and accel=1.\n  Samples must be stored concatenated in a single flat buffer `samplesBuffer`,\n  supplied with an array of sizes `samplesSizes`, providing the size of each sample, in order.\n  The resulting dictionary will be saved into `dictBuffer`.\n @return: size of dictionary stored into `dictBuffer` (<= `dictBufferCapacity`)\n          or an error code, which can be tested with ZDICT_isError().\n  Note:  Dictionary training will fail if there are not enough samples to construct a\n         dictionary, or if most of the samples are too small (< 8 bytes being the lower limit).\n         If dictionary training fails, you should use zstd without a dictionary, as the dictionary\n         would've been ineffective anyways. If you believe your samples would benefit from a dictionary\n         please open an issue with details, and we can look into it.\n  Note: ZDICT_trainFromBuffer()'s memory usage is about 6 MB.\n  Tips: In general, a reasonable dictionary has a size of ~ 100 KB.\n        It's possible to select smaller or larger size, just by specifying `dictBufferCapacity`.\n        In general, it's recommended to provide a few thousands samples, though this can vary a lot.\n        It's recommended that total size of all samples be about ~x100 times the target size of dictionary."]
+    pub fn ZDICT_trainFromBuffer(
+        dictBuffer: *mut ::std::os::raw::c_void,
+        dictBufferCapacity: usize,
+        samplesBuffer: *const ::std::os::raw::c_void,
+        samplesSizes: *const usize,
+        nbSamples: ::std::os::raw::c_uint,
+    ) -> usize;
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ZDICT_params_t {
+    pub compressionLevel: ::std::os::raw::c_int,
+    pub notificationLevel: ::std::os::raw::c_uint,
+    pub dictID: ::std::os::raw::c_uint,
+}
+#[test]
+fn bindgen_test_layout_ZDICT_params_t() {
+    const UNINIT: ::std::mem::MaybeUninit<ZDICT_params_t> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<ZDICT_params_t>(),
+        12usize,
+        concat!("Size of: ", stringify!(ZDICT_params_t))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<ZDICT_params_t>(),
+        4usize,
+        concat!("Alignment of ", stringify!(ZDICT_params_t))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).compressionLevel) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ZDICT_params_t),
+            "::",
+            stringify!(compressionLevel)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).notificationLevel) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ZDICT_params_t),
+            "::",
+            stringify!(notificationLevel)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).dictID) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ZDICT_params_t),
+            "::",
+            stringify!(dictID)
+        )
+    );
+}
+extern "C" {
+    #[doc = " ZDICT_finalizeDictionary():\n Given a custom content as a basis for dictionary, and a set of samples,\n finalize dictionary by adding headers and statistics according to the zstd\n dictionary format.\n\n Samples must be stored concatenated in a flat buffer `samplesBuffer`,\n supplied with an array of sizes `samplesSizes`, providing the size of each\n sample in order. The samples are used to construct the statistics, so they\n should be representative of what you will compress with this dictionary.\n\n The compression level can be set in `parameters`. You should pass the\n compression level you expect to use in production. The statistics for each\n compression level differ, so tuning the dictionary for the compression level\n can help quite a bit.\n\n You can set an explicit dictionary ID in `parameters`, or allow us to pick\n a random dictionary ID for you, but we can't guarantee no collisions.\n\n The dstDictBuffer and the dictContent may overlap, and the content will be\n appended to the end of the header. If the header + the content doesn't fit in\n maxDictSize the beginning of the content is truncated to make room, since it\n is presumed that the most profitable content is at the end of the dictionary,\n since that is the cheapest to reference.\n\n `maxDictSize` must be >= max(dictContentSize, ZSTD_DICTSIZE_MIN).\n\n @return: size of dictionary stored into `dstDictBuffer` (<= `maxDictSize`),\n          or an error code, which can be tested by ZDICT_isError().\n Note: ZDICT_finalizeDictionary() will push notifications into stderr if\n       instructed to, using notificationLevel>0.\n NOTE: This function currently may fail in several edge cases including:\n         * Not enough samples\n         * Samples are uncompressible\n         * Samples are all exactly the same"]
+    pub fn ZDICT_finalizeDictionary(
+        dstDictBuffer: *mut ::std::os::raw::c_void,
+        maxDictSize: usize,
+        dictContent: *const ::std::os::raw::c_void,
+        dictContentSize: usize,
+        samplesBuffer: *const ::std::os::raw::c_void,
+        samplesSizes: *const usize,
+        nbSamples: ::std::os::raw::c_uint,
+        parameters: ZDICT_params_t,
+    ) -> usize;
+}
+extern "C" {
+    pub fn ZDICT_getDictID(
+        dictBuffer: *const ::std::os::raw::c_void,
+        dictSize: usize,
+    ) -> ::std::os::raw::c_uint;
+}
+extern "C" {
+    pub fn ZDICT_getDictHeaderSize(
+        dictBuffer: *const ::std::os::raw::c_void,
+        dictSize: usize,
+    ) -> usize;
+}
+extern "C" {
+    pub fn ZDICT_isError(errorCode: usize) -> ::std::os::raw::c_uint;
+}
+extern "C" {
+    pub fn ZDICT_getErrorName(errorCode: usize) -> *const ::std::os::raw::c_char;
+}
+pub const ZSTD_ErrorCode_ZSTD_error_no_error: ZSTD_ErrorCode = 0;
+pub const ZSTD_ErrorCode_ZSTD_error_GENERIC: ZSTD_ErrorCode = 1;
+pub const ZSTD_ErrorCode_ZSTD_error_prefix_unknown: ZSTD_ErrorCode = 10;
+pub const ZSTD_ErrorCode_ZSTD_error_version_unsupported: ZSTD_ErrorCode = 12;
+pub const ZSTD_ErrorCode_ZSTD_error_frameParameter_unsupported: ZSTD_ErrorCode = 14;
+pub const ZSTD_ErrorCode_ZSTD_error_frameParameter_windowTooLarge: ZSTD_ErrorCode = 16;
+pub const ZSTD_ErrorCode_ZSTD_error_corruption_detected: ZSTD_ErrorCode = 20;
+pub const ZSTD_ErrorCode_ZSTD_error_checksum_wrong: ZSTD_ErrorCode = 22;
+pub const ZSTD_ErrorCode_ZSTD_error_dictionary_corrupted: ZSTD_ErrorCode = 30;
+pub const ZSTD_ErrorCode_ZSTD_error_dictionary_wrong: ZSTD_ErrorCode = 32;
+pub const ZSTD_ErrorCode_ZSTD_error_dictionaryCreation_failed: ZSTD_ErrorCode = 34;
+pub const ZSTD_ErrorCode_ZSTD_error_parameter_unsupported: ZSTD_ErrorCode = 40;
+pub const ZSTD_ErrorCode_ZSTD_error_parameter_outOfBound: ZSTD_ErrorCode = 42;
+pub const ZSTD_ErrorCode_ZSTD_error_tableLog_tooLarge: ZSTD_ErrorCode = 44;
+pub const ZSTD_ErrorCode_ZSTD_error_maxSymbolValue_tooLarge: ZSTD_ErrorCode = 46;
+pub const ZSTD_ErrorCode_ZSTD_error_maxSymbolValue_tooSmall: ZSTD_ErrorCode = 48;
+pub const ZSTD_ErrorCode_ZSTD_error_stage_wrong: ZSTD_ErrorCode = 60;
+pub const ZSTD_ErrorCode_ZSTD_error_init_missing: ZSTD_ErrorCode = 62;
+pub const ZSTD_ErrorCode_ZSTD_error_memory_allocation: ZSTD_ErrorCode = 64;
+pub const ZSTD_ErrorCode_ZSTD_error_workSpace_tooSmall: ZSTD_ErrorCode = 66;
+pub const ZSTD_ErrorCode_ZSTD_error_dstSize_tooSmall: ZSTD_ErrorCode = 70;
+pub const ZSTD_ErrorCode_ZSTD_error_srcSize_wrong: ZSTD_ErrorCode = 72;
+pub const ZSTD_ErrorCode_ZSTD_error_dstBuffer_null: ZSTD_ErrorCode = 74;
+pub const ZSTD_ErrorCode_ZSTD_error_frameIndex_tooLarge: ZSTD_ErrorCode = 100;
+pub const ZSTD_ErrorCode_ZSTD_error_seekableIO: ZSTD_ErrorCode = 102;
+pub const ZSTD_ErrorCode_ZSTD_error_dstBuffer_wrong: ZSTD_ErrorCode = 104;
+pub const ZSTD_ErrorCode_ZSTD_error_srcBuffer_wrong: ZSTD_ErrorCode = 105;
+pub const ZSTD_ErrorCode_ZSTD_error_maxCode: ZSTD_ErrorCode = 120;
+pub type ZSTD_ErrorCode = ::std::os::raw::c_int;
+extern "C" {
+    #[doc = " ZSTD_getErrorCode() :\nconvert a `size_t` function result into a `ZSTD_ErrorCode` enum type,\nwhich can be used to compare with enum list published above"]
+    pub fn ZSTD_getErrorCode(functionResult: usize) -> ZSTD_ErrorCode;
+}
+extern "C" {
+    pub fn ZSTD_getErrorString(code: ZSTD_ErrorCode) -> *const ::std::os::raw::c_char;
+}

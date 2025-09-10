@@ -18,6 +18,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="NativeCompressions.LZ4.csproj" />
+		<ProjectReference Include="NativeCompressions.ZStandard.csproj" />
 	</ItemGroup>
 
 </Project>
