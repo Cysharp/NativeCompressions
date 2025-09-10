@@ -15,61 +15,66 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-
-Console.WriteLine(LZ4.Version);
-
-var linkedCompressed = File.ReadAllBytes("silesia.tar.lz4");
-var original = LZ4.Decompress(linkedCompressed);
-var blockIndependenCompressed = LZ4.Compress(original);
+using NativeCompressions.ZStandard;
 
 
-Console.ReadLine();
+Console.WriteLine(ZStandard.Version);
 
-var dest = new ArrayBufferPipeWriter();
 
-//await LZ4.DecompressAsync(parallelCompressedHandle, dest);
-
-//Console.WriteLine(dest.WrittenCount);
-//Console.WriteLine(original.Length);
 
 //Console.WriteLine(LZ4.Version);
 
-//using var fs = new FileStream("silesia.tar.lz4", FileMode.Open, FileAccess.Read, FileShare.Read, 1, useAsync: true);
-
-//var filePipe = PipeReader.Create(fs);
-
-//await LZ4.DecompressAsync(filePipe, dest);
-
-//Console.WriteLine(dest.WrittenCount);
-// Socket socket = default!;
-
-var source = ReadOnlyMemory<byte>.Empty;
+//var linkedCompressed = File.ReadAllBytes("silesia.tar.lz4");
+//var original = LZ4.Decompress(linkedCompressed);
+//var blockIndependenCompressed = LZ4.Compress(original);
 
 
-// Parallel Compression from File to File
-//using SafeFileHandle sourceHandle = File.OpenHandle("foo.bin");
-//using var dest = new FileStream("foo.lz4", FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
-//await LZ4.CompressAsync(sourceHandle, PipeWriter.Create(dest), maxDegreeOfParallelism: null);
+//Console.ReadLine();
+
+//var dest = new ArrayBufferPipeWriter();
+
+////await LZ4.DecompressAsync(parallelCompressedHandle, dest);
+
+////Console.WriteLine(dest.WrittenCount);
+////Console.WriteLine(original.Length);
+
+////Console.WriteLine(LZ4.Version);
+
+////using var fs = new FileStream("silesia.tar.lz4", FileMode.Open, FileAccess.Read, FileShare.Read, 1, useAsync: true);
+
+////var filePipe = PipeReader.Create(fs);
+
+////await LZ4.DecompressAsync(filePipe, dest);
+
+////Console.WriteLine(dest.WrittenCount);
+//// Socket socket = default!;
+
+//var source = ReadOnlyMemory<byte>.Empty;
 
 
-var sw = Stopwatch.StartNew();
-await LZ4.CompressAsync(original, dest, maxDegreeOfParallelism: null);
-
-Console.WriteLine(sw.Elapsed.TotalMilliseconds + "ms");
-
-//var compressedBytes = dest.WrittenSpan.ToArray();
+//// Parallel Compression from File to File
+////using SafeFileHandle sourceHandle = File.OpenHandle("foo.bin");
+////using var dest = new FileStream("foo.lz4", FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
+////await LZ4.CompressAsync(sourceHandle, PipeWriter.Create(dest), maxDegreeOfParallelism: null);
 
 
-//var memoryPipe = PipeReader.Create(new MemoryStream(compressedBytes));
+//var sw = Stopwatch.StartNew();
+//await LZ4.CompressAsync(original, dest, maxDegreeOfParallelism: null);
 
-//var readResult = await memoryPipe.ReadAtLeastAsync(compressedBytes.Length);
-//var readOnlySequence = readResult.Buffer;
+//Console.WriteLine(sw.Elapsed.TotalMilliseconds + "ms");
+
+////var compressedBytes = dest.WrittenSpan.ToArray();
 
 
-//var dest2 = new ArrayBufferPipeWriter();
-//await LZ4.DecompressAsync(readOnlySequence, dest2);
+////var memoryPipe = PipeReader.Create(new MemoryStream(compressedBytes));
 
-//Console.WriteLine(dest2.WrittenCount);
-//Console.WriteLine(dest2.WrittenSpan.SequenceEqual(original));
+////var readResult = await memoryPipe.ReadAtLeastAsync(compressedBytes.Length);
+////var readOnlySequence = readResult.Buffer;
+
+
+////var dest2 = new ArrayBufferPipeWriter();
+////await LZ4.DecompressAsync(readOnlySequence, dest2);
+
+////Console.WriteLine(dest2.WrittenCount);
+////Console.WriteLine(dest2.WrittenSpan.SequenceEqual(original));
 

@@ -12,19 +12,18 @@ internal static class NativeMethodsLoader
     // win => __DllName, __DllName.dll
     // linux, osx => __DllName.so, __DllName.dylib
 
-    const string __DllName = "lz4"; // osx, linux = liblz4
-
     [ModuleInitializer]
     public static void Initialize()
     {
         NativeLibrary.SetDllImportResolver(typeof(NativeCompressions.LZ4.LZ4).Assembly, DllImportResolver);
+        NativeLibrary.SetDllImportResolver(typeof(NativeCompressions.ZStandard.ZStandard).Assembly, DllImportResolver);
     }
 
     static IntPtr DllImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
-        if (libraryName == __DllName)
+        if (libraryName is "lz4" or "libzstd")
         {
-            var name = __DllName;
+            var name = libraryName;
             var ext = "";
             var prefix = "";
             var platform = "";
@@ -38,13 +37,13 @@ internal static class NativeMethodsLoader
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
                 platform = "osx";
-                prefix = "lib";
+                prefix = libraryName.StartsWith("lib") ? "" : "lib";
                 ext = ".dylib";
             }
             else
             {
                 platform = "linux";
-                prefix = "lib";
+                prefix = libraryName.StartsWith("lib") ? "" : "lib";
                 ext = ".so";
             }
 
