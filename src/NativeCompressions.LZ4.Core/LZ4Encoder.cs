@@ -52,7 +52,7 @@ public unsafe partial struct LZ4Encoder : IDisposable
         // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         LZ4F_cctx_s* ptr = default;
         var code = LZ4F_createCompressionContext(&ptr, LZ4.FrameVersion);
-        LZ4.HandleErrorCode(code);
+        LZ4.ThrowIfError(code);
         this.context = ptr;
         this.header = frameOptions;
         this.compressionDictionary = compressionDictionary;
@@ -164,7 +164,7 @@ public unsafe partial struct LZ4Encoder : IDisposable
                 var writtenOrErrorCode = (compressionDictionary == null)
                     ? LZ4F_compressBegin(context, dest, (nuint)destination.Length, preferencePtr)
                     : LZ4F_compressBegin_usingCDict(context, dest, (nuint)destination.Length, compressionDictionary.Handle, preferencePtr);
-                LZ4.HandleErrorCode(writtenOrErrorCode);
+                LZ4.ThrowIfError(writtenOrErrorCode);
                 isWrittenHeader = true;
 
                 // LZ4F_cctx_s always need to call compressBegin but header can ignore(write for single frame from multiple context(multiple block))
@@ -188,7 +188,7 @@ public unsafe partial struct LZ4Encoder : IDisposable
         {
             // consume sources.
             var writtenOrErrorCode = LZ4F_compressUpdate(context, dest, (nuint)destination.Length, src, (nuint)source.Length, null);
-            LZ4.HandleErrorCode(writtenOrErrorCode);
+            LZ4.ThrowIfError(writtenOrErrorCode);
 
             destination = destination.Slice((int)writtenOrErrorCode);
             totalWritten += (int)writtenOrErrorCode; // written size can be zero, meaning input data was just buffered.
@@ -217,7 +217,7 @@ public unsafe partial struct LZ4Encoder : IDisposable
         {
             // LZ4F_compressOptions_t(stableSrc) is currently not used in LZ4 source so always pass null.
             var writtenOrErrorCode = LZ4F_flush(context, dest, (nuint)destination.Length, cOptPtr: null);
-            LZ4.HandleErrorCode(writtenOrErrorCode);
+            LZ4.ThrowIfError(writtenOrErrorCode);
 
             return (int)writtenOrErrorCode;
         }
@@ -251,7 +251,7 @@ public unsafe partial struct LZ4Encoder : IDisposable
         {
             // LZ4F_compressOptions_t(stableSrc) is currently not used in LZ4 source so always pass null.
             var writtenOrErrorCode = LZ4F_compressEnd(context, dest, (nuint)destination.Length, cOptPtr: null);
-            LZ4.HandleErrorCode(writtenOrErrorCode);
+            LZ4.ThrowIfError(writtenOrErrorCode);
             totalWritten += (int)writtenOrErrorCode;
 
             // secret option, LZ4Encoder can reuse after call Close()

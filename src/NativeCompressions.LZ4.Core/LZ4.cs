@@ -40,10 +40,7 @@ public static partial class LZ4
     /// <summary>
     /// Get the maximum allowed compression level.
     /// </summary>
-    public static int GetMaxCompressionLevel()
-    {
-        return LZ4F_compressionLevel_max();
-    }
+    public static int MaxCompressionLevel => LZ4F_compressionLevel_max();
 
     /// <summary>
     /// Gets the minimum number of bytes required to determine the LZ4 frame header size.
@@ -115,7 +112,7 @@ public static partial class LZ4
         return true;
     }
 
-    internal static void HandleErrorCode(nuint code)
+    internal static void ThrowIfError(nuint code)
     {
         if (LZ4F_isError(code) != 0)
         {

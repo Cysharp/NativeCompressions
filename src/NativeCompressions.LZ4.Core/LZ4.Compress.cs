@@ -36,18 +36,18 @@ public static partial class LZ4
                 if (dictionary == null)
                 {
                     var bytesWrittenOrErrorCode = LZ4F_compressFrame(dest, (nuint)buffer.Length, src, (nuint)source.Length, pref);
-                    HandleErrorCode(bytesWrittenOrErrorCode);
+                    ThrowIfError(bytesWrittenOrErrorCode);
                     return buffer.AsSpan(0, (int)bytesWrittenOrErrorCode).ToArray();
                 }
                 else
                 {
                     LZ4F_cctx_s* cctx = default;
                     var code = LZ4F_createCompressionContext(&cctx, LZ4.FrameVersion);
-                    LZ4.HandleErrorCode(code);
+                    LZ4.ThrowIfError(code);
                     try
                     {
                         var bytesWrittenOrErrorCode = LZ4F_compressFrame_usingCDict(cctx, dest, (nuint)buffer.Length, src, (nuint)source.Length, dictionary.Handle, pref);
-                        HandleErrorCode(bytesWrittenOrErrorCode);
+                        ThrowIfError(bytesWrittenOrErrorCode);
                         return buffer.AsSpan(0, (int)bytesWrittenOrErrorCode).ToArray();
                     }
                     finally
@@ -78,18 +78,18 @@ public static partial class LZ4
             if (dictionary == null)
             {
                 var bytesWrittenOrErrorCode = LZ4F_compressFrame(dest, (nuint)destination.Length, src, (nuint)source.Length, pref);
-                HandleErrorCode(bytesWrittenOrErrorCode);
+                ThrowIfError(bytesWrittenOrErrorCode);
                 return (int)bytesWrittenOrErrorCode;
             }
             else
             {
                 LZ4F_cctx_s* cctx = default;
                 var code = LZ4F_createCompressionContext(&cctx, LZ4.FrameVersion);
-                LZ4.HandleErrorCode(code);
+                LZ4.ThrowIfError(code);
                 try
                 {
                     var bytesWrittenOrErrorCode = LZ4F_compressFrame_usingCDict(cctx, dest, (nuint)destination.Length, src, (nuint)source.Length, dictionary.Handle, pref);
-                    HandleErrorCode(bytesWrittenOrErrorCode);
+                    ThrowIfError(bytesWrittenOrErrorCode);
                     return (int)bytesWrittenOrErrorCode;
                 }
                 finally

@@ -19,6 +19,7 @@ using NativeCompressions.ZStandard;
 
 
 Console.WriteLine(ZStandard.Version);
+Console.WriteLine(ZStandard.GetMinCompressionLevel());
 
 
 

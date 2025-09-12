@@ -138,3 +138,5 @@ _tmp
 binding/target/.rustc_info.json
 
 bindgen/target/.rustc_info.json
+
+.claude/settings.local.json

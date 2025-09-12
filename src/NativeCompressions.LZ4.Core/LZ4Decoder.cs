@@ -29,7 +29,7 @@ public unsafe partial struct LZ4Decoder : IDisposable
         // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         LZ4F_dctx_s* ptr = default;
         var code = LZ4F_createDecompressionContext(&ptr, LZ4.FrameVersion);
-        LZ4.HandleErrorCode(code);
+        LZ4.ThrowIfError(code);
 
         this.context = ptr;
         this.disposed = false;
@@ -66,7 +66,7 @@ public unsafe partial struct LZ4Decoder : IDisposable
         fixed (byte* src = source)
         {
             var sizeOrErrorCode = LZ4F_headerSize(src, (nuint)source.Length);
-            LZ4.HandleErrorCode(sizeOrErrorCode);
+            LZ4.ThrowIfError(sizeOrErrorCode);
             return (int)sizeOrErrorCode;
         }
     }
@@ -115,7 +115,7 @@ public unsafe partial struct LZ4Decoder : IDisposable
 
             var consumed = (nuint)source.Length;
             var hintOrErrorCode = LZ4F_getFrameInfo(context, (LZ4F_frameInfo_t*)Unsafe.AsPointer(ref frameInfo), src, &consumed);
-            LZ4.HandleErrorCode(hintOrErrorCode);
+            LZ4.ThrowIfError(hintOrErrorCode);
 
             bytesConsumed = (int)consumed;
             return result;
@@ -242,7 +242,8 @@ public unsafe partial struct LZ4Decoder : IDisposable
                 }
             }
 
-            LZ4.HandleErrorCode(hintOrErrorCode);
+            // TODO: throw or return InvalidData?
+            LZ4.ThrowIfError(hintOrErrorCode);
 
             bytesConsumed = (int)consumed;
             bytesWritten = (int)written;
