@@ -28,13 +28,13 @@ public unsafe struct ZStandardEncoder : IDisposable
     {
         // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         this.context = ZSTD_createCCtx();
+        if (context == null)
+        {
+            throw new ZStandardException("Failed to create compression context");
+        }
 
         options.SetParameter(context);
-        if (dictionary != null)
-        {
-            var result = ZSTD_CCtx_refCDict(context, dictionary.CompressionHandle);
-            ZStandard.ThrowIfError(result);
-        }
+        dictionary?.SetDictionary(context);
     }
 
     /// <summary>
@@ -154,11 +154,7 @@ public unsafe struct ZStandardEncoder : IDisposable
         ZStandard.ThrowIfError(result);
 
         options.SetParameter(context);
-        if (dictionary != null)
-        {
-            result = ZSTD_CCtx_refCDict(context, dictionary.CompressionHandle);
-            ZStandard.ThrowIfError(result);
-        }
+        dictionary?.SetDictionary(context);
     }
 
     void ValidateDisposed()

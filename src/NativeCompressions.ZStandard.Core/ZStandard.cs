@@ -45,7 +45,7 @@ public static partial class ZStandard
     /// <summary>
     /// Gets the default compression level.
     /// </summary>
-    public static int DefaultCompressionLevel => ZSTD_defaultCLevel();
+    public const int DefaultCompressionLevel = 3; // ZSTD_defaultCLevel();
 
     /// <summary>
     /// Gets the maximum compressed size for a given input size.
@@ -58,6 +58,7 @@ public static partial class ZStandard
     /// <summary>
     /// Checks if a code represents an error.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool IsError(nuint code)
     {
         return ZSTD_isError(code) != 0;

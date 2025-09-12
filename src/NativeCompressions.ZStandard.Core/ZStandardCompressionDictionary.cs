@@ -9,11 +9,10 @@ public sealed class ZStandardCompressionDictionary : SafeHandle
     public override bool IsInvalid => handle == IntPtr.Zero;
 
     // manage two handles(Compression and Decompression)
+    public unsafe ZSTD_CDict_s* CompressionHandle => ((ZSTD_CDict_s*)handle);
+    public unsafe ZSTD_DDict_s* DecompressionHandle { get; private set; }
 
-    internal unsafe ZSTD_CDict_s* CompressionHandle => ((ZSTD_CDict_s*)handle);
-    internal unsafe ZSTD_DDict_s* DecompressionHandle { get; private set; }
-
-    public ZStandardCompressionDictionary(ReadOnlySpan<byte> dictionaryData, int compressionLevel = 3)
+    public ZStandardCompressionDictionary(ReadOnlySpan<byte> dictionaryData, int compressionLevel = ZStandard.DefaultCompressionLevel)
         : base(IntPtr.Zero, true)
     {
         unsafe
@@ -39,7 +38,7 @@ public sealed class ZStandardCompressionDictionary : SafeHandle
         }
     }
 
-    protected override bool ReleaseHandle()
+    protected override unsafe bool ReleaseHandle()
     {
         if (handle != IntPtr.Zero)
         {
@@ -53,8 +52,21 @@ public sealed class ZStandardCompressionDictionary : SafeHandle
                 }
             }
             handle = IntPtr.Zero;
+            DecompressionHandle = null;
             return true;
         }
         return false;
+    }
+
+    internal unsafe void SetDictionary(ZSTD_CCtx_s* context)
+    {
+        var result = ZSTD_CCtx_refCDict(context, CompressionHandle);
+        ZStandard.ThrowIfError(result);
+    }
+
+    internal unsafe void SetDictionary(ZSTD_DCtx_s* context)
+    {
+        var result = ZSTD_DCtx_refDDict(context, DecompressionHandle);
+        ZStandard.ThrowIfError(result);
     }
 }

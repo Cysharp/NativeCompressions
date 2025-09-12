@@ -1,4 +1,5 @@
 ﻿using NativeCompressions.ZStandard.Raw;
+using System.Collections;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using static NativeCompressions.ZStandard.Raw.NativeMethods;
@@ -18,6 +19,33 @@ public readonly record struct ZStandardCompressionOptions
 
     // enum ZSTD_cParameter
 
+    readonly int compressionLevel;
+    readonly int windowLog;
+    readonly int hashLog;
+    readonly int chainLog;
+    readonly int searchLog;
+    readonly int minMatch;
+    readonly int targetLength;
+    readonly int strategy;
+    readonly int enableLongDistanceMatching;
+    readonly int ldmHashLog;
+    readonly int ldmMinMatch;
+    readonly int ldmBucketSizeLog;
+    readonly int ldmHashRateLog;
+    readonly int contentSizeFlag;
+    readonly int checksumFlag;
+    readonly int dictIDFlag;
+    readonly int nbWorkers;
+    readonly int jobSize;
+    readonly int overlapLog;
+
+    public ZStandardCompressionOptions()
+    {
+        // default is 1
+        contentSizeFlag = 1;
+        dictIDFlag = 1;
+    }
+
     /// <summary>
     /// Compression level, with the following ranges:
     /// - Negative values: ultra-fast compression (up to -131072)
@@ -25,7 +53,11 @@ public readonly record struct ZStandardCompressionOptions
     /// - 1-22: standard compression levels
     /// - Higher levels = better compression ratio but slower
     /// </summary>
-    public int CompressionLevel { get; init; }
+    public int CompressionLevel
+    {
+        get => compressionLevel;
+        init => compressionLevel = value;
+    }
 
     /// <summary>
     /// Window log size (10-31). Larger values use more memory but may improve compression ratio.
@@ -47,7 +79,7 @@ public readonly record struct ZStandardCompressionOptions
     /// <summary>
     /// Enable long distance matching. 0 = disabled, 1 = enabled
     /// </summary>
-    public int EnableLongDistanceMatching { get; init; }
+    public bool EnableLongDistanceMatching { get; init; }
 
     //ZSTD_c_ldmHashLog
     //ZSTD_c_ldmMinMatch
@@ -93,9 +125,27 @@ public readonly record struct ZStandardCompressionOptions
     {
         if (IsDefault) return;
 
-        // TODO: set others...
-        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_compressionLevel, CompressionLevel);
-        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_windowLog, WindowLog);
+        // TODO: check for almostly default(change only compression level)
+
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_compressionLevel, compressionLevel);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_windowLog, windowLog);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_hashLog, hashLog);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_chainLog, chainLog);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_searchLog, searchLog);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_minMatch, minMatch);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_targetLength, targetLength);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_strategy, strategy);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_enableLongDistanceMatching, enableLongDistanceMatching);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_ldmHashLog, ldmHashLog);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_ldmMinMatch, ldmMinMatch);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_ldmBucketSizeLog, ldmBucketSizeLog);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_ldmHashRateLog, ldmHashRateLog);
+        SetParameterCoreDefaultIsOne(context, ZSTD_cParameter.ZSTD_c_contentSizeFlag, contentSizeFlag);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_checksumFlag, checksumFlag);
+        SetParameterCoreDefaultIsOne(context, ZSTD_cParameter.ZSTD_c_dictIDFlag, dictIDFlag);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_nbWorkers, nbWorkers);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_jobSize, jobSize);
+        SetParameterCore(context, ZSTD_cParameter.ZSTD_c_overlapLog, overlapLog);
     }
 
     // Set parameter if value is not zero(default).
@@ -106,6 +156,19 @@ public readonly record struct ZStandardCompressionOptions
         {
             var code = ZSTD_CCtx_setParameter(context, (int)parameter, value);
             ZStandard.ThrowIfError(code);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal unsafe void SetParameterCoreDefaultIsOne(ZSTD_CCtx_s* context, ZSTD_cParameter parameter, int value)
+    {
+        if (value != 1)
+        {
+            var code = ZSTD_CCtx_setParameter(context, (int)parameter, value);
+            if (ZStandard.IsError(code)) // for inlining
+            {
+                ZStandard.ThrowIfError(code);
+            }
         }
     }
 }
