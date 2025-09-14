@@ -357,7 +357,7 @@ public static partial class LZ4
     public static async ValueTask DecompressAsync(SafeFileHandle source, long offset, PipeWriter destination, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
 #if NETSTANDARD2_1 || NET5_0
-        var fs = new FileStream(source, FileAccess.Read, 4096, isAsync: true);
+        var fs = new FileStream(source, FileAccess.Read, 1, isAsync: true);
         if (offset != 0)
         {
             fs.Seek(offset, SeekOrigin.Begin);

@@ -2,15 +2,11 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.1;net8.0;net9.0;</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>NativeCompressions.ZStandard</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\NativeCompressions.LZ4.Core\Internal\**\*.cs" 
+    <Compile Include="..\NativeCompressions.LZ4.Core\Internal\**\*.cs"
              Exclude="**\LZ4ActivitySource.cs"
              Link="Internal\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>

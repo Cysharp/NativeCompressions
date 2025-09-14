@@ -1,6 +1,6 @@
 ﻿#pragma warning disable CA2022 // Avoid inexact read with 'Stream.Read'
 
-using NativeCompressions.LZ4.Internal;
+using NativeCompressions.Internal;
 using System.Buffers;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
@@ -23,7 +23,7 @@ public sealed class LZ4Stream : Stream
     int readBufferOffset; // for decompress
     int readBufferCount; // for decompress
 
-    public LZ4Stream(Stream stream, CompressionMode mode, bool leaveOpen = false)
+    public LZ4Stream(Stream stream, CompressionMode mode, LZ4CompressionDictionary? compressionDictionary = null, bool leaveOpen = false)
     {
         this.mode = mode;
         this.stream = stream;
@@ -32,15 +32,15 @@ public sealed class LZ4Stream : Stream
 
         if (mode == CompressionMode.Decompress)
         {
-            this.decoder = new LZ4Decoder();
+            this.decoder = new LZ4Decoder(compressionDictionary);
         }
         else
         {
-            this.encoder = new LZ4Encoder();
+            this.encoder = new LZ4Encoder(LZ4FrameOptions.Default, compressionDictionary);
         }
     }
 
-    public LZ4Stream(Stream stream, in LZ4FrameOptions frameOptions, LZ4CompressionDictionary? compressionDictionary, bool leaveOpen = false)
+    public LZ4Stream(Stream stream, in LZ4FrameOptions frameOptions, LZ4CompressionDictionary? compressionDictionary = null, bool leaveOpen = false)
     {
         this.mode = CompressionMode.Compress;
         this.stream = stream;
@@ -101,11 +101,7 @@ public sealed class LZ4Stream : Stream
     {
         ValidateDisposed();
         return cancellationToken.IsCancellationRequested
-#if NETSTANDARD2_1
-            ? new ValueTask(Task.FromCanceled(cancellationToken))
-#else
             ? ValueTask.FromCanceled(cancellationToken)
-#endif
             : WriteCoreAsync(buffer, cancellationToken);
     }
 
@@ -198,7 +194,7 @@ public sealed class LZ4Stream : Stream
         }
     }
 
-#endregion
+    #endregion
 
     #region Decode
 
@@ -487,6 +483,10 @@ public sealed class LZ4Stream : Stream
                 stream.Dispose();
             }
         }
+        catch
+        {
+            // in dispose, ignore exceptions.
+        }
         finally
         {
             if (buffer != null)
@@ -519,6 +519,10 @@ public sealed class LZ4Stream : Stream
             {
                 stream.Dispose();
             }
+        }
+        catch
+        {
+            // in dispose, ignore exceptions.
         }
         finally
         {

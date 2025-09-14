@@ -1,5 +1,5 @@
 ﻿using Microsoft.Win32.SafeHandles;
-using NativeCompressions.LZ4.Internal;
+using NativeCompressions.Internal;
 using NativeCompressions.LZ4.Raw;
 using System.Buffers;
 using System.Diagnostics;

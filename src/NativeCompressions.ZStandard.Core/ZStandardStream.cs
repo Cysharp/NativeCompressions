@@ -1,285 +1,575 @@
-﻿//using System.Buffers;
-//using System.IO.Compression;
+﻿#pragma warning disable CA2022 // Avoid inexact read with 'Stream.Read'
 
-//namespace NativeCompressions.ZStandard;
+using NativeCompressions.Internal;
+using System.Buffers;
+using System.IO.Compression;
+using System.Runtime.InteropServices;
 
-///// <summary>
-///// Provides a Stream wrapper for ZStandard compression and decompression.
-///// </summary>
-//public class ZStandardStream : Stream
-//{
-//    readonly Stream baseStream;
-//    readonly CompressionMode mode;
-//    readonly bool leaveOpen;
-//    readonly ZStandardCompressionOptions options;
-//    readonly ZStandardCompressionDictionary? dictionary;
-    
-//    ZStandardEncoder encoder;
-//    ZStandardDecoder decoder;
-    
-//    byte[]? buffer;
-//    int bufferPos;
-//    int bufferCount;
-    
-//    bool disposed;
+namespace NativeCompressions.ZStandard;
 
-//    /// <summary>
-//    /// Initializes a new instance of the ZStandardStream class using the specified stream and compression mode.
-//    /// </summary>
-//    public ZStandardStream(Stream stream, CompressionMode mode)
-//        : this(stream, mode, leaveOpen: false)
-//    {
-//    }
+public sealed class ZStandardStream : Stream
+{
+    const int BufferSize = 65536;
 
-//    /// <summary>
-//    /// Initializes a new instance of the ZStandardStream class using the specified stream, compression mode, and optionally leaves the stream open.
-//    /// </summary>
-//    public ZStandardStream(Stream stream, CompressionMode mode, bool leaveOpen)
-//        : this(stream, mode, ZStandardCompressionOptions.Default, null, leaveOpen)
-//    {
-//    }
+    ZStandardEncoder encoder;
+    ZStandardDecoder decoder;
 
-//    /// <summary>
-//    /// Initializes a new instance of the ZStandardStream class with custom options.
-//    /// </summary>
-//    public ZStandardStream(Stream stream, CompressionMode mode, ZStandardCompressionOptions options, ZStandardCompressionDictionary? dictionary = null, bool leaveOpen = false)
-//    {
-//        this.baseStream = stream ?? throw new ArgumentNullException(nameof(stream));
-//        this.mode = mode;
-//        this.leaveOpen = leaveOpen;
-//        this.options = options;
-//        this.dictionary = dictionary;
-        
-//        if (mode == CompressionMode.Compress)
-//        {
-//            if (!stream.CanWrite)
-//                throw new ArgumentException("Stream must be writable for compression", nameof(stream));
-            
-//            encoder = new ZStandardEncoder(options, dictionary);
-//        }
-//        else
-//        {
-//            if (!stream.CanRead)
-//                throw new ArgumentException("Stream must be readable for decompression", nameof(stream));
-            
-//            decoder = new ZStandardDecoder(dictionary);
-//            buffer = ArrayPool<byte>.Shared.Rent(65536);
-//        }
-//    }
+    Stream stream;
+    CompressionMode mode;
+    bool leaveOpen;
+    bool isDisposed;
 
-//    public override bool CanRead => mode == CompressionMode.Decompress && baseStream.CanRead;
-//    public override bool CanWrite => mode == CompressionMode.Compress && baseStream.CanWrite;
-//    public override bool CanSeek => false;
-//    public override long Length => throw new NotSupportedException();
-//    public override long Position 
-//    { 
-//        get => throw new NotSupportedException(); 
-//        set => throw new NotSupportedException(); 
-//    }
+    byte[]? buffer; // both compress and decompress
+    int readBufferOffset; // for decompress
+    int readBufferCount; // for decompress
 
-//    public override void Flush()
-//    {
-//        if (mode == CompressionMode.Compress)
-//        {
-//            var buffer = ArrayPool<byte>.Shared.Rent(65536);
-//            try
-//            {
-//                var written = encoder.Flush(buffer);
-//                if (written > 0)
-//                {
-//                    baseStream.Write(buffer, 0, written);
-//                }
-//            }
-//            finally
-//            {
-//                ArrayPool<byte>.Shared.Return(buffer);
-//            }
-//        }
-//        baseStream.Flush();
-//    }
+    public ZStandardStream(Stream stream, CompressionMode mode, ZStandardCompressionDictionary? compressionDictionary = null, bool leaveOpen = false)
+    {
+        this.mode = mode;
+        this.stream = stream;
+        this.leaveOpen = leaveOpen;
+        this.readBufferCount = 0;
 
-//    public override async Task FlushAsync(CancellationToken cancellationToken)
-//    {
-//        if (mode == CompressionMode.Compress)
-//        {
-//            var buffer = ArrayPool<byte>.Shared.Rent(65536);
-//            try
-//            {
-//                var written = encoder.Flush(buffer);
-//                if (written > 0)
-//                {
-//                    await baseStream.WriteAsync(buffer, 0, written, cancellationToken);
-//                }
-//            }
-//            finally
-//            {
-//                ArrayPool<byte>.Shared.Return(buffer);
-//            }
-//        }
-//        await baseStream.FlushAsync(cancellationToken);
-//    }
+        if (mode == CompressionMode.Decompress)
+        {
+            this.decoder = new ZStandardDecoder(ZStandardDecompressionOptions.Default, compressionDictionary);
+        }
+        else
+        {
+            this.encoder = new ZStandardEncoder(ZStandardCompressionOptions.Default, compressionDictionary);
+        }
+    }
 
-//    public override int Read(byte[] buffer, int offset, int count)
-//    {
-//        ValidateArguments(buffer, offset, count);
-        
-//        if (mode != CompressionMode.Decompress)
-//            throw new InvalidOperationException("Cannot read from a compression stream");
-        
-//        return ReadCore(buffer.AsSpan(offset, count));
-//    }
+    public ZStandardStream(Stream stream, in ZStandardCompressionOptions compressionOptions, ZStandardCompressionDictionary? compressionDictionary, bool leaveOpen = false)
+    {
+        this.mode = CompressionMode.Compress;
+        this.stream = stream;
+        this.leaveOpen = leaveOpen;
+        this.readBufferCount = 0;
+        this.encoder = new ZStandardEncoder(compressionOptions, compressionDictionary);
+    }
 
-//    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-//    {
-//        if (mode != CompressionMode.Decompress)
-//            throw new InvalidOperationException("Cannot read from a compression stream");
-        
-//        // Ensure we have data in our internal buffer
-//        if (bufferPos >= bufferCount)
-//        {
-//            bufferPos = 0;
-//            bufferCount = await baseStream.ReadAsync(this.buffer!, 0, this.buffer!.Length, cancellationToken);
-//            if (bufferCount == 0)
-//                return 0;
-//        }
-        
-//        var status = decoder.Decompress(
-//            this.buffer.AsSpan(bufferPos, bufferCount - bufferPos),
-//            buffer.Span,
-//            out int bytesConsumed,
-//            out int bytesWritten);
-        
-//        bufferPos += bytesConsumed;
-//        return bytesWritten;
-//    }
+    public ZStandardStream(Stream stream, in ZStandardDecompressionOptions decompressionOptions, ZStandardCompressionDictionary? compressionDictionary, bool leaveOpen = false)
+    {
+        this.mode = CompressionMode.Decompress;
+        this.stream = stream;
+        this.leaveOpen = leaveOpen;
+        this.readBufferCount = 0;
+        this.decoder = new ZStandardDecoder(decompressionOptions, compressionDictionary);
+    }
 
-//    private int ReadCore(Span<byte> buffer)
-//    {
-//        // Ensure we have data in our internal buffer
-//        if (bufferPos >= bufferCount)
-//        {
-//            bufferPos = 0;
-//            bufferCount = baseStream.Read(this.buffer!, 0, this.buffer!.Length);
-//            if (bufferCount == 0)
-//                return 0;
-//        }
-        
-//        var status = decoder.Decompress(
-//            this.buffer.AsSpan(bufferPos, bufferCount - bufferPos),
-//            buffer,
-//            out int bytesConsumed,
-//            out int bytesWritten);
-        
-//        bufferPos += bytesConsumed;
-//        return bytesWritten;
-//    }
+    public override bool CanRead => mode == CompressionMode.Decompress && stream != null && stream.CanRead;
+    public override bool CanWrite => mode == CompressionMode.Compress && stream != null && stream.CanWrite;
+    public override bool CanSeek => false;
+    public override long Length => throw new NotSupportedException();
+    public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
 
-//    public override void Write(byte[] buffer, int offset, int count)
-//    {
-//        ValidateArguments(buffer, offset, count);
-        
-//        if (mode != CompressionMode.Compress)
-//            throw new InvalidOperationException("Cannot write to a decompression stream");
-        
-//        WriteCore(buffer.AsSpan(offset, count));
-//    }
+    #region Encode
 
-//    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
-//    {
-//        if (mode != CompressionMode.Compress)
-//            throw new InvalidOperationException("Cannot write to a decompression stream");
-        
-//        var tempBuffer = ArrayPool<byte>.Shared.Rent(encoder.GetMaxCompressedLength(buffer.Length));
-//        try
-//        {
-//            var written = encoder.Compress(buffer.Span, tempBuffer);
-//            if (written > 0)
-//            {
-//                await baseStream.WriteAsync(tempBuffer, 0, written, cancellationToken);
-//            }
-//        }
-//        finally
-//        {
-//            ArrayPool<byte>.Shared.Return(tempBuffer);
-//        }
-//    }
+    public override void Write(byte[] buffer, int offset, int count)
+    {
+        ValidateDisposed();
+        WriteCore(new ReadOnlySpan<byte>(buffer, offset, count));
+    }
 
-//    private void WriteCore(ReadOnlySpan<byte> buffer)
-//    {
-//        var tempBuffer = ArrayPool<byte>.Shared.Rent(encoder.GetMaxCompressedLength(buffer.Length));
-//        try
-//        {
-//            var written = encoder.Compress(buffer, tempBuffer);
-//            if (written > 0)
-//            {
-//                baseStream.Write(tempBuffer, 0, written);
-//            }
-//        }
-//        finally
-//        {
-//            ArrayPool<byte>.Shared.Return(tempBuffer);
-//        }
-//    }
+    public override void Write(ReadOnlySpan<byte> buffer)
+    {
+        ValidateDisposed();
+        WriteCore(buffer);
+    }
 
-//    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-//    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void WriteByte(byte value)
+    {
+        ValidateDisposed();
+        Span<byte> span = stackalloc byte[1];
+        span[0] = value;
+        WriteCore(span);
+    }
 
-//    protected override void Dispose(bool disposing)
-//    {
-//        if (!disposed)
-//        {
-//            if (disposing)
-//            {
-//                if (mode == CompressionMode.Compress)
-//                {
-//                    // Write frame footer
-//                    var tempBuffer = ArrayPool<byte>.Shared.Rent(encoder.GetMaxFlushBufferLength(includingFooter: true));
-//                    try
-//                    {
-//                        var written = encoder.Close(tempBuffer);
-//                        if (written > 0)
-//                        {
-//                            baseStream.Write(tempBuffer, 0, written);
-//                        }
-//                    }
-//                    finally
-//                    {
-//                        ArrayPool<byte>.Shared.Return(tempBuffer);
-//                    }
-                    
-//                    encoder.Dispose();
-//                }
-//                else
-//                {
-//                    decoder.Dispose();
-//                    if (buffer != null)
-//                    {
-//                        ArrayPool<byte>.Shared.Return(buffer);
-//                        buffer = null;
-//                    }
-//                }
-                
-//                if (!leaveOpen)
-//                {
-//                    baseStream.Dispose();
-//                }
-//            }
-            
-//            disposed = true;
-//        }
-        
-//        base.Dispose(disposing);
-//    }
+    public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback? callback, object? state)
+    {
+        ValidateDisposed();
+        return TaskToAsyncResult.Begin(WriteAsync(buffer, offset, count, CancellationToken.None), callback, state);
+    }
 
-//    private static void ValidateArguments(byte[] buffer, int offset, int count)
-//    {
-//        if (buffer == null)
-//            throw new ArgumentNullException(nameof(buffer));
-//        if (offset < 0)
-//            throw new ArgumentOutOfRangeException(nameof(offset));
-//        if (count < 0)
-//            throw new ArgumentOutOfRangeException(nameof(count));
-//        if (offset + count > buffer.Length)
-//            throw new ArgumentException("Buffer too small");
-//    }
-//}
+    public override void EndWrite(IAsyncResult asyncResult)
+    {
+        ValidateDisposed();
+        TaskToAsyncResult.End(asyncResult);
+    }
+
+    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        ValidateDisposed();
+        return WriteAsync(new ReadOnlyMemory<byte>(buffer, offset, count), cancellationToken).AsTask();
+    }
+
+    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        ValidateDisposed();
+        return cancellationToken.IsCancellationRequested
+            ? ValueTask.FromCanceled(cancellationToken)
+            : WriteCoreAsync(buffer, cancellationToken);
+    }
+
+    public override void Flush()
+    {
+        ValidateDisposed();
+        if (mode != CompressionMode.Compress)
+        {
+            throw new InvalidOperationException("Write operation must be Compress mode.");
+        }
+
+        if (buffer == null) return;
+
+        var status = OperationStatus.DestinationTooSmall;
+        while (status == OperationStatus.DestinationTooSmall)
+        {
+            status = encoder.Flush(buffer, out var written);
+            stream.Write(buffer, 0, written);
+        }
+        if (status != OperationStatus.Done)
+        {
+            throw new InvalidOperationException($"Flush failed: {status}");
+        }
+    }
+
+    public override async Task FlushAsync(CancellationToken cancellationToken)
+    {
+        ValidateDisposed();
+        if (mode != CompressionMode.Compress)
+        {
+            throw new InvalidOperationException("Write operation must be Compress mode.");
+        }
+        if (buffer == null) return;
+
+        var status = OperationStatus.DestinationTooSmall;
+        while (status == OperationStatus.DestinationTooSmall)
+        {
+            status = encoder.Flush(buffer, out var written);
+            await stream.WriteAsync(buffer.AsMemory(0, written), cancellationToken); // use ValueTask overload.
+        }
+        if (status != OperationStatus.Done)
+        {
+            throw new InvalidOperationException($"Flush failed: {status}");
+        }
+    }
+
+    void WriteCore(ReadOnlySpan<byte> source)
+    {
+        ValidateDisposed();
+        if (mode != CompressionMode.Compress)
+        {
+            throw new InvalidOperationException("Write operation must be Compress mode.");
+        }
+
+        var dest = buffer;
+        if (dest == null)
+        {
+            dest = buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
+        }
+
+        var status = OperationStatus.DestinationTooSmall;
+        while (status == OperationStatus.DestinationTooSmall)
+        {
+            status = encoder.Compress(source, dest, out var consumed, out var written, isFinalBlock: false);
+            if (status == OperationStatus.InvalidData)
+            {
+                throw new InvalidOperationException("Compression failed.");
+            }
+
+            source = source.Slice(consumed);
+            stream.Write(dest, 0, written);
+        }
+    }
+
+    async ValueTask WriteCoreAsync(ReadOnlyMemory<byte> source, CancellationToken cancellationToken)
+    {
+        ValidateDisposed();
+        if (mode != CompressionMode.Compress)
+        {
+            throw new InvalidOperationException("Write operation must be Compress mode.");
+        }
+
+        var dest = buffer;
+        if (dest == null)
+        {
+            dest = buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
+        }
+
+        var status = OperationStatus.DestinationTooSmall;
+        while (status == OperationStatus.DestinationTooSmall)
+        {
+            status = encoder.Compress(source.Span, dest, out var consumed, out var written, isFinalBlock: false);
+            if (status == OperationStatus.InvalidData)
+            {
+                throw new InvalidOperationException("Compression failed.");
+            }
+
+            source = source.Slice(consumed);
+            await stream.WriteAsync(dest.AsMemory(0, written));
+        }
+    }
+
+    #endregion
+
+    #region Decode
+
+    public override int Read(byte[] buffer, int offset, int count)
+    {
+        ValidateDisposed();
+        return ReadCore(new Span<byte>(buffer, offset, count));
+    }
+
+    public override int ReadByte()
+    {
+        ValidateDisposed();
+        byte b = default;
+        var read = Read(MemoryMarshal.CreateSpan(ref b, 1));
+        return read != 0 ? b : -1;
+    }
+
+    public override int Read(Span<byte> buffer)
+    {
+        ValidateDisposed();
+        return ReadCore(buffer);
+    }
+
+    public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback? callback, object? state)
+    {
+        ValidateDisposed();
+        return TaskToAsyncResult.Begin(ReadAsync(buffer, offset, count, CancellationToken.None), callback, state);
+    }
+
+    public override int EndRead(IAsyncResult asyncResult)
+    {
+        ValidateDisposed();
+        return TaskToAsyncResult.End<int>(asyncResult);
+    }
+
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        ValidateDisposed();
+        return ReadCoreAsync(new Memory<byte>(buffer, offset, count), cancellationToken).AsTask();
+    }
+
+    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        ValidateDisposed();
+        return ReadCoreAsync(buffer, cancellationToken);
+    }
+
+    int ReadCore(Span<byte> destination)
+    {
+        if (destination.IsEmpty) return 0;
+        if (mode != CompressionMode.Decompress)
+        {
+            throw new InvalidOperationException("Read operation must be Decompress mode.");
+        }
+
+        buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
+        var totalRead = 0;
+
+        while (destination.Length > 0)
+        {
+            ReadOnlySpan<byte> source;
+
+            if (readBufferCount > 0)
+            {
+                // Use existing buffered data
+                source = buffer.AsSpan(readBufferOffset, readBufferCount);
+            }
+            else
+            {
+                // Buffer is empty, first flush decoder's internal buffer
+                source = ReadOnlySpan<byte>.Empty;
+            }
+
+            var status = decoder.Decompress(source, destination, out var consumed, out var written);
+
+            // Update buffer state
+            if (consumed > 0)
+            {
+                readBufferOffset += consumed;
+                readBufferCount -= consumed;
+            }
+
+            if (written > 0)
+            {
+                totalRead += written;
+                destination = destination.Slice(written);
+            }
+
+            switch (status)
+            {
+                case OperationStatus.Done:
+                    // Frame completed, there might be another frame so continue
+                    decoder.Reset();
+                    break;
+
+                case OperationStatus.DestinationTooSmall:
+                    // Output buffer is full
+                    return totalRead;
+
+                case OperationStatus.NeedMoreData:
+                    // Need more data
+
+                    // If written > 0, decoder likely has more data in its internal buffer
+                    // Exhaust the internal buffer before reading new data
+                    if (written > 0)
+                    {
+                        // Decoder produced output, retry in next loop
+                        // Don't read additional data
+                        break;
+                    }
+
+                    // Only consider reading new data when written == 0
+                    if (readBufferCount == 0)
+                    {
+                        // Buffer was completely consumed or was originally empty
+                        // Decoder's internal buffer is also empty, so read new data
+                        readBufferOffset = 0;
+                        readBufferCount = stream.Read(buffer, 0, buffer.Length);
+
+                        if (readBufferCount == 0)
+                        {
+                            // Truly reached EOF
+                            return totalRead;
+                        }
+                    }
+                    else
+                    {
+                        // readBufferCount > 0: still have unconsumed data
+                        // This happens when data was partially consumed (incomplete block header, etc.)
+
+                        // Move unconsumed data to the beginning of buffer
+                        if (readBufferOffset > 0)
+                        {
+                            Buffer.BlockCopy(buffer, readBufferOffset, buffer, 0, readBufferCount);
+                        }
+
+                        // Read additional data
+                        var bytesRead = stream.Read(buffer, readBufferCount, buffer.Length - readBufferCount);
+
+                        readBufferOffset = 0;
+                        readBufferCount += bytesRead;
+
+                        if (bytesRead == 0)
+                        {
+                            // No more data available
+                            // Possibly incomplete frame at end
+                            return totalRead;
+                        }
+                    }
+                    break;
+            }
+        }
+
+        return totalRead;
+    }
+
+    async ValueTask<int> ReadCoreAsync(Memory<byte> destination, CancellationToken cancellationToken)
+    {
+        if (destination.IsEmpty) return 0;
+        if (mode != CompressionMode.Decompress)
+        {
+            throw new InvalidOperationException("Read operation must be Decompress mode.");
+        }
+
+        buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
+        var totalRead = 0;
+
+        while (destination.Length > 0)
+        {
+            ReadOnlySpan<byte> source;
+
+            if (readBufferCount > 0)
+            {
+                // Use existing buffered data
+                source = buffer.AsSpan(readBufferOffset, readBufferCount);
+            }
+            else
+            {
+                // Buffer is empty, first flush decoder's internal buffer
+                source = ReadOnlySpan<byte>.Empty;
+            }
+
+            var status = decoder.Decompress(source, destination.Span, out var consumed, out var written);
+
+            // Update buffer state
+            if (consumed > 0)
+            {
+                readBufferOffset += consumed;
+                readBufferCount -= consumed;
+            }
+
+            if (written > 0)
+            {
+                totalRead += written;
+                destination = destination.Slice(written);
+            }
+
+            switch (status)
+            {
+                case OperationStatus.Done:
+                    // Frame completed, there might be another frame so continue
+                    decoder.Reset();
+                    break;
+
+                case OperationStatus.DestinationTooSmall:
+                    // Output buffer is full
+                    return totalRead;
+
+                case OperationStatus.NeedMoreData:
+                    // Need more data
+
+                    // If written > 0, decoder likely has more data in its internal buffer
+                    // Exhaust the internal buffer before reading new data
+                    if (written > 0)
+                    {
+                        // Decoder produced output, retry in next loop
+                        // Don't read additional data
+                        break;
+                    }
+
+                    // Only consider reading new data when written == 0
+                    if (readBufferCount == 0)
+                    {
+                        // Buffer was completely consumed or was originally empty
+                        // Decoder's internal buffer is also empty, so read new data
+                        readBufferOffset = 0;
+                        readBufferCount = await stream.ReadAsync(
+                            buffer.AsMemory(0, buffer.Length), cancellationToken);
+
+                        if (readBufferCount == 0)
+                        {
+                            // Truly reached EOF
+                            return totalRead;
+                        }
+                    }
+                    else
+                    {
+                        // readBufferCount > 0: still have unconsumed data
+                        // This happens when data was partially consumed (incomplete block header, etc.)
+
+                        // Move unconsumed data to the beginning of buffer
+                        if (readBufferOffset > 0)
+                        {
+                            Buffer.BlockCopy(buffer, readBufferOffset, buffer, 0, readBufferCount);
+                        }
+
+                        // Read additional data
+                        var bytesRead = await stream.ReadAsync(
+                            buffer.AsMemory(readBufferCount, buffer.Length - readBufferCount),
+                            cancellationToken);
+
+                        readBufferOffset = 0;
+                        readBufferCount += bytesRead;
+
+                        if (bytesRead == 0)
+                        {
+                            // No more data available
+                            // Possibly incomplete frame at end
+                            return totalRead;
+                        }
+                    }
+                    break;
+            }
+        }
+
+        return totalRead;
+    }
+
+    #endregion
+
+    protected override void Dispose(bool disposing)
+    {
+        if (isDisposed) return;
+
+        try
+        {
+            if (buffer != null && mode == CompressionMode.Compress)
+            {
+                // Dispose is called from Close so share implementation.
+                var status = encoder.Close(buffer, out var written);
+                if (status == OperationStatus.Done)
+                {
+                    stream.Write(buffer, 0, written);
+                }
+            }
+
+            if (!leaveOpen)
+            {
+                stream.Dispose();
+            }
+        }
+        catch
+        {
+            // in dispose, ignore exceptions.
+        }
+        finally
+        {
+            if (buffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+
+            encoder.Dispose();
+            decoder.Dispose();
+
+            isDisposed = true;
+            base.Dispose(disposing);
+        }
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        if (isDisposed) return;
+
+        try
+        {
+            if (buffer != null && mode == CompressionMode.Compress)
+            {
+                // Dispose is called from Close so share implementation.
+                var status = encoder.Close(buffer, out var written);
+                if (status == OperationStatus.Done)
+                {
+                    await stream.WriteAsync(buffer.AsMemory(0, written));
+                }
+            }
+
+            if (!leaveOpen)
+            {
+                stream.Dispose();
+            }
+        }
+        catch
+        {
+            // in dispose, ignore exceptions.
+        }
+        finally
+        {
+            if (buffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+
+            encoder.Dispose();
+            decoder.Dispose();
+
+            isDisposed = true;
+            base.Dispose();
+        }
+    }
+
+    void ValidateDisposed()
+    {
+        if (isDisposed)
+        {
+            Throws.ObjectDisposedException();
+        }
+    }
+}
+

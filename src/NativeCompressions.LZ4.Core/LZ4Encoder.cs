@@ -1,4 +1,4 @@
-﻿using NativeCompressions.LZ4.Internal;
+﻿using NativeCompressions.Internal;
 using NativeCompressions.LZ4.Raw;
 using System.Runtime.CompilerServices;
 using static NativeCompressions.LZ4.Raw.NativeMethods;
