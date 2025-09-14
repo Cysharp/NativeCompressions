@@ -1,6 +1,7 @@
-using Benchmark.BenchmarkNetUtilities;
+﻿using Benchmark.BenchmarkNetUtilities;
 using Benchmark.Models;
 using NativeCompressions.LZ4;
+using NativeCompressions.ZStandard;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
@@ -15,9 +16,9 @@ public class CompressionCompare
 
     List<Question> target = default!;
 
-    int zstdefault = NativeCompressions.ZStandard.ZStdNativeMethods.ZSTD_defaultCLevel(); // 3
-    int zstdmin = 1; // NativeCompressions.ZStandard.ZStdNativeMethods.ZSTD_minCLevel();
-    int zstdmax = NativeCompressions.ZStandard.ZStdNativeMethods.ZSTD_maxCLevel(); // 22
+    int zstdefault = NativeCompressions.ZStandard.ZStandard.DefaultCompressionLevel; // 3
+    int zstdmin = -4; // NativeCompressions.ZStandard.ZStdNativeMethods.ZSTD_minCLevel();
+    int zstdmax = NativeCompressions.ZStandard.ZStandard.MaxCompressionLevel; // 22
 
     public CompressionCompare()
     {
@@ -47,32 +48,23 @@ public class CompressionCompare
     [Benchmark]
     public unsafe int ZStandard_Min()
     {
-        fixed (byte* s = src)
-        fixed (byte* d = dest)
-        {
-            return (int)NativeCompressions.ZStandard.ZStdNativeMethods.ZSTD_compress(d, (nuint)dest.Length, s, (nuint)src.Length, zstdmin);
-        }
+        var bytesWritten = NativeCompressions.ZStandard.ZStandard.Compress(src, dest, zstdmin);
+        return bytesWritten;
     }
 
     [Benchmark]
     public unsafe int ZStandard_Default()
     {
-        fixed (byte* s = src)
-        fixed (byte* d = dest)
-        {
-            return (int)NativeCompressions.ZStandard.ZStdNativeMethods.ZSTD_compress(d, (nuint)dest.Length, s, (nuint)src.Length, zstdefault);
-        }
+        var bytesWritten = NativeCompressions.ZStandard.ZStandard.Compress(src, dest);
+        return bytesWritten;
     }
 
 
     [Benchmark]
     public unsafe int ZStandard_Max()
     {
-        fixed (byte* s = src)
-        fixed (byte* d = dest)
-        {
-            return (int)NativeCompressions.ZStandard.ZStdNativeMethods.ZSTD_compress(d, (nuint)dest.Length, s, (nuint)src.Length, zstdmax);
-        }
+        var bytesWritten = NativeCompressions.ZStandard.ZStandard.Compress(src, dest, zstdmax);
+        return bytesWritten;
     }
 
     [Benchmark]
