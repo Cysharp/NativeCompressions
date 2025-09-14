@@ -84,6 +84,13 @@ public static partial class ZStandard
         }
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)] // need to check before call IsError
+    internal static void ThrowAsError(nuint code)
+    {
+        var error = GetErrorName(code);
+        throw new ZStandardException(error);
+    }
+
     // TODO: remove GetDecompressedSize from here?
 
     /// <summary>

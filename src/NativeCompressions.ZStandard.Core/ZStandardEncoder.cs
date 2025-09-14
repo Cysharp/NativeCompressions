@@ -22,9 +22,17 @@ public unsafe struct ZStandardEncoder : IDisposable
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="ZStandardEncoder"/> struct with compressionLevel.
+    /// </summary>
+    public ZStandardEncoder(int compressionLevel)
+        : this(new ZStandardCompressionOptions(compressionLevel), null)
+    {
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ZStandardEncoder"/> struct with specified options.
     /// </summary>
-    public ZStandardEncoder(in ZStandardCompressionOptions options, ZStandardCompressionDictionary? dictionary = null)
+    public ZStandardEncoder(in ZStandardCompressionOptions compressionOptions, ZStandardCompressionDictionary? dictionary = null)
     {
         // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         this.context = ZSTD_createCCtx();
@@ -33,7 +41,7 @@ public unsafe struct ZStandardEncoder : IDisposable
             throw new ZStandardException("Failed to create compression context");
         }
 
-        options.SetParameter(context);
+        compressionOptions.SetParameter(context);
         dictionary?.SetDictionary(context);
     }
 

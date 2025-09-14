@@ -29,13 +29,13 @@ public static partial class ZStandard
     /// <summary>
     /// Compresses data using ZStandard algorithm with specified options.
     /// </summary>
-    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, in ZStandardCompressionOptions frameOptions, ZStandardCompressionDictionary? dictionary = null)
+    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, in ZStandardCompressionOptions compressionOptions, ZStandardCompressionDictionary? dictionary = null)
     {
         var maxLength = GetMaxCompressedLength(source.Length);
         var destination = ArrayPool<byte>.Shared.Rent(maxLength);
         try
         {
-            var bytesWritten = Compress(source, destination, frameOptions, dictionary);
+            var bytesWritten = Compress(source, destination, compressionOptions, dictionary);
             return destination.AsSpan(0, bytesWritten).ToArray();
         }
         finally
@@ -56,7 +56,7 @@ public static partial class ZStandard
         }
     }
 
-    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in ZStandardCompressionOptions frameOptions, ZStandardCompressionDictionary? dictionary = null)
+    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in ZStandardCompressionOptions compressionOptions, ZStandardCompressionDictionary? dictionary = null)
     {
         fixed (byte* src = source)
         fixed (byte* dest = destination)
@@ -67,16 +67,16 @@ public static partial class ZStandard
             {
                 throw new ZStandardException("Failed to create compression context");
             }
-            
+
             try
             {
-                if (dictionary != null && frameOptions.IsDefault)
+                if (dictionary != null && compressionOptions.IsDefault)
                 {
                     bytesWritten = ZSTD_compress_usingCDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, dictionary.CompressionHandle);
                 }
                 else
                 {
-                    frameOptions.SetParameter(context);
+                    compressionOptions.SetParameter(context);
                     dictionary?.SetDictionary(context);
                     bytesWritten = ZSTD_compress2(context, dest, (nuint)destination.Length, src, (nuint)source.Length);
                 }
@@ -90,4 +90,6 @@ public static partial class ZStandard
             return (int)bytesWritten;
         }
     }
+
+    // TODO: other overload
 }
