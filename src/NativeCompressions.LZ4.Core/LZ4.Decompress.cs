@@ -1,5 +1,5 @@
 ﻿using Microsoft.Win32.SafeHandles;
-using NativeCompressions.LZ4.Internal;
+using NativeCompressions.Internal;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Diagnostics;
@@ -28,6 +28,7 @@ public static partial class LZ4
             {
                 var destination = new byte[frameInfo.ContentSize]; // trusted ContentSize, decode one-shot.
                 var dest = destination.AsSpan();
+
                 var status = OperationStatus.DestinationTooSmall;
                 while (status == OperationStatus.DestinationTooSmall && source.Length > 0)
                 {
@@ -36,6 +37,7 @@ public static partial class LZ4
                     dest = dest.Slice(bytesWritten);
                 }
 
+                // TODO: if... done?
                 if (status == OperationStatus.NeedMoreData)
                 {
                     throw new InvalidOperationException("Invalid LZ4 frame.");

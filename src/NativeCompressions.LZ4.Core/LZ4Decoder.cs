@@ -1,4 +1,4 @@
-﻿using NativeCompressions.LZ4.Internal;
+﻿using NativeCompressions.Internal;
 using NativeCompressions.LZ4.Raw;
 using System.Buffers;
 using System.Runtime.CompilerServices;
@@ -193,7 +193,8 @@ public unsafe partial struct LZ4Decoder : IDisposable
     /// <returns>
     /// <see cref="OperationStatus.Done"/> if the current frame is completely decompressed;
     /// <see cref="OperationStatus.NeedMoreData"/> if more compressed data is needed to continue;
-    /// <see cref="OperationStatus.DestinationTooSmall"/> if the destination buffer is likely too small.
+    /// <see cref="OperationStatus.DestinationTooSmall"/> if the destination buffer is likely too small;
+    /// <see cref="OperationStatus.InvalidData"/> if the data is invalid can not process;
     /// </returns>
     /// <exception cref="ObjectDisposedException">
     /// Thrown when the decoder has been disposed.
@@ -210,7 +211,7 @@ public unsafe partial struct LZ4Decoder : IDisposable
     /// decompressed and the decoder is ready to process a new frame.
     /// 
     /// The distinction between <see cref="OperationStatus.NeedMoreData"/> and 
-    /// <see cref="OperationStatus.DestinationTooSmall"/> is heuristic-based:
+    /// <see cref="OperationStatus.DestinationTooSmall"/>
     /// - If the destination buffer was completely filled, it's likely too small
     /// - Otherwise, more source data is needed
     /// 
@@ -242,29 +243,41 @@ public unsafe partial struct LZ4Decoder : IDisposable
                 }
             }
 
-            // TODO: throw or return InvalidData?
-            LZ4.ThrowIfError(hintOrErrorCode);
-
             bytesConsumed = (int)consumed;
             bytesWritten = (int)written;
             hintOfNextSrcSize = (int)hintOrErrorCode;
+
+            if (LZ4.IsError(hintOrErrorCode))
+            {
+                return OperationStatus.InvalidData;
+            }
 
             if (hintOrErrorCode == 0)
             {
                 return OperationStatus.Done;
             }
 
-            // Heuristic to distinguish between "need more data" vs "destination too small"
-            // If destination was completely filled, it's likely too small
-            if (bytesWritten == destination.Length && bytesWritten > 0)
+            var sourceFullyConsumed = bytesConsumed == source.Length;
+            var destinationFullyUsed = bytesWritten == destination.Length;
+
+            var result = (sourceFullyConsumed, destinationFullyUsed) switch
             {
-                return OperationStatus.DestinationTooSmall;
-            }
-            else
-            {
-                // Source was exhausted or no output was produced
-                return OperationStatus.NeedMoreData;
-            }
+                // both full, remains output data exists in native context
+                (true, true) => OperationStatus.DestinationTooSmall,
+
+                // source is fully consumed but output buffer has space, need more input data
+                (true, false) => OperationStatus.NeedMoreData,
+
+                // output buffer is full but input remains, need larger output buffer
+                (false, true) => OperationStatus.DestinationTooSmall,
+
+                // others
+                (false, false) => (bytesConsumed > 0 || bytesWritten > 0) // any progress?
+                    ? OperationStatus.NeedMoreData
+                    : OperationStatus.InvalidData
+            };
+
+            return result;
         }
     }
 

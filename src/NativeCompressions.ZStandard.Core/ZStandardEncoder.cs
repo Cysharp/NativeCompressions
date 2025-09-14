@@ -1,4 +1,4 @@
-﻿using NativeCompressions.ZStandard.Internal;
+﻿using NativeCompressions.Internal;
 using NativeCompressions.ZStandard.Raw;
 using System.Buffers;
 using static NativeCompressions.ZStandard.Raw.NativeMethods;
@@ -36,10 +36,7 @@ public unsafe struct ZStandardEncoder : IDisposable
     {
         // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         this.context = ZSTD_createCCtx();
-        if (context == null)
-        {
-            throw new ZStandardException("Failed to create compression context");
-        }
+        if (context == null) throw new ZStandardException("Failed to create compression context");
 
         compressionOptions.SetParameter(context);
         dictionary?.SetDictionary(context);
@@ -179,18 +176,18 @@ public unsafe struct ZStandardEncoder : IDisposable
             disposed = true;
         }
     }
-}
 
-internal enum ZSTD_EndDirective
-{
-    ZSTD_e_continue = 0,
-    ZSTD_e_flush = 1,
-    ZSTD_e_end = 2
-}
+    enum ZSTD_EndDirective
+    {
+        ZSTD_e_continue = 0,
+        ZSTD_e_flush = 1,
+        ZSTD_e_end = 2
+    }
 
-internal enum ZSTD_ResetDirective
-{
-    ZSTD_reset_session_only = 1,
-    ZSTD_reset_parameters = 2,
-    ZSTD_reset_session_and_parameters = 3
+    enum ZSTD_ResetDirective
+    {
+        ZSTD_reset_session_only = 1,
+        ZSTD_reset_parameters = 2,
+        ZSTD_reset_session_and_parameters = 3
+    }
 }

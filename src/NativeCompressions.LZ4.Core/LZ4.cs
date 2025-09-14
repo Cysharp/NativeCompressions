@@ -112,6 +112,11 @@ public static partial class LZ4
         return true;
     }
 
+    internal static bool IsError(nuint code)
+    {
+        return LZ4F_isError(code) != 0;
+    }
+
     internal static void ThrowIfError(nuint code)
     {
         if (LZ4F_isError(code) != 0)

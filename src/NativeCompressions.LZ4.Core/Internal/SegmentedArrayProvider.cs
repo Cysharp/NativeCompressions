@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace NativeCompressions.LZ4.Internal;
+namespace NativeCompressions.Internal;
 
 // similar as IBufferWriter style to avoid Add frequently.
 internal ref struct SegmentedArrayProvider<T>

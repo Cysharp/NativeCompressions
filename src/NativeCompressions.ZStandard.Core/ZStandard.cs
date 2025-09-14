@@ -1,4 +1,4 @@
-﻿using NativeCompressions.ZStandard.Internal;
+﻿using NativeCompressions.Internal;
 using NativeCompressions.ZStandard.Raw;
 using System.Drawing;
 using System.Runtime.CompilerServices;
@@ -110,7 +110,7 @@ public static partial class ZStandard
         if (IsError(code))
         {
             var error = GetErrorName(code);
-            throw new ZStandardException(error);
+            throw ZStandardException.FromErrorName(error);
         }
     }
 
@@ -118,6 +118,6 @@ public static partial class ZStandard
     internal static void ThrowAsError(nuint code)
     {
         var error = GetErrorName(code);
-        throw new ZStandardException(error);
+        throw ZStandardException.FromErrorName(error);
     }
 }

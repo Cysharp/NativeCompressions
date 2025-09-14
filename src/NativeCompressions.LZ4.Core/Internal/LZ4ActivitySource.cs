@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 
-namespace NativeCompressions.LZ4.Internal;
+namespace NativeCompressions.Internal;
 
 internal static class LZ4ActivitySource
 {
