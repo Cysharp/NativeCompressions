@@ -219,7 +219,7 @@ public static partial class LZ4
     {
         using var decoder = new LZ4Decoder(dictionary);
 
-        Span<byte> temp = stackalloc byte[GetMaxFrameHeaderLength()];
+        Span<byte> temp = stackalloc byte[MaxFrameHeaderLength];
         source.Slice(0, Math.Min(source.Length, temp.Length)).CopyTo(temp);
 
         var frameInfo = decoder.GetFrameInfo(temp, out var bytesConsumed); // if temp is too small, LZ4F_getFrameInfo returns error.
@@ -367,8 +367,8 @@ public static partial class LZ4
 
         var sourceLength = RandomAccess.GetLength(source);
 
-        Span<byte> headerBuffer = stackalloc byte[LZ4.GetMaxFrameHeaderLength()];
-        var headerRead = RandomAccess.Read(source, headerBuffer.Slice(0, LZ4.GetMaxFrameHeaderLength()), offset); // read(oversize)
+        Span<byte> headerBuffer = stackalloc byte[LZ4.MaxFrameHeaderLength];
+        var headerRead = RandomAccess.Read(source, headerBuffer.Slice(0, LZ4.MaxFrameHeaderLength), offset); // read(oversize)
 
         var frameInfo = decoder.GetFrameInfo(headerBuffer.Slice(0, headerRead), out var bytesConsumed); // if short size, LZ4F_getFrameInfo returns error
         offset += bytesConsumed;
@@ -586,11 +586,11 @@ public static partial class LZ4
         // get header.
         {
             // pick min frame-header
-            var result = await source.ReadAtLeastAsync(LZ4.GetMinSizeToKnowFrameHeaderLength(), cancellationToken);
+            var result = await source.ReadAtLeastAsync(LZ4.MinSizeToKnowFrameHeaderLength, cancellationToken);
 
             // to simplify implementation, always copy to working buffer from ReadOnlySpan<byte>
-            Span<byte> headerBuffer = stackalloc byte[LZ4.GetMaxFrameHeaderLength()];
-            result.Buffer.Slice(0, LZ4.GetMinSizeToKnowFrameHeaderLength()).CopyTo(headerBuffer);
+            Span<byte> headerBuffer = stackalloc byte[LZ4.MaxFrameHeaderLength];
+            result.Buffer.Slice(0, LZ4.MinSizeToKnowFrameHeaderLength).CopyTo(headerBuffer);
             source.AdvanceTo(result.Buffer.Start); // no-advance
 
             var headerSize = decoder.GetHeaderSize(headerBuffer);
@@ -598,7 +598,7 @@ public static partial class LZ4
             // pick actual frame-header
             result = await source.ReadAtLeastAsync(headerSize, cancellationToken);
 
-            Span<byte> headerBuffer2 = stackalloc byte[LZ4.GetMaxFrameHeaderLength()]; // don't trust headerSize for untrusted data
+            Span<byte> headerBuffer2 = stackalloc byte[LZ4.MaxFrameHeaderLength]; // don't trust headerSize for untrusted data
             result.Buffer.Slice(0, headerSize).CopyTo(headerBuffer2);
 
             frameInfo = decoder.GetFrameInfo(headerBuffer2, out var consumed);

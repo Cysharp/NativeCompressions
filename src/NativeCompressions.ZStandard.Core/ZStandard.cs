@@ -1,4 +1,6 @@
-﻿using NativeCompressions.ZStandard.Raw;
+﻿using NativeCompressions.ZStandard.Internal;
+using NativeCompressions.ZStandard.Raw;
+using System.Drawing;
 using System.Runtime.CompilerServices;
 using static NativeCompressions.ZStandard.Raw.NativeMethods;
 
@@ -55,6 +57,34 @@ public static partial class ZStandard
         return (int)ZSTD_compressBound((nuint)inputSize);
     }
 
+    public const int MaxFrameHeaderSize = 18; // ZSTD_FRAMEHEADERSIZE_MAX 18
+
+    public static unsafe bool TryGetFrameContentSize(ReadOnlySpan<byte> source, out ulong size)
+    {
+        const ulong ZSTD_CONTENTSIZE_UNKNOWN = unchecked(0UL - 1);
+        const ulong ZSTD_CONTENTSIZE_ERROR = unchecked(0UL - 2);
+
+        // src hint : any size >= `ZSTD_frameHeaderSize_max` is large enough.
+        fixed (byte* src = source)
+        {
+            // @return : -decompressed size of `src` frame content, if known
+            // -ZSTD_CONTENTSIZE_UNKNOWN if the size cannot be determined
+            // -ZSTD_CONTENTSIZE_ERROR if an error occurred(e.g.invalid magic number, srcSize too small)
+            size = ZSTD_getFrameContentSize(src, (nuint)source.Length);
+
+            if (size == ZSTD_CONTENTSIZE_UNKNOWN)
+            {
+                return false;
+            }
+            else if (size == ZSTD_CONTENTSIZE_ERROR)
+            {
+                throw new ZStandardException("Error determining content size(e.g.invalid magic number, srcSize too small)");
+            }
+
+            return true;
+        }
+    }
+
     /// <summary>
     /// Checks if a code represents an error.
     /// </summary>
@@ -89,33 +119,5 @@ public static partial class ZStandard
     {
         var error = GetErrorName(code);
         throw new ZStandardException(error);
-    }
-
-    // TODO: remove GetDecompressedSize from here?
-
-    /// <summary>
-    /// Gets the decompressed size from a compressed frame.
-    /// </summary>
-    internal static long GetDecompressedSize(ReadOnlySpan<byte> compressedData)
-    {
-        unsafe
-        {
-            fixed (byte* ptr = compressedData)
-            {
-                var size = ZSTD_getFrameContentSize(ptr, (nuint)compressedData.Length);
-
-                // Check for special return values
-                if (size == ulong.MaxValue - 0) // ZSTD_CONTENTSIZE_UNKNOWN
-                {
-                    return -1;
-                }
-                if (size == ulong.MaxValue - 1) // ZSTD_CONTENTSIZE_ERROR
-                {
-                    throw new ZStandardException("Error determining content size");
-                }
-
-                return (long)size;
-            }
-        }
     }
 }

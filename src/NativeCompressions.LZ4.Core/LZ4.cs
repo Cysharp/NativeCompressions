@@ -51,7 +51,7 @@ public static partial class LZ4
     /// and flags to determine the full header size. Use this value to ensure you have
     /// enough data before calling <see cref="GetHeaderSize"/>.
     /// </remarks>
-    public static int GetMinSizeToKnowFrameHeaderLength() => 5; // LZ4F_MIN_SIZE_TO_KNOW_HEADER_LENGTH
+    public const int MinSizeToKnowFrameHeaderLength = 5; // LZ4F_MIN_SIZE_TO_KNOW_HEADER_LENGTH
 
     /// <summary>
     /// Gets the maximum possible size of an LZ4 frame header.
@@ -64,7 +64,7 @@ public static partial class LZ4
     /// - Dictionary ID: +4 bytes (if present)
     /// - Header checksum: +1 byte
     /// </remarks>
-    public static int GetMaxFrameHeaderLength() => 19; // LZ4F_HEADER_SIZE_MAX
+    public const int MaxFrameHeaderLength = 19; // LZ4F_HEADER_SIZE_MAX
 
     /// <summary>
     /// Gets the maximum possible size of an LZ4 frame footer.
@@ -75,7 +75,7 @@ public static partial class LZ4
     /// - End mark: 4 bytes (always present)
     /// - Content checksum: 4 bytes (if content checksum is enabled)
     /// </remarks>
-    public static int GetMaxFrameFooterLength() => 8;  // EndMarkSize + ChecksumSize
+    public const int MaxFrameFooterLength = 8;  // EndMarkSize + ChecksumSize
 
     public static int GetMaxCompressedLength(int inputSize) => GetMaxCompressedLength(inputSize, LZ4FrameOptions.Default);
 
@@ -95,7 +95,7 @@ public static partial class LZ4
     {
         using var decoder = new LZ4Decoder();
 
-        if (source.Length < GetMinSizeToKnowFrameHeaderLength())
+        if (source.Length < MinSizeToKnowFrameHeaderLength)
         {
             frameInfo = default;
             return false;
