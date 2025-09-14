@@ -85,7 +85,7 @@ public static partial class ZStandard
 
             if (status != OperationStatus.Done)
             {
-                throw new ZStandardException("Decompression failed: {status}");
+                throw new ZStandardException($"Decompression failed: {status}");
             }
 
 #if NETSTANDARD2_1
