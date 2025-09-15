@@ -21,7 +21,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\NativeCompressions.LZ4.csproj" />
-		<ProjectReference Include="..\..\src\NativeCompressions.ZStandard\NativeCompressions.ZStandard.csproj" />
+		<ProjectReference Include="..\..\src\NativeCompressions.ZStandard.csproj" />
 	</ItemGroup>
 
 

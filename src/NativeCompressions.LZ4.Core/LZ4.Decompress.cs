@@ -3,6 +3,7 @@ using NativeCompressions.Internal;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO.Compression;
 using System.IO.Pipelines;
 using System.Numerics;
@@ -26,21 +27,25 @@ public static partial class LZ4
 
             if (frameInfo.ContentSize != 0) // 0 means unknown
             {
+                if (frameInfo.ContentSize > (ulong)Array.MaxLength)
+                {
+                    throw new LZ4Exception($"Content size {frameInfo.ContentSize} exceeds maximum array size");
+                }
+
                 var destination = new byte[frameInfo.ContentSize]; // trusted ContentSize, decode one-shot.
                 var dest = destination.AsSpan();
 
                 var status = OperationStatus.DestinationTooSmall;
-                while (status == OperationStatus.DestinationTooSmall && source.Length > 0)
+                while (status == OperationStatus.DestinationTooSmall)
                 {
                     status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
                     source = source.Slice(bytesConsumed);
                     dest = dest.Slice(bytesWritten);
                 }
 
-                // TODO: if... done?
-                if (status == OperationStatus.NeedMoreData)
+                if (status != OperationStatus.Done)
                 {
-                    throw new InvalidOperationException("Invalid LZ4 frame.");
+                    throw new LZ4Exception("Invalid LZ4 frame.");
                 }
 
                 return destination;
