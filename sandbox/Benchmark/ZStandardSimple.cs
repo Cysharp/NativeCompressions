@@ -1,6 +1,6 @@
 ﻿using Benchmark.BenchmarkNetUtilities;
 using Benchmark.Models;
-using NativeCompressions.ZStandard;
+using NativeCompressions.Zstandard;
 using System.Buffers;
 using System.IO.Pipelines;
 using System.Text;
@@ -9,7 +9,7 @@ using System.Text.Json;
 namespace Benchmark;
 
 [PayloadColumn]
-public class ZStandardSimpleEncode
+public class ZstandardSimpleEncode
 {
     byte[] src = default!;
     public byte[] dest = default!;
@@ -27,36 +27,36 @@ public class ZStandardSimpleEncode
     //    dest = new byte[maxSize];
     //}
 
-    public ZStandardSimpleEncode()
+    public ZstandardSimpleEncode()
     {
         src = Resources.Silesia;
-        var maxSize = NativeCompressions.ZStandard.ZStandard.GetMaxCompressedLength(src.Length);
+        var maxSize = NativeCompressions.Zstandard.Zstandard.GetMaxCompressedLength(src.Length);
         dest = new byte[maxSize];
         writer = new ArrayBufferPipeWriter(maxSize);
     }
 
     [Benchmark]
-    public int NativeCompressions_ZStandard_Compress_Default()
+    public int NativeCompressions_Zstandard_Compress_Default()
     {
-        return NativeCompressions.ZStandard.ZStandard.Compress(src, dest);
+        return NativeCompressions.Zstandard.Zstandard.Compress(src, dest);
     }
 
     [Benchmark]
-    public int NativeCompressions_ZStandard_Compress_Minus4()
+    public int NativeCompressions_Zstandard_Compress_Minus4()
     {
-        return NativeCompressions.ZStandard.ZStandard.Compress(src, dest, -4);
+        return NativeCompressions.Zstandard.Zstandard.Compress(src, dest, -4);
     }
 
     //[Benchmark]
-    //public int NativeCompressions_ZStandard_Compress_Max()
+    //public int NativeCompressions_Zstandard_Compress_Max()
     //{
-    //    return NativeCompressions.ZStandard.ZStandard.Compress(src, dest, ZStandard.MaxCompressionLevel);
+    //    return NativeCompressions.Zstandard.Zstandard.Compress(src, dest, Zstandard.MaxCompressionLevel);
     //}
 
     [Benchmark]
-    public int NativeCompressions_ZStandard_Compress_Multithread()
+    public int NativeCompressions_Zstandard_Compress_Multithread()
     {
-        return NativeCompressions.ZStandard.ZStandard.Compress(src, dest, ZStandardCompressionOptions.Default with { NbWorkers = 4 });
+        return NativeCompressions.Zstandard.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default with { NbWorkers = 4 });
     }
 }
 

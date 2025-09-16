@@ -1,42 +1,42 @@
 ﻿using NativeCompressions.Internal;
-using NativeCompressions.ZStandard.Raw;
+using NativeCompressions.Zstandard.Raw;
 using System.Buffers;
-using static NativeCompressions.ZStandard.Raw.NativeMethods;
+using static NativeCompressions.Zstandard.Raw.NativeMethods;
 
-namespace NativeCompressions.ZStandard;
+namespace NativeCompressions.Zstandard;
 
 /// <summary>
-/// Provides streaming compression functionality for ZStandard format.
+/// Provides streaming compression functionality for Zstandard format.
 /// </summary>
-public unsafe struct ZStandardEncoder : IDisposable
+public unsafe struct ZstandardEncoder : IDisposable
 {
     ZSTD_CCtx_s* context;
     bool disposed;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ZStandardEncoder"/> struct with default settings.
+    /// Initializes a new instance of the <see cref="ZstandardEncoder"/> struct with default settings.
     /// </summary>
-    public ZStandardEncoder()
-        : this(ZStandardCompressionOptions.Default, null)
+    public ZstandardEncoder()
+        : this(ZstandardCompressionOptions.Default, null)
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ZStandardEncoder"/> struct with compressionLevel.
+    /// Initializes a new instance of the <see cref="ZstandardEncoder"/> struct with compressionLevel.
     /// </summary>
-    public ZStandardEncoder(int compressionLevel)
-        : this(new ZStandardCompressionOptions(compressionLevel), null)
+    public ZstandardEncoder(int compressionLevel)
+        : this(new ZstandardCompressionOptions(compressionLevel), null)
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ZStandardEncoder"/> struct with specified options.
+    /// Initializes a new instance of the <see cref="ZstandardEncoder"/> struct with specified options.
     /// </summary>
-    public ZStandardEncoder(in ZStandardCompressionOptions compressionOptions, ZStandardCompressionDictionary? dictionary = null)
+    public ZstandardEncoder(in ZstandardCompressionOptions compressionOptions, ZstandardCompressionDictionary? dictionary = null)
     {
         // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         this.context = ZSTD_createCCtx();
-        if (context == null) throw new ZStandardException("Failed to create compression context");
+        if (context == null) throw new ZstandardException("Failed to create compression context");
 
         compressionOptions.SetParameter(context);
         dictionary?.SetDictionary(context);
@@ -100,7 +100,7 @@ public unsafe struct ZStandardEncoder : IDisposable
 
             // @return provides a minimum amount of data remaining to be flushed from internal buffers or an error code
             var remaining = ZSTD_compressStream2(context, &output, &input, (int)endOperation);
-            if (ZStandard.IsError(remaining))
+            if (Zstandard.IsError(remaining))
             {
                 bytesWritten = 0;
                 bytesConsumed = 0;
@@ -137,7 +137,7 @@ public unsafe struct ZStandardEncoder : IDisposable
     /// Resets the encoder to start a new compression session.
     /// </summary>
     /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
-    /// <exception cref="ZStandardException">Thrown when the reset operation fails.</exception>
+    /// <exception cref="ZstandardException">Thrown when the reset operation fails.</exception>
     /// <remarks>
     /// This method resets only the session state, preserving all compression parameters.
     /// After calling Reset(), the encoder is ready to compress a new frame with the same settings.
@@ -148,15 +148,15 @@ public unsafe struct ZStandardEncoder : IDisposable
         ValidateDisposed();
 
         var result = ZSTD_CCtx_reset(context, (int)ZSTD_ResetDirective.ZSTD_reset_session_only);
-        ZStandard.ThrowIfError(result);
+        Zstandard.ThrowIfError(result);
     }
 
-    public void Reset(in ZStandardCompressionOptions options, ZStandardCompressionDictionary? dictionary = null)
+    public void Reset(in ZstandardCompressionOptions options, ZstandardCompressionDictionary? dictionary = null)
     {
         ValidateDisposed();
 
         var result = ZSTD_CCtx_reset(context, (int)ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
-        ZStandard.ThrowIfError(result);
+        Zstandard.ThrowIfError(result);
 
         options.SetParameter(context);
         dictionary?.SetDictionary(context);

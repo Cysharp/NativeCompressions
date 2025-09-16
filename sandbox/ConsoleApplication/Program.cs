@@ -15,21 +15,21 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using NativeCompressions.ZStandard;
+using NativeCompressions.Zstandard;
 
 
 unsafe
 {
-    var ctx = NativeCompressions.ZStandard.Raw.NativeMethods.ZSTD_createCCtx();
+    var ctx = NativeCompressions.Zstandard.Raw.NativeMethods.ZSTD_createCCtx();
 
-    var x = NativeCompressions.ZStandard.Raw.NativeMethods.ZSTD_CCtx_setParameter(ctx, 400, 4);
-    var xxx = NativeCompressions.ZStandard.Raw.NativeMethods.ZSTD_getErrorName(x);
+    var x = NativeCompressions.Zstandard.Raw.NativeMethods.ZSTD_CCtx_setParameter(ctx, 400, 4);
+    var xxx = NativeCompressions.Zstandard.Raw.NativeMethods.ZSTD_getErrorName(x);
     Console.WriteLine(new string((sbyte*)xxx));
 }
 
-Console.WriteLine(ZStandard.Version);
-Console.WriteLine(ZStandard.MinCompressionLevel);
-Console.WriteLine(ZStandard.MaxCompressionLevel);
+Console.WriteLine(Zstandard.Version);
+Console.WriteLine(Zstandard.MinCompressionLevel);
+Console.WriteLine(Zstandard.MaxCompressionLevel);
 
 
 

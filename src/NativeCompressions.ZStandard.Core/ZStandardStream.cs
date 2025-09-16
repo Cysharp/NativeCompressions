@@ -5,14 +5,14 @@ using System.Buffers;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 
-namespace NativeCompressions.ZStandard;
+namespace NativeCompressions.Zstandard;
 
-public sealed class ZStandardStream : Stream
+public sealed class ZstandardStream : Stream
 {
     const int BufferSize = 65536;
 
-    ZStandardEncoder encoder;
-    ZStandardDecoder decoder;
+    ZstandardEncoder encoder;
+    ZstandardDecoder decoder;
 
     Stream stream;
     CompressionMode mode;
@@ -23,7 +23,7 @@ public sealed class ZStandardStream : Stream
     int readBufferOffset; // for decompress
     int readBufferCount; // for decompress
 
-    public ZStandardStream(Stream stream, CompressionMode mode, ZStandardCompressionDictionary? compressionDictionary = null, bool leaveOpen = false)
+    public ZstandardStream(Stream stream, CompressionMode mode, ZstandardCompressionDictionary? compressionDictionary = null, bool leaveOpen = false)
     {
         this.mode = mode;
         this.stream = stream;
@@ -32,30 +32,30 @@ public sealed class ZStandardStream : Stream
 
         if (mode == CompressionMode.Decompress)
         {
-            this.decoder = new ZStandardDecoder(ZStandardDecompressionOptions.Default, compressionDictionary);
+            this.decoder = new ZstandardDecoder(ZstandardDecompressionOptions.Default, compressionDictionary);
         }
         else
         {
-            this.encoder = new ZStandardEncoder(ZStandardCompressionOptions.Default, compressionDictionary);
+            this.encoder = new ZstandardEncoder(ZstandardCompressionOptions.Default, compressionDictionary);
         }
     }
 
-    public ZStandardStream(Stream stream, in ZStandardCompressionOptions compressionOptions, ZStandardCompressionDictionary? compressionDictionary, bool leaveOpen = false)
+    public ZstandardStream(Stream stream, in ZstandardCompressionOptions compressionOptions, ZstandardCompressionDictionary? compressionDictionary, bool leaveOpen = false)
     {
         this.mode = CompressionMode.Compress;
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.readBufferCount = 0;
-        this.encoder = new ZStandardEncoder(compressionOptions, compressionDictionary);
+        this.encoder = new ZstandardEncoder(compressionOptions, compressionDictionary);
     }
 
-    public ZStandardStream(Stream stream, in ZStandardDecompressionOptions decompressionOptions, ZStandardCompressionDictionary? compressionDictionary, bool leaveOpen = false)
+    public ZstandardStream(Stream stream, in ZstandardDecompressionOptions decompressionOptions, ZstandardCompressionDictionary? compressionDictionary, bool leaveOpen = false)
     {
         this.mode = CompressionMode.Decompress;
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.readBufferCount = 0;
-        this.decoder = new ZStandardDecoder(decompressionOptions, compressionDictionary);
+        this.decoder = new ZstandardDecoder(decompressionOptions, compressionDictionary);
     }
 
     public override bool CanRead => mode == CompressionMode.Decompress && stream != null && stream.CanRead;

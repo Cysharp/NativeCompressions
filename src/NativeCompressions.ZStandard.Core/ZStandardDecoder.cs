@@ -1,34 +1,34 @@
 ﻿using NativeCompressions.Internal;
-using NativeCompressions.ZStandard.Raw;
+using NativeCompressions.Zstandard.Raw;
 using System.Buffers;
-using static NativeCompressions.ZStandard.Raw.NativeMethods;
+using static NativeCompressions.Zstandard.Raw.NativeMethods;
 
-namespace NativeCompressions.ZStandard;
+namespace NativeCompressions.Zstandard;
 
 /// <summary>
-/// Provides streaming decompression functionality for ZStandard format.
+/// Provides streaming decompression functionality for Zstandard format.
 /// </summary>
-public unsafe struct ZStandardDecoder : IDisposable
+public unsafe struct ZstandardDecoder : IDisposable
 {
     ZSTD_DCtx_s* context;
     bool disposed;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ZStandardDecoder"/> struct.
+    /// Initializes a new instance of the <see cref="ZstandardDecoder"/> struct.
     /// </summary>
-    public ZStandardDecoder()
-        : this(ZStandardDecompressionOptions.Default, null)
+    public ZstandardDecoder()
+        : this(ZstandardDecompressionOptions.Default, null)
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ZStandardDecoder"/> struct with specified options.
+    /// Initializes a new instance of the <see cref="ZstandardDecoder"/> struct with specified options.
     /// </summary>
-    public ZStandardDecoder(in ZStandardDecompressionOptions decompressionOptions, ZStandardCompressionDictionary? dictionary = null)
+    public ZstandardDecoder(in ZstandardDecompressionOptions decompressionOptions, ZstandardCompressionDictionary? dictionary = null)
     {
         // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         context = ZSTD_createDCtx();
-        if (context == null) throw new ZStandardException("Failed to create decompression context");
+        if (context == null) throw new ZstandardException("Failed to create decompression context");
 
         decompressionOptions.SetParameter(context);
         dictionary?.SetDictionary(context);
@@ -71,7 +71,7 @@ public unsafe struct ZStandardDecoder : IDisposable
             bytesWritten = (int)output.pos;
             hintOfNextSrcSize = (int)hintOrErrorCode;
 
-            if (ZStandard.IsError(hintOrErrorCode))
+            if (Zstandard.IsError(hintOrErrorCode))
             {
                 return OperationStatus.InvalidData;
             }
@@ -110,15 +110,15 @@ public unsafe struct ZStandardDecoder : IDisposable
         ValidateDisposed();
 
         var result = ZSTD_DCtx_reset(context, (int)ZSTD_ResetDirective.ZSTD_reset_session_only);
-        ZStandard.ThrowIfError(result);
+        Zstandard.ThrowIfError(result);
     }
 
-    public void Reset(in ZStandardDecompressionOptions options, ZStandardCompressionDictionary? dictionary = null)
+    public void Reset(in ZstandardDecompressionOptions options, ZstandardCompressionDictionary? dictionary = null)
     {
         ValidateDisposed();
 
         var result = ZSTD_DCtx_reset(context, (int)ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
-        ZStandard.ThrowIfError(result);
+        Zstandard.ThrowIfError(result);
 
         options.SetParameter(context);
         dictionary?.SetDictionary(context);

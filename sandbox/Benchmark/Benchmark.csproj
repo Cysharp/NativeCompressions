@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -47,7 +47,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\NativeCompressions.LZ4.csproj" />
-    <ProjectReference Include="..\..\src\NativeCompressions.ZStandard.csproj" />
+    <ProjectReference Include="..\..\src\NativeCompressions.Zstandard.csproj" />
   </ItemGroup>
 
 

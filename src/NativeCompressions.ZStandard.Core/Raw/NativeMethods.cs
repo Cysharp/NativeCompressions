@@ -8,7 +8,7 @@ using System;
 using System.Runtime.InteropServices;
 
 
-namespace NativeCompressions.ZStandard.Raw
+namespace NativeCompressions.Zstandard.Raw
 {
     public static unsafe partial class NativeMethods
     {

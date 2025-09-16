@@ -1,10 +1,10 @@
-﻿namespace NativeCompressions.ZStandard;
+﻿namespace NativeCompressions.Zstandard;
 
-public class ZStandardException(string message)
+public class ZstandardException(string message)
     : Exception(message)
 {
-    public static ZStandardException FromErrorName(string errorName)
+    public static ZstandardException FromErrorName(string errorName)
     {
-        return new ZStandardException($"ZStandard native operation has been failed, error: {errorName}");
+        return new ZstandardException($"Zstandard native operation has been failed, error: {errorName}");
     }
 }

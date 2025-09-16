@@ -1,15 +1,15 @@
 ﻿using System.Buffers;
 using System.IO.Pipelines;
-using static NativeCompressions.ZStandard.Raw.NativeMethods;
+using static NativeCompressions.Zstandard.Raw.NativeMethods;
 
-namespace NativeCompressions.ZStandard;
+namespace NativeCompressions.Zstandard;
 
-public static partial class ZStandard
+public static partial class Zstandard
 {
     const int AllowParallelCompressThreshold = 1024 * 1024; // 1MB
 
     /// <summary>
-    /// Compresses data using ZStandard algorithm.
+    /// Compresses data using Zstandard algorithm.
     /// </summary>
     public static unsafe byte[] Compress(ReadOnlySpan<byte> source, int compressionLevel = DefaultCompressionLevel)
     {
@@ -27,9 +27,9 @@ public static partial class ZStandard
     }
 
     /// <summary>
-    /// Compresses data using ZStandard algorithm with specified options.
+    /// Compresses data using Zstandard algorithm with specified options.
     /// </summary>
-    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, in ZStandardCompressionOptions compressionOptions, ZStandardCompressionDictionary? dictionary = null)
+    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, in ZstandardCompressionOptions compressionOptions, ZstandardCompressionDictionary? dictionary = null)
     {
         var maxLength = GetMaxCompressedLength(source.Length);
         var destination = ArrayPool<byte>.Shared.Rent(maxLength);
@@ -56,7 +56,7 @@ public static partial class ZStandard
         }
     }
 
-    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in ZStandardCompressionOptions compressionOptions, ZStandardCompressionDictionary? dictionary = null)
+    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in ZstandardCompressionOptions compressionOptions, ZstandardCompressionDictionary? dictionary = null)
     {
         fixed (byte* src = source)
         fixed (byte* dest = destination)
@@ -65,7 +65,7 @@ public static partial class ZStandard
             var context = ZSTD_createCCtx();
             if (context == null)
             {
-                throw new ZStandardException("Failed to create compression context");
+                throw new ZstandardException("Failed to create compression context");
             }
 
             try

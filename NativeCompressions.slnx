@@ -9,12 +9,12 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/NativeCompressions.LZ4.Core/NativeCompressions.LZ4.Core.csproj" />
-    <Project Path="src/NativeCompressions.ZStandard.Core/NativeCompressions.ZStandard.Core.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Core/NativeCompressions.Zstandard.Core.csproj" />
   </Folder>
   <Folder Name="/src/meta/">
     <Project Path="src/NativeCompressions.csproj" />
     <Project Path="src/NativeCompressions.LZ4.csproj" />
-    <Project Path="src/NativeCompressions.ZStandard.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.csproj" />
   </Folder>
   <Folder Name="/src/runtimes/">
     <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.csproj" />
@@ -30,18 +30,18 @@
     <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.ios-arm64.csproj" />
     <Project Path="src/NativeCompressions.LZ4.Runtime/NativeCompressions.LZ4.Runtime.ios-x64.csproj" />
 
-    <Project Path="src/NativeCompressions.ZStandard.Runtime/NativeCompressions.ZStandard.Runtime.csproj" />
-    <Project Path="src/NativeCompressions.ZStandard.Runtime/NativeCompressions.ZStandard.Runtime.linux-arm64.csproj" />
-    <Project Path="src/NativeCompressions.ZStandard.Runtime/NativeCompressions.ZStandard.Runtime.linux-x64.csproj" />
-    <Project Path="src/NativeCompressions.ZStandard.Runtime/NativeCompressions.ZStandard.Runtime.osx-arm64.csproj" />
-    <Project Path="src/NativeCompressions.ZStandard.Runtime/NativeCompressions.ZStandard.Runtime.osx-x64.csproj" />
-    <Project Path="src/NativeCompressions.ZStandard.Runtime/NativeCompressions.ZStandard.Runtime.win-arm64.csproj" />
-    <Project Path="src/NativeCompressions.ZStandard.Runtime/NativeCompressions.ZStandard.Runtime.win-x64.csproj" />
-    <Project Path="src/NativeCompressions.ZStandard.Runtime/NativeCompressions.ZStandard.Runtime.android-arm.csproj" />
-    <Project Path="src/NativeCompressions.ZStandard.Runtime/NativeCompressions.ZStandard.Runtime.android-arm64.csproj" />
-    <Project Path="src/NativeCompressions.ZStandard.Runtime/NativeCompressions.ZStandard.Runtime.android-x64.csproj" />
-    <Project Path="src/NativeCompressions.ZStandard.Runtime/NativeCompressions.ZStandard.Runtime.ios-arm64.csproj" />
-    <Project Path="src/NativeCompressions.ZStandard.Runtime/NativeCompressions.ZStandard.Runtime.ios-x64.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.linux-arm64.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.linux-x64.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.osx-arm64.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.osx-x64.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.win-arm64.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.win-x64.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.android-arm.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.android-arm64.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.android-x64.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.ios-arm64.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.ios-x64.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/NativeCompressions.Tests/NativeCompressions.Tests.csproj" />

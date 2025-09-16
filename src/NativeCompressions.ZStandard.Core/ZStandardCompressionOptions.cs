@@ -1,29 +1,29 @@
-﻿using NativeCompressions.ZStandard.Raw;
+﻿using NativeCompressions.Zstandard.Raw;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using static NativeCompressions.ZStandard.Raw.NativeMethods;
+using static NativeCompressions.Zstandard.Raw.NativeMethods;
 
-namespace NativeCompressions.ZStandard;
+namespace NativeCompressions.Zstandard;
 
 /// <summary>
 /// Represents as ZSTD_cParameter.
 /// </summary>
 [StructLayout(LayoutKind.Auto)]
-public readonly record struct ZStandardCompressionOptions
+public readonly record struct ZstandardCompressionOptions
 {
-    public static readonly ZStandardCompressionOptions Default = new ZStandardCompressionOptions();
+    public static readonly ZstandardCompressionOptions Default = new ZstandardCompressionOptions();
 
     public bool IsDefault
     {
         get
         {
             var thisSpan = MemoryMarshal.CreateReadOnlySpan(
-                ref Unsafe.As<ZStandardCompressionOptions, byte>(ref Unsafe.AsRef(in this)),
-                Unsafe.SizeOf<ZStandardCompressionOptions>());
+                ref Unsafe.As<ZstandardCompressionOptions, byte>(ref Unsafe.AsRef(in this)),
+                Unsafe.SizeOf<ZstandardCompressionOptions>());
 
             var defaultSpan = MemoryMarshal.CreateReadOnlySpan(
-                ref Unsafe.As<ZStandardCompressionOptions, byte>(ref Unsafe.AsRef(in Default)),
-                Unsafe.SizeOf<ZStandardCompressionOptions>());
+                ref Unsafe.As<ZstandardCompressionOptions, byte>(ref Unsafe.AsRef(in Default)),
+                Unsafe.SizeOf<ZstandardCompressionOptions>());
 
             return thisSpan.SequenceEqual(defaultSpan);
         }
@@ -49,11 +49,11 @@ public readonly record struct ZStandardCompressionOptions
     readonly int jobSize;
     readonly int overlapLog;
 
-    public ZStandardCompressionOptions()
+    public ZstandardCompressionOptions()
     {
     }
 
-    public ZStandardCompressionOptions(int compressionLevel)
+    public ZstandardCompressionOptions(int compressionLevel)
     {
         this.compressionLevel = compressionLevel;
     }
@@ -370,9 +370,9 @@ public readonly record struct ZStandardCompressionOptions
         if (value != 0)
         {
             var code = ZSTD_CCtx_setParameter(context, (int)parameter, value);
-            if (ZStandard.IsError(code)) // for inlining
+            if (Zstandard.IsError(code)) // for inlining
             {
-                ZStandard.ThrowAsError(code);
+                Zstandard.ThrowAsError(code);
             }
         }
     }
@@ -383,9 +383,9 @@ public readonly record struct ZStandardCompressionOptions
         if (!value)
         {
             var code = ZSTD_CCtx_setParameter(context, (int)parameter, 0); // set to false
-            if (ZStandard.IsError(code)) // for inlining
+            if (Zstandard.IsError(code)) // for inlining
             {
-                ZStandard.ThrowAsError(code);
+                Zstandard.ThrowAsError(code);
             }
         }
     }
@@ -396,9 +396,9 @@ public readonly record struct ZStandardCompressionOptions
         if (value)
         {
             var code = ZSTD_CCtx_setParameter(context, (int)parameter, 1); // set to true
-            if (ZStandard.IsError(code)) // for inlining
+            if (Zstandard.IsError(code)) // for inlining
             {
-                ZStandard.ThrowAsError(code);
+                Zstandard.ThrowAsError(code);
             }
         }
     }

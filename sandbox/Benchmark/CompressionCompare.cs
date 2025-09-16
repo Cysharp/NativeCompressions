@@ -1,7 +1,7 @@
 ﻿using Benchmark.BenchmarkNetUtilities;
 using Benchmark.Models;
 using NativeCompressions.LZ4;
-using NativeCompressions.ZStandard;
+using NativeCompressions.Zstandard;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
@@ -16,9 +16,9 @@ public class CompressionCompare
 
     List<Question> target = default!;
 
-    // int zstdefault = NativeCompressions.ZStandard.ZStandard.DefaultCompressionLevel; // 3
-    int zstdmin = -4; // NativeCompressions.ZStandard.ZStdNativeMethods.ZSTD_minCLevel();
-    int zstdmax = NativeCompressions.ZStandard.ZStandard.MaxCompressionLevel; // 22
+    // int zstdefault = NativeCompressions.Zstandard.Zstandard.DefaultCompressionLevel; // 3
+    int zstdmin = -4; // NativeCompressions.Zstandard.ZStdNativeMethods.ZSTD_minCLevel();
+    int zstdmax = NativeCompressions.Zstandard.Zstandard.MaxCompressionLevel; // 22
 
     public CompressionCompare()
     {
@@ -46,24 +46,24 @@ public class CompressionCompare
 
 
     [Benchmark]
-    public unsafe int ZStandard_Min()
+    public unsafe int Zstandard_Min()
     {
-        var bytesWritten = NativeCompressions.ZStandard.ZStandard.Compress(src, dest, zstdmin);
+        var bytesWritten = NativeCompressions.Zstandard.Zstandard.Compress(src, dest, zstdmin);
         return bytesWritten;
     }
 
     [Benchmark]
-    public unsafe int ZStandard_Default()
+    public unsafe int Zstandard_Default()
     {
-        var bytesWritten = NativeCompressions.ZStandard.ZStandard.Compress(src, dest);
+        var bytesWritten = NativeCompressions.Zstandard.Zstandard.Compress(src, dest);
         return bytesWritten;
     }
 
 
     [Benchmark]
-    public unsafe int ZStandard_Max()
+    public unsafe int Zstandard_Max()
     {
-        var bytesWritten = NativeCompressions.ZStandard.ZStandard.Compress(src, dest, zstdmax);
+        var bytesWritten = NativeCompressions.Zstandard.Zstandard.Compress(src, dest, zstdmax);
         return bytesWritten;
     }
 

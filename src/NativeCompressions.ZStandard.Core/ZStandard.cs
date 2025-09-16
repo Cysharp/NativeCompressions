@@ -1,17 +1,17 @@
 ﻿using NativeCompressions.Internal;
-using NativeCompressions.ZStandard.Raw;
+using NativeCompressions.Zstandard.Raw;
 using System.Drawing;
 using System.Runtime.CompilerServices;
-using static NativeCompressions.ZStandard.Raw.NativeMethods;
+using static NativeCompressions.Zstandard.Raw.NativeMethods;
 
-namespace NativeCompressions.ZStandard;
+namespace NativeCompressions.Zstandard;
 
-public static partial class ZStandard
+public static partial class Zstandard
 {
     static string? version;
 
     /// <summary>
-    /// Gets the version string of the ZStandard library.
+    /// Gets the version string of the Zstandard library.
     /// </summary>
     public static string Version
     {
@@ -30,7 +30,7 @@ public static partial class ZStandard
     }
 
     /// <summary>
-    /// Gets the version number of the ZStandard library.
+    /// Gets the version number of the Zstandard library.
     /// </summary>
     public static uint VersionNumber => ZSTD_versionNumber();
 
@@ -78,7 +78,7 @@ public static partial class ZStandard
             }
             else if (size == ZSTD_CONTENTSIZE_ERROR)
             {
-                throw new ZStandardException("Error determining content size(e.g.invalid magic number, srcSize too small)");
+                throw new ZstandardException("Error determining content size(e.g.invalid magic number, srcSize too small)");
             }
 
             return true;
@@ -110,7 +110,7 @@ public static partial class ZStandard
         if (IsError(code))
         {
             var error = GetErrorName(code);
-            throw ZStandardException.FromErrorName(error);
+            throw ZstandardException.FromErrorName(error);
         }
     }
 
@@ -118,6 +118,6 @@ public static partial class ZStandard
     internal static void ThrowAsError(nuint code)
     {
         var error = GetErrorName(code);
-        throw ZStandardException.FromErrorName(error);
+        throw ZstandardException.FromErrorName(error);
     }
 }

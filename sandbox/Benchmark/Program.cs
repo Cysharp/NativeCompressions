@@ -22,8 +22,8 @@ BenchmarkSwitcher.FromAssembly(Assembly.GetEntryAssembly()!).Run(args, config);
 
 global::System.Console.WriteLine("DEBUG BUILD.");
 
-var bench = new ZStandardSimpleEncode();
-var i = bench.NativeCompressions_ZStandard_Compress_Multithread();
+var bench = new ZstandardSimpleEncode();
+var i = bench.NativeCompressions_Zstandard_Compress_Multithread();
 Console.WriteLine(i);
 
 return;

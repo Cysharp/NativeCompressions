@@ -1,5 +1,5 @@
 ﻿//using NativeCompressions.Lz4;
-//using NativeCompressions.ZStandard;
+//using NativeCompressions.Zstandard;
 
 //namespace NativeCompressions.Tests
 //{

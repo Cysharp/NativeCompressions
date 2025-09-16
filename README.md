@@ -3,19 +3,19 @@
 <!-- [![CI](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml/badge.svg)](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml)
 [![NuGet](https://img.shields.io/nuget/v/NativeCompressions)](https://www.nuget.org/packages/NativeCompressions) -->
 
-NativeCompressions provides native library bindings, streaming processing, and multi-threading support for [LZ4](https://github.com/lz4/lz4) with its excellent decompression speed, and [ZStandard](https://github.com/facebook/zstd) with its superior balance of compression ratio and performance.
+NativeCompressions provides native library bindings, streaming processing, and multi-threading support for [LZ4](https://github.com/lz4/lz4) with its excellent decompression speed, and [Zstandard](https://github.com/facebook/zstd) with its superior balance of compression ratio and performance.
 
 ![](https://github.com/user-attachments/assets/5ab559ef-86ca-42ba-add7-b6904a335409)
 
 ![](https://github.com/user-attachments/assets/3eed676a-e3b5-411b-95c7-6be6896f991a)
 
-> Encode [silesia.tar](https://en.wikipedia.org/wiki/Silesia_corpus) corpus(200MB) with default LZ4 options / ZStandard options.
+> Encode [silesia.tar](https://en.wikipedia.org/wiki/Silesia_corpus) corpus(200MB) with default LZ4 options / Zstandard options.
 
-Compression is crucial for any application, but .NET has had limited options. NativeCompressions builds state-of-the-art algorithms (LZ4, ZStandard) with allocation-free, stream-less streaming APIs. Furthermore, by leveraging modern C# APIs (`Span<T>`, `RandomAccess`, `PipeReader/Writer`) to provide high-level multi-threading APIs, we achieve high-performance compression in any environment.
+Compression is crucial for any application, but .NET has had limited options. NativeCompressions builds state-of-the-art algorithms (LZ4, Zstandard) with allocation-free, stream-less streaming APIs. Furthermore, by leveraging modern C# APIs (`Span<T>`, `RandomAccess`, `PipeReader/Writer`) to provide high-level multi-threading APIs, we achieve high-performance compression in any environment.
 
-We chose native bindings over Pure C# implementation because compression library performance depends not only on algorithms but also on implementation. LZ4 and ZStandard are actively developed with performance improvements in every release. It's impossible to keep synchronizing advanced memory operations and CPU architecture optimizations with .NET ports. To continuously provide the best and latest performance, native bindings are necessary. Note that .NET's standard `System.IO.Compression.BrotliEncoder/Decoder` links [brotli](https://github.com/dotnet/runtime/tree/main/src/native/external/brotli) to [libSystem.IO.Compression.Native](https://github.com/dotnet/runtime/tree/main/src/native/libs/System.IO.Compression.Native), also DeflateStream/GZipStream uses native zlib (from .NET 9, it's [zlib-ng](https://github.com/zlib-ng/zlib-ng)), meaning we follow the same adoption criteria as .NET official.
+We chose native bindings over Pure C# implementation because compression library performance depends not only on algorithms but also on implementation. LZ4 and Zstandard are actively developed with performance improvements in every release. It's impossible to keep synchronizing advanced memory operations and CPU architecture optimizations with .NET ports. To continuously provide the best and latest performance, native bindings are necessary. Note that .NET's standard `System.IO.Compression.BrotliEncoder/Decoder` links [brotli](https://github.com/dotnet/runtime/tree/main/src/native/external/brotli) to [libSystem.IO.Compression.Native](https://github.com/dotnet/runtime/tree/main/src/native/libs/System.IO.Compression.Native), also DeflateStream/GZipStream uses native zlib (from .NET 9, it's [zlib-ng](https://github.com/zlib-ng/zlib-ng)), meaning we follow the same adoption criteria as .NET official.
 
-LZ4 and ZStandard are created by the same author [Cyan4973](https://github.com/Cyan4973), showing high performance against competitors in their respective domains (LZ4 vs Snappy / ZStandard vs Brotli), and are widely used as industry standards.
+LZ4 and Zstandard are created by the same author [Cyan4973](https://github.com/Cyan4973), showing high performance against competitors in their respective domains (LZ4 vs Snappy / Zstandard vs Brotli), and are widely used as industry standards.
 
 > [!NOTE]
 > This library is in preview. We do not recommend using it in production environments. The API may change. We are collecting feedback during this preview period.
@@ -38,12 +38,12 @@ byte[] decompressed = LZ4.Decompress(compressed);
 ```
 
 ```csharp
-// for ZStandard
-using NativeCompressions.ZStandard;
+// for Zstandard
+using NativeCompressions.Zstandard;
 
 // Simple compression
-byte[] compressed = ZStandard.Compress(sourceData);
-byte[] decompressed = ZStandard.Decompress(compressed);
+byte[] compressed = Zstandard.Compress(sourceData);
+byte[] decompressed = Zstandard.Decompress(compressed);
 ```
 
 Install for Unity, see [Unity](#unity) section.
@@ -256,9 +256,9 @@ var decompressed = destination.AsSpan(0, decompressedSize).ToArray();
 ### Raw API
 TODO
 
-ZStandard
+Zstandard
 ---
-It is generally similar to the LZ4 API. The `ZStandard` class has static methods, and there are `ZStandardEncoder` and `ZStandardDecoder` as Streamless-streaming APIs. Currently, the PipeReader/PipeWriter API is not implemented, but it will eventually be provided.
+It is generally similar to the LZ4 API. The `Zstandard` class has static methods, and there are `ZstandardEncoder` and `ZstandardDecoder` as Streamless-streaming APIs. Currently, the PipeReader/PipeWriter API is not implemented, but it will eventually be provided.
 
 Detailed documentation will also be prepared later.
 
@@ -280,8 +280,8 @@ License
 ---
 This library is licensed under the MIT License.
 
-This library includes precompiled binaries of LZ4 and ZStandard. See LICENSE file for full license texts.
+This library includes precompiled binaries of LZ4 and Zstandard. See LICENSE file for full license texts.
 
 ### Third-party Notices
 * LZ4 - [Licensed under BSD 2-Clause license](https://github.com/lz4/lz4/blob/dev/LICENSE)
-* ZStandard - [Licensed under BSD License](https://github.com/facebook/zstd/blob/dev/LICENSE)
+* Zstandard - [Licensed under BSD License](https://github.com/facebook/zstd/blob/dev/LICENSE)

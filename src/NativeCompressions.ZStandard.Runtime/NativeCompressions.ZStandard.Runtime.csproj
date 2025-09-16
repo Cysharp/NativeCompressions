@@ -7,7 +7,7 @@
 		<IncludeBuildOutput>false</IncludeBuildOutput>
 		<IncludeContentInPack>true</IncludeContentInPack>
 		<NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
-		<Description>ZStandard native runtimes for NativeCompressions.ZStandard.</Description>
+		<Description>Zstandard native runtimes for NativeCompressions.Zstandard.</Description>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -15,17 +15,17 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="NativeCompressions.ZStandard.Runtime.linux-arm64.csproj" />
-		<ProjectReference Include="NativeCompressions.ZStandard.Runtime.linux-x64.csproj" />
-		<ProjectReference Include="NativeCompressions.ZStandard.Runtime.osx-arm64.csproj" />
-		<ProjectReference Include="NativeCompressions.ZStandard.Runtime.osx-x64.csproj" />
-		<ProjectReference Include="NativeCompressions.ZStandard.Runtime.win-arm64.csproj" />
-		<ProjectReference Include="NativeCompressions.ZStandard.Runtime.win-x64.csproj" />
-    <ProjectReference Include="NativeCompressions.ZStandard.Runtime.android-arm.csproj" />
-    <ProjectReference Include="NativeCompressions.ZStandard.Runtime.android-arm64.csproj" />
-    <ProjectReference Include="NativeCompressions.ZStandard.Runtime.android-x64.csproj" />
-    <ProjectReference Include="NativeCompressions.ZStandard.Runtime.ios-arm64.csproj" />
-    <ProjectReference Include="NativeCompressions.ZStandard.Runtime.ios-x64.csproj" />
+		<ProjectReference Include="NativeCompressions.Zstandard.Runtime.linux-arm64.csproj" />
+		<ProjectReference Include="NativeCompressions.Zstandard.Runtime.linux-x64.csproj" />
+		<ProjectReference Include="NativeCompressions.Zstandard.Runtime.osx-arm64.csproj" />
+		<ProjectReference Include="NativeCompressions.Zstandard.Runtime.osx-x64.csproj" />
+		<ProjectReference Include="NativeCompressions.Zstandard.Runtime.win-arm64.csproj" />
+		<ProjectReference Include="NativeCompressions.Zstandard.Runtime.win-x64.csproj" />
+    <ProjectReference Include="NativeCompressions.Zstandard.Runtime.android-arm.csproj" />
+    <ProjectReference Include="NativeCompressions.Zstandard.Runtime.android-arm64.csproj" />
+    <ProjectReference Include="NativeCompressions.Zstandard.Runtime.android-x64.csproj" />
+    <ProjectReference Include="NativeCompressions.Zstandard.Runtime.ios-arm64.csproj" />
+    <ProjectReference Include="NativeCompressions.Zstandard.Runtime.ios-x64.csproj" />
 	</ItemGroup>
 
 </Project>

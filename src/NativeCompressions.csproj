@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFrameworks>netstandard2.1;net8.0;net9.0;</TargetFrameworks>
@@ -7,7 +7,7 @@
 		<IncludeBuildOutput>false</IncludeBuildOutput>
 		<IncludeContentInPack>true</IncludeContentInPack>
 		<NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
-		<Description>Native LZ4/ZStandard high-performance streaming compression for .NET.</Description>
+		<Description>Native LZ4/Zstandard high-performance streaming compression for .NET.</Description>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -18,7 +18,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="NativeCompressions.LZ4.csproj" />
-		<ProjectReference Include="NativeCompressions.ZStandard.csproj" />
+		<ProjectReference Include="NativeCompressions.Zstandard.csproj" />
 	</ItemGroup>
 
 </Project>

@@ -1,10 +1,10 @@
-﻿using NativeCompressions.ZStandard.Raw;
+﻿using NativeCompressions.Zstandard.Raw;
 using System.Runtime.InteropServices;
-using static NativeCompressions.ZStandard.Raw.NativeMethods;
+using static NativeCompressions.Zstandard.Raw.NativeMethods;
 
-namespace NativeCompressions.ZStandard;
+namespace NativeCompressions.Zstandard;
 
-public sealed class ZStandardCompressionDictionary : SafeHandle
+public sealed class ZstandardCompressionDictionary : SafeHandle
 {
     public override bool IsInvalid => handle == IntPtr.Zero;
 
@@ -12,7 +12,7 @@ public sealed class ZStandardCompressionDictionary : SafeHandle
     public unsafe ZSTD_CDict_s* CompressionHandle => ((ZSTD_CDict_s*)handle);
     public unsafe ZSTD_DDict_s* DecompressionHandle { get; private set; }
 
-    public ZStandardCompressionDictionary(ReadOnlySpan<byte> dictionaryData, int compressionLevel = ZStandard.DefaultCompressionLevel)
+    public ZstandardCompressionDictionary(ReadOnlySpan<byte> dictionaryData, int compressionLevel = Zstandard.DefaultCompressionLevel)
         : base(IntPtr.Zero, true)
     {
         unsafe
@@ -23,7 +23,7 @@ public sealed class ZStandardCompressionDictionary : SafeHandle
                 var cHandle = ZSTD_createCDict(p, (nuint)dictionaryData.Length, compressionLevel);
                 if (cHandle == null)
                 {
-                    throw new ZStandardException("Failed to create compression dictionary");
+                    throw new ZstandardException("Failed to create compression dictionary");
                 }
                 SetHandle((IntPtr)cHandle);
 
@@ -32,7 +32,7 @@ public sealed class ZStandardCompressionDictionary : SafeHandle
                 if (DecompressionHandle == null)
                 {
                     ZSTD_freeCDict(cHandle);
-                    throw new ZStandardException("Failed to create decompression dictionary");
+                    throw new ZstandardException("Failed to create decompression dictionary");
                 }
             }
         }
@@ -61,12 +61,12 @@ public sealed class ZStandardCompressionDictionary : SafeHandle
     internal unsafe void SetDictionary(ZSTD_CCtx_s* context)
     {
         var result = ZSTD_CCtx_refCDict(context, CompressionHandle);
-        ZStandard.ThrowIfError(result);
+        Zstandard.ThrowIfError(result);
     }
 
     internal unsafe void SetDictionary(ZSTD_DCtx_s* context)
     {
         var result = ZSTD_DCtx_refDDict(context, DecompressionHandle);
-        ZStandard.ThrowIfError(result);
+        Zstandard.ThrowIfError(result);
     }
 }

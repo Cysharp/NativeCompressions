@@ -1,17 +1,17 @@
-﻿using NativeCompressions.ZStandard.Raw;
+﻿using NativeCompressions.Zstandard.Raw;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using static NativeCompressions.ZStandard.Raw.NativeMethods;
+using static NativeCompressions.Zstandard.Raw.NativeMethods;
 
-namespace NativeCompressions.ZStandard;
+namespace NativeCompressions.Zstandard;
 
 /// <summary>
 /// Represents as ZSTD_dParameter
 /// </summary>
 [StructLayout(LayoutKind.Auto)]
-public readonly record struct ZStandardDecompressionOptions
+public readonly record struct ZstandardDecompressionOptions
 {
-    public static readonly ZStandardDecompressionOptions Default = new ZStandardDecompressionOptions();
+    public static readonly ZstandardDecompressionOptions Default = new ZstandardDecompressionOptions();
 
     public bool IsDefault
     {
@@ -55,9 +55,9 @@ public readonly record struct ZStandardDecompressionOptions
         if (value != 0)
         {
             var code = ZSTD_DCtx_setParameter(context, (int)parameter, value);
-            if (ZStandard.IsError(code)) // for inlining
+            if (Zstandard.IsError(code)) // for inlining
             {
-                ZStandard.ThrowAsError(code);
+                Zstandard.ThrowAsError(code);
             }
         }
     }

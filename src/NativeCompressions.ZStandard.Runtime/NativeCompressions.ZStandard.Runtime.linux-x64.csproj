@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>netstandard2.1</TargetFramework>
@@ -7,7 +7,7 @@
 		<IncludeBuildOutput>false</IncludeBuildOutput>
 		<IncludeContentInPack>true</IncludeContentInPack>
 		<NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
-		<Description>ZStandard native runtime for linux-x64.</Description>
+		<Description>Zstandard native runtime for linux-x64.</Description>
 	</PropertyGroup>
 
 	<ItemGroup>
