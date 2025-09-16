@@ -504,6 +504,10 @@ jobs:
           mkdir -p "${DEST_BASE_PATH}/{ios-arm64,ios-x64}/native"
           mkdir -p "${DEST_BASE_PATH}/{android-arm,android-arm64,android-x64}/native"
 
+          # Show current
+          ls -lR artifacts/
+          ls -lR "${DEST_BASE_PATH}/"
+
           # Windows
           if [ -f artifacts/lz4-win-x64/lz4.dll ]; then
             cp -f artifacts/lz4-win-x64/lz4.dll "${DEST_BASE_PATH}/win-x64/native/lz4.dll"

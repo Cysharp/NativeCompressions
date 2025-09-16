@@ -494,6 +494,10 @@ jobs:
           mkdir -p "${DEST_BASE_PATH}/{ios-arm64,ios-x64}/native"
           mkdir -p "${DEST_BASE_PATH}/{android-arm,android-arm64,android-x64}/native"
 
+          # Show current
+          ls -lR artifacts/
+          ls -lR "${DEST_BASE_PATH}/"
+
           # Windows
           if [ -f artifacts/zstd-win-x64/libzstd.dll ]; then
             cp -f artifacts/zstd-win-x64/libzstd.dll "${DEST_BASE_PATH}/win-x64/native/libzstd.dll"
