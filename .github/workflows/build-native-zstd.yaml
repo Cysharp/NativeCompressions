@@ -603,7 +603,7 @@ jobs:
           WORKFLOW_NAME="build-debug.yaml"
 
           # Add initial comment
-          gh pr comment $PR_NUMBER --body "
+          gh pr comment "$PR_NUMBER" --body "
           ## 🔄 Build Validation
 
           - **Status**: Starting build validation...
@@ -616,13 +616,13 @@ jobs:
           echo "Triggering ${WORKFLOW_NAME} for branch: ${NEW_BRANCH_NAME}"
 
           # Get the current latest run ID before triggering (to compare later)
-          BEFORE_RUN_ID=$(gh run list --workflow="${WORKFLOW_NAME}" --branch="${NEW_BRANCH_NAME}" --limit=1 --json id --jq '.[0].id // empty' 2>/dev/null || echo "")
+          BEFORE_RUN_ID=$(gh run list --workflow="${WORKFLOW_NAME}" --branch="${NEW_BRANCH_NAME}" --limit=1 --json databaseId --jq ".[0].databaseId")
 
           # Trigger the workflow
           gh workflow run "${WORKFLOW_NAME}" --ref "${NEW_BRANCH_NAME}"
 
           if [ $? -ne 0 ]; then
-            gh pr comment $PR_NUMBER --edit-last --body "
+            gh pr comment "$PR_NUMBER" --edit-last --body "
             ## ❌ Build Validation Failed
 
             - **Status**: Could not trigger build workflow
@@ -639,8 +639,8 @@ jobs:
 
           # Get the new workflow run ID (should be the latest one after triggering)
           RETRY_COUNT=0
-          while [ $RETRY_COUNT -lt 12 ]; do # Retry for 2 minutes
-            WORKFLOW_RUN_ID=$(gh run list --workflow="${WORKFLOW_NAME}" --branch="${NEW_BRANCH_NAME}" --limit=1 --json id --jq '.[0].id // empty' 2>/dev/null || echo "")
+          while [ $RETRY_COUNT -lt 5 ]; do # Retry for 2 minutes
+            WORKFLOW_RUN_ID=$(gh run list --workflow="${WORKFLOW_NAME}" --branch="${NEW_BRANCH_NAME}" --limit=1 --json databaseId --jq ".[0].databaseId")
 
             if [ -n "$WORKFLOW_RUN_ID" ] && [ "$WORKFLOW_RUN_ID" != "$BEFORE_RUN_ID" ]; then
               echo "Found new workflow run ID: $WORKFLOW_RUN_ID"
@@ -653,7 +653,7 @@ jobs:
           done
 
           if [ -z "$WORKFLOW_RUN_ID" ] || [ "$WORKFLOW_RUN_ID" = "$BEFORE_RUN_ID" ]; then
-            gh pr comment $PR_NUMBER --edit-last --body "
+            gh pr comment "$PR_NUMBER" --edit-last --body "
             ## ❌ Build Validation Failed
 
             - **Status**: Could not find triggered workflow run
@@ -665,7 +665,7 @@ jobs:
           fi
 
           echo "Triggered workflow run ID: $WORKFLOW_RUN_ID"
-            gh pr comment $PR_NUMBER --edit-last --body "
+            gh pr comment "$PR_NUMBER" --edit-last --body "
             ## ❌ Build Validation Failed
 
             - **Status**: Could not trigger build workflow
@@ -680,15 +680,15 @@ jobs:
 
           # Wait for workflow to complete and report status
           echo "Waiting for build to complete..."
-          TIMEOUT=1800 # 30 minutes
+          TIMEOUT=300 # 5 minutes
           ELAPSED=0
 
           while [ $ELAPSED -lt $TIMEOUT ]; do
             sleep 30
             ELAPSED=$((ELAPSED + 30))
 
-            STATUS=$(gh run view $WORKFLOW_RUN_ID --json status --jq '.status')
-            CONCLUSION=$(gh run view $WORKFLOW_RUN_ID --json conclusion --jq '.conclusion')
+            STATUS=$(gh run view "$WORKFLOW_RUN_ID" --json status --jq '.status')
+            CONCLUSION=$(gh run view "$WORKFLOW_RUN_ID" --json conclusion --jq '.conclusion')
 
             echo "Build status: $STATUS, conclusion: $CONCLUSION"
 
@@ -696,7 +696,7 @@ jobs:
               WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/$WORKFLOW_RUN_ID"
 
               if [ "$CONCLUSION" = "success" ]; then
-                gh pr comment $PR_NUMBER --edit-last --body "
+                gh pr comment "$PR_NUMBER" --edit-last --body "
                 ## ✅ Build Validation Passed
 
                 - **Status**: All builds completed successfully
@@ -709,7 +709,7 @@ jobs:
 
                 # Set commit status
                 COMMIT_SHA=$(git rev-parse HEAD)
-                gh api repos/${{ github.repository }}/statuses/$COMMIT_SHA \
+                gh api "repos/${{ github.repository }}/statuses/$COMMIT_SHA" \
                   --method POST \
                   --field state=success \
                   --field target_url="$WORKFLOW_URL" \
@@ -717,7 +717,7 @@ jobs:
                   --field context="ci/build-debug-validation"
 
               else
-                gh pr comment $PR_NUMBER --edit-last --body "
+                gh pr comment "$PR_NUMBER" --edit-last --body "
                 ## ❌ Build Validation Failed
 
                 - **Status**: Build failed with conclusion: \`$CONCLUSION\`
@@ -730,7 +730,7 @@ jobs:
 
                 # Set commit status
                 COMMIT_SHA=$(git rev-parse HEAD)
-                gh api repos/${{ github.repository }}/statuses/$COMMIT_SHA \
+                gh api "repos/${{ github.repository }}/statuses/$COMMIT_SHA" \
                   --method POST \
                   --field state=failure \
                   --field target_url="$WORKFLOW_URL" \
@@ -743,7 +743,7 @@ jobs:
           done
 
           if [ $ELAPSED -ge $TIMEOUT ]; then
-            gh pr comment $PR_NUMBER --edit-last --body "
+            gh pr comment "$PR_NUMBER" --edit-last --body "
             ## ⏰ Build Validation Timeout
 
             - **Status**: Build validation timed out after 30 minutes
