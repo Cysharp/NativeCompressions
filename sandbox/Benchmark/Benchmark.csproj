@@ -47,9 +47,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\NativeCompressions.LZ4.csproj" />
-    <!--<ProjectReference Include="..\..\src\NativeCompressions.ZStandard.csproj" />-->
-    <ProjectReference Include="..\..\src\NativeCompressions.ZStandard.Core\NativeCompressions.ZStandard.Core.csproj" />
-    <ProjectReference Include="..\..\src\NativeCompressions.ZStandard.Runtime\NativeCompressions.ZStandard.Runtime.win-x64.csproj" />
+    <ProjectReference Include="..\..\src\NativeCompressions.ZStandard.csproj" />
   </ItemGroup>
 
 

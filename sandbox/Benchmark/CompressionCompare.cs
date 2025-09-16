@@ -16,7 +16,7 @@ public class CompressionCompare
 
     List<Question> target = default!;
 
-    int zstdefault = NativeCompressions.ZStandard.ZStandard.DefaultCompressionLevel; // 3
+    // int zstdefault = NativeCompressions.ZStandard.ZStandard.DefaultCompressionLevel; // 3
     int zstdmin = -4; // NativeCompressions.ZStandard.ZStdNativeMethods.ZSTD_minCLevel();
     int zstdmax = NativeCompressions.ZStandard.ZStandard.MaxCompressionLevel; // 22
 
