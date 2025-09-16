@@ -37,7 +37,17 @@ jobs:
         run: |
           # Get latest release tag
           LATEST_TAG=$(gh release view --json tagName -q '.tagName')
-          LATEST_COMMIT=$(gh api "repos/${GH_REPO}/git/refs/tags/$LATEST_TAG" --jq '.object.sha')
+
+          # Get the tag object first, then extract the actual commit SHA
+          TAG_OBJECT_SHA=$(gh api "repos/${GH_REPO}/git/refs/tags/$LATEST_TAG" --jq '.object.sha')
+          TAG_OBJECT_TYPE=$(gh api "repos/${GH_REPO}/git/refs/tags/$LATEST_TAG" --jq '.object.type')
+          if [ "$TAG_OBJECT_TYPE" = "tag" ]; then
+            # Annotated tag - get the commit SHA from the tag object
+            LATEST_COMMIT=$(gh api "repos/${GH_REPO}/git/tags/$TAG_OBJECT_SHA" --jq '.object.sha')
+          else
+            # Lightweight tag - the SHA is already the commit SHA
+            LATEST_COMMIT=$TAG_OBJECT_SHA
+          fi
 
           # Get current submodule tag (if exists)
           cd zstd
