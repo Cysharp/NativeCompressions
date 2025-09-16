@@ -498,62 +498,71 @@ jobs:
         run: |
           echo "Updated lz4 runtimes to ${LATEST_TAG}"
 
-          mkdir -p "${DEST_BASE_PATH}/{linux-x64,linux-arm64}/native"
-          mkdir -p "${DEST_BASE_PATH}/{osx-arm64,osx-x64}/native"
-          mkdir -p "${DEST_BASE_PATH}/{win-arm64,win-x64}/native"
-          mkdir -p "${DEST_BASE_PATH}/{ios-arm64,ios-x64}/native"
-          mkdir -p "${DEST_BASE_PATH}/{android-arm,android-arm64,android-x64}/native"
+          for arch in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64 ios-arm64 ios-x64 android-arm android-arm64 android-x64; do
+            mkdir -p "${DEST_BASE_PATH}/${arch}/native"
+          done
 
           # Show current
-          ls -lR artifacts/
-          ls -lR "${DEST_BASE_PATH}/"
+          echo "::group::Show artifacts/"
+            ls -lR artifacts/
+          echo "::endgroup::"
 
-          # Windows
-          if [ -f artifacts/lz4-win-x64/lz4.dll ]; then
-            cp -f artifacts/lz4-win-x64/lz4.dll "${DEST_BASE_PATH}/win-x64/native/lz4.dll"
-          fi
-          if [ -f artifacts/lz4-win-arm64/lz4.dll ]; then
-            cp -f artifacts/lz4-win-arm64/lz4.dll "${DEST_BASE_PATH}/win-arm64/native/lz4.dll"
-          fi
+          echo "::group::Show ${DEST_BASE_PATH}/"
+            ls -lR "${DEST_BASE_PATH}/"
+          echo "::endgroup::"
 
-          # Linux
-          if [ -f artifacts/lz4-linux-x64/liblz4.so ]; then
-            cp -f artifacts/lz4-linux-x64/liblz4.so "${DEST_BASE_PATH}/linux-x64/native/liblz4.so"
-          fi
-          if [ -f artifacts/lz4-linux-arm64/liblz4.so ]; then
-            cp -f artifacts/lz4-linux-arm64/liblz4.so "${DEST_BASE_PATH}/linux-arm64/native/liblz4.so"
-          fi
+          echo "::group::Copy new files"
 
-          # macOS
-          if [ -f artifacts/lz4-osx-x64/liblz4.dylib ]; then
-            cp -f artifacts/lz4-osx-x64/liblz4.dylib "${DEST_BASE_PATH}/osx-x64/native/liblz4.dylib"
-          fi
-          if [ -f artifacts/lz4-osx-arm64/liblz4.dylib ]; then
-            cp -f artifacts/lz4-osx-arm64/liblz4.dylib "${DEST_BASE_PATH}/osx-arm64/native/liblz4.dylib"
-          fi
+            # Windows
+            if [ -f artifacts/lz4-win-x64/lz4.dll ]; then
+              cp -f artifacts/lz4-win-x64/lz4.dll "${DEST_BASE_PATH}/win-x64/native/lz4.dll"
+            fi
+            if [ -f artifacts/lz4-win-arm64/lz4.dll ]; then
+              cp -f artifacts/lz4-win-arm64/lz4.dll "${DEST_BASE_PATH}/win-arm64/native/lz4.dll"
+            fi
 
-          # iOS
-          if [ -f artifacts/lz4-ios-arm64/liblz4.a ]; then
-            cp -f artifacts/lz4-ios-arm64/liblz4.a "${DEST_BASE_PATH}/ios-arm64/native/liblz4.a"
-          fi
-          if [ -f artifacts/lz4-ios-x86_64/liblz4.a ]; then
-            cp -f artifacts/lz4-ios-x86_64/liblz4.a "${DEST_BASE_PATH}/ios-x64/native/liblz4.a"
-          fi
+            # Linux
+            if [ -f artifacts/lz4-linux-x64/liblz4.so ]; then
+              cp -f artifacts/lz4-linux-x64/liblz4.so "${DEST_BASE_PATH}/linux-x64/native/liblz4.so"
+            fi
+            if [ -f artifacts/lz4-linux-arm64/liblz4.so ]; then
+              cp -f artifacts/lz4-linux-arm64/liblz4.so "${DEST_BASE_PATH}/linux-arm64/native/liblz4.so"
+            fi
 
-          # Android
-          if [ -f artifacts/lz4-android-arm/liblz4.so ]; then
-            cp -f artifacts/lz4-android-arm/liblz4.so "${DEST_BASE_PATH}/android-arm/native/liblz4.so"
-          fi
-          if [ -f artifacts/lz4-android-arm64/liblz4.so ]; then
-            cp -f artifacts/lz4-android-arm64/liblz4.so "${DEST_BASE_PATH}/android-arm64/native/liblz4.so"
-          fi
-          if [ -f artifacts/lz4-android-x86_64/liblz4.so ]; then
-            cp -f artifacts/lz4-android-x86_64/liblz4.so "${DEST_BASE_PATH}/android-x64/native/liblz4.so"
-          fi
+            # macOS
+            if [ -f artifacts/lz4-osx-x64/liblz4.dylib ]; then
+              cp -f artifacts/lz4-osx-x64/liblz4.dylib "${DEST_BASE_PATH}/osx-x64/native/liblz4.dylib"
+            fi
+            if [ -f artifacts/lz4-osx-arm64/liblz4.dylib ]; then
+              cp -f artifacts/lz4-osx-arm64/liblz4.dylib "${DEST_BASE_PATH}/osx-arm64/native/liblz4.dylib"
+            fi
 
-          # Commit runtime updates
-          git add "${DEST_BASE_PATH}"
-          git commit -m "automate: Update LZ4 native libraries to ${LATEST_TAG}"
+            # iOS
+            if [ -f artifacts/lz4-ios-arm64/liblz4.a ]; then
+              cp -f artifacts/lz4-ios-arm64/liblz4.a "${DEST_BASE_PATH}/ios-arm64/native/liblz4.a"
+            fi
+            if [ -f artifacts/lz4-ios-x86_64/liblz4.a ]; then
+              cp -f artifacts/lz4-ios-x86_64/liblz4.a "${DEST_BASE_PATH}/ios-x64/native/liblz4.a"
+            fi
+
+            # Android
+            if [ -f artifacts/lz4-android-arm/liblz4.so ]; then
+              cp -f artifacts/lz4-android-arm/liblz4.so "${DEST_BASE_PATH}/android-arm/native/liblz4.so"
+            fi
+            if [ -f artifacts/lz4-android-arm64/liblz4.so ]; then
+              cp -f artifacts/lz4-android-arm64/liblz4.so "${DEST_BASE_PATH}/android-arm64/native/liblz4.so"
+            fi
+            if [ -f artifacts/lz4-android-x86_64/liblz4.so ]; then
+              cp -f artifacts/lz4-android-x86_64/liblz4.so "${DEST_BASE_PATH}/android-x64/native/liblz4.so"
+            fi
+
+          echo "::endgroup::"
+
+          echo "::group::git commit"
+            # Commit runtime updates
+            git add "${DEST_BASE_PATH}"
+            git commit -m "automate: Update LZ4 native libraries to ${LATEST_TAG}"
+          echo "::endgroup::"
       # create PR
       - name: Push branch and create PR
         env:

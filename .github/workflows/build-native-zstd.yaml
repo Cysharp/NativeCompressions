@@ -488,87 +488,97 @@ jobs:
         run: |
           echo "Updated zstd runtimes to ${LATEST_TAG}"
 
-          mkdir -p "${DEST_BASE_PATH}/{linux-x64,linux-arm64}/native"
-          mkdir -p "${DEST_BASE_PATH}/{osx-arm64,osx-x64}/native"
-          mkdir -p "${DEST_BASE_PATH}/{win-arm64,win-x64}/native"
-          mkdir -p "${DEST_BASE_PATH}/{ios-arm64,ios-x64}/native"
-          mkdir -p "${DEST_BASE_PATH}/{android-arm,android-arm64,android-x64}/native"
+          # Create directory structure
+          for arch in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64 ios-arm64 ios-x64 android-arm android-arm64 android-x64; do
+            mkdir -p "${DEST_BASE_PATH}/${arch}/native"
+          done
 
           # Show current
-          ls -lR artifacts/
-          ls -lR "${DEST_BASE_PATH}/"
+          echo "::group::Show artifacts/"
+            ls -lR artifacts/
+          echo "::endgroup::"
 
-          # Windows
-          if [ -f artifacts/zstd-win-x64/libzstd.dll ]; then
-            cp -f artifacts/zstd-win-x64/libzstd.dll "${DEST_BASE_PATH}/win-x64/native/libzstd.dll"
-          fi
-          if [ -f artifacts/zstd-win-arm64/libzstd.dll ]; then
-            cp -f artifacts/zstd-win-arm64/libzstd.dll "${DEST_BASE_PATH}/win-arm64/native/libzstd.dll"
-          fi
+          echo "::group::Show ${DEST_BASE_PATH}/"
+            ls -lR "${DEST_BASE_PATH}/"
+          echo "::endgroup::"
 
-          # Linux
-          if [ -f artifacts/zstd-linux-x64/libzstd.so ]; then
-            cp -f artifacts/zstd-linux-x64/libzstd.so "${DEST_BASE_PATH}/linux-x64/native/libzstd.so"
-          fi
-          if [ -f artifacts/zstd-linux-arm64/libzstd.so ]; then
-            cp -f artifacts/zstd-linux-arm64/libzstd.so "${DEST_BASE_PATH}/linux-arm64/native/libzstd.so"
-          fi
+          echo "::group::Copy new files"
 
-          # macOS
-          if [ -f artifacts/zstd-osx-x64/libzstd.dylib ]; then
-            cp -f artifacts/zstd-osx-x64/libzstd.dylib "${DEST_BASE_PATH}/osx-x64/native/libzstd.dylib"
-          fi
-          if [ -f artifacts/zstd-osx-arm64/libzstd.dylib ]; then
-            cp -f artifacts/zstd-osx-arm64/libzstd.dylib "${DEST_BASE_PATH}/osx-arm64/native/libzstd.dylib"
-          fi
+            # Windows
+            if [ -f artifacts/zstd-win-x64/libzstd.dll ]; then
+              cp -f artifacts/zstd-win-x64/libzstd.dll "${DEST_BASE_PATH}/win-x64/native/libzstd.dll"
+            fi
+            if [ -f artifacts/zstd-win-arm64/libzstd.dll ]; then
+              cp -f artifacts/zstd-win-arm64/libzstd.dll "${DEST_BASE_PATH}/win-arm64/native/libzstd.dll"
+            fi
 
-          # iOS
-          if [ -f artifacts/zstd-ios-arm64/libzstd.a ]; then
-            cp -f artifacts/zstd-ios-arm64/libzstd.a "${DEST_BASE_PATH}/ios-arm64/native/libzstd.a"
-          fi
-          if [ -f artifacts/zstd-ios-x86_64/libzstd.a ]; then
-            cp -f artifacts/zstd-ios-x86_64/libzstd.a "${DEST_BASE_PATH}/ios-x64/native/libzstd.a"
-          fi
+            # Linux
+            if [ -f artifacts/zstd-linux-x64/libzstd.so ]; then
+              cp -f artifacts/zstd-linux-x64/libzstd.so "${DEST_BASE_PATH}/linux-x64/native/libzstd.so"
+            fi
+            if [ -f artifacts/zstd-linux-arm64/libzstd.so ]; then
+              cp -f artifacts/zstd-linux-arm64/libzstd.so "${DEST_BASE_PATH}/linux-arm64/native/libzstd.so"
+            fi
 
-          # Android
-          if [ -f artifacts/zstd-android-arm/libzstd.so ]; then
-            cp -f artifacts/zstd-android-arm/libzstd.so "${DEST_BASE_PATH}/android-arm/native/libzstd.so"
-          fi
-          if [ -f artifacts/zstd-android-arm64/libzstd.so ]; then
-            cp -f artifacts/zstd-android-arm64/libzstd.so "${DEST_BASE_PATH}/android-arm64/native/libzstd.so"
-          fi
-          if [ -f artifacts/zstd-android-x86_64/libzstd.so ]; then
-            cp -f artifacts/zstd-android-x86_64/libzstd.so "${DEST_BASE_PATH}/android-x64/native/libzstd.so"
-          fi
+            # macOS
+            if [ -f artifacts/zstd-osx-x64/libzstd.dylib ]; then
+              cp -f artifacts/zstd-osx-x64/libzstd.dylib "${DEST_BASE_PATH}/osx-x64/native/libzstd.dylib"
+            fi
+            if [ -f artifacts/zstd-osx-arm64/libzstd.dylib ]; then
+              cp -f artifacts/zstd-osx-arm64/libzstd.dylib "${DEST_BASE_PATH}/osx-arm64/native/libzstd.dylib"
+            fi
 
-      #     # Commit runtime updates
-      #     git add "${DEST_BASE_PATH}"
-      #     git commit -m "automate: Update ZStandard native libraries to ${LATEST_TAG}"
-      # # create PR
-      # - name: Push branch and create PR
-      #   env:
-      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   run: |
-      #     # Push the branch
-      #     git push origin "${NEW_BRANCH_NAME}"
+            # iOS
+            if [ -f artifacts/zstd-ios-arm64/libzstd.a ]; then
+              cp -f artifacts/zstd-ios-arm64/libzstd.a "${DEST_BASE_PATH}/ios-arm64/native/libzstd.a"
+            fi
+            if [ -f artifacts/zstd-ios-x86_64/libzstd.a ]; then
+              cp -f artifacts/zstd-ios-x86_64/libzstd.a "${DEST_BASE_PATH}/ios-x64/native/libzstd.a"
+            fi
 
-      #     cat <<'EOF' > artifacts/pr_body.txt
-      #     This PR updates ZStandard to the latest release `${{ needs.check_new_release.outputs.latest_tag }}` ([${{ needs.check_new_release.outputs.latest_commit }}](https://github.com/facebook/zstd/commit/${{ needs.check_new_release.outputs.latest_commit }}))
+            # Android
+            if [ -f artifacts/zstd-android-arm/libzstd.so ]; then
+              cp -f artifacts/zstd-android-arm/libzstd.so "${DEST_BASE_PATH}/android-arm/native/libzstd.so"
+            fi
+            if [ -f artifacts/zstd-android-arm64/libzstd.so ]; then
+              cp -f artifacts/zstd-android-arm64/libzstd.so "${DEST_BASE_PATH}/android-arm64/native/libzstd.so"
+            fi
+            if [ -f artifacts/zstd-android-x86_64/libzstd.so ]; then
+              cp -f artifacts/zstd-android-x86_64/libzstd.so "${DEST_BASE_PATH}/android-x64/native/libzstd.so"
+            fi
 
-      #     ## Changes
-      #     - Updated ZStandard submodule to ${{ needs.check_new_release.outputs.latest_tag }}
-      #     - Updated native libraries for all platforms:
-      #       - Windows x64/ARM64
-      #       - Linux x64/ARM64
-      #       - macOS x64/ARM64
-      #       - Android ARM/ARM64/x64
-      #       - iOS ARM64/x64 (device/simulator)
+          echo "::endgroup::"
 
-      #     ## Build artifacts
-      #     All native libraries have been built and tested in CI.
+          echo "::group::git commit"
+            # Commit runtime updates
+            git add "${DEST_BASE_PATH}"
+            git commit -m "automate: Update ZStandard native libraries to ${LATEST_TAG}"
+          echo "::endgroup::"
+      # create PR
+      - name: Push branch and create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Push the branch
+          git push origin "${NEW_BRANCH_NAME}"
 
-      #     @neuecc
-      #     EOF
+          cat <<'EOF' > artifacts/pr_body.txt
+          This PR updates ZStandard to the latest release `${{ needs.check_new_release.outputs.latest_tag }}` ([${{ needs.check_new_release.outputs.latest_commit }}](https://github.com/facebook/zstd/commit/${{ needs.check_new_release.outputs.latest_commit }}))
 
-      #     # Create PR
-      #     gh pr create --title "automate: Update ZStandard to ${LATEST_TAG}" --base main --head "${NEW_BRANCH_NAME}" --body-file artifacts/pr_body.txt
+          ## Changes
+          - Updated ZStandard submodule to ${{ needs.check_new_release.outputs.latest_tag }}
+          - Updated native libraries for all platforms:
+            - Windows x64/ARM64
+            - Linux x64/ARM64
+            - macOS x64/ARM64
+            - Android ARM/ARM64/x64
+            - iOS ARM64/x64 (device/simulator)
+
+          ## Build artifacts
+          All native libraries have been built and tested in CI.
+
+          @neuecc
+          EOF
+
+          # Create PR
+          gh pr create --title "automate: Update ZStandard to ${LATEST_TAG}" --base main --head "${NEW_BRANCH_NAME}" --body-file artifacts/pr_body.txt
