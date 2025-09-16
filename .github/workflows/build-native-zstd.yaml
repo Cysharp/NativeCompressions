@@ -102,7 +102,7 @@ jobs:
         shell: msys2 {0}
         run: |
           cd zstd
-          make -C lib libzstd CC=gcc TARGET_SYSTEM=Windows
+          make -C lib libzstd CC=gcc CFLAGS="-DZSTD_MULTITHREAD" TARGET_SYSTEM=Windows
           ls -la lib/dll/*.dll
           file lib/dll/*.dll
       - name: Prepare artifacts
@@ -140,7 +140,7 @@ jobs:
           docker run --rm -v "$PWD:/work" \
             mstorsjo/llvm-mingw:latest \
             bash -c "cd /work/zstd && \
-              make -C lib libzstd CC=aarch64-w64-mingw32-gcc CFLAGS='-O3' TARGET_SYSTEM=Windows"
+              make -C lib libzstd CC=aarch64-w64-mingw32-gcc CFLAGS='-O3' CFLAGS="-DZSTD_MULTITHREAD" TARGET_SYSTEM=Windows"
           file zstd/lib/dll/libzstd.dll
       - name: Prepare artifacts
         run: |
