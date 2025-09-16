@@ -1,7 +1,10 @@
 ﻿using Benchmark.BenchmarkNetUtilities;
 using Benchmark.Models;
+using NativeCompressions.LZ4;
 using NativeCompressions.Zstandard;
 using System.Buffers;
+using System.Formats.Tar;
+using System.IO.Compression;
 using System.IO.Pipelines;
 using System.Text;
 using System.Text.Json;
@@ -36,6 +39,33 @@ public class ZstandardSimpleEncode
     }
 
     [Benchmark]
+    public int K4os_LZ4_Encode()
+    {
+        return K4os.Compression.LZ4.LZ4Codec.Encode(src, dest, K4os.Compression.LZ4.LZ4Level.L00_FAST);
+    }
+
+    [Benchmark]
+    public int K4os_LZ4_FrameEncode()
+    {
+        return K4os.Compression.LZ4.Streams.LZ4Frame.Encode(src, dest, K4os.Compression.LZ4.LZ4Level.L00_FAST);
+    }
+
+    [Benchmark]
+    public int NativeCompressions_LZ4_Compress()
+    {
+        return NativeCompressions.LZ4.LZ4.Compress(src, dest);
+    }
+
+    [Benchmark]
+    public async Task<int> NativeCompressions_LZ4_CompressMultiThread()
+    {
+        writer.ResetWrittenCount();
+        await NativeCompressions.LZ4.LZ4.CompressAsync(src, writer, LZ4FrameOptions.Default);
+        return (int)writer.WrittenCount;
+    }
+
+
+    [Benchmark]
     public int NativeCompressions_Zstandard_Compress_Default()
     {
         return NativeCompressions.Zstandard.Zstandard.Compress(src, dest);
@@ -58,6 +88,32 @@ public class ZstandardSimpleEncode
     {
         return NativeCompressions.Zstandard.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default with { NbWorkers = 4 });
     }
+
+    [Benchmark]
+    public int BrotliEncoder_TryCompress()
+    {
+        System.IO.Compression.BrotliEncoder.TryCompress(src, dest, out var bytesWritten);
+        return bytesWritten;
+    }
+
+    [Benchmark]
+    public int GZipStream_Optimal()
+    {
+        using (var ms = new MemoryStream(src))
+        using (var ms2 = new MemoryStream(buffer: dest, writable: true))
+        using (var gzip = new GZipStream(ms2, CompressionLevel.Optimal, leaveOpen: true))
+        {
+            ms.CopyTo(gzip);
+            gzip.Close();
+            return (int)ms2.Position;
+        }
+    }
+
+    //public void Tar()
+    //{
+    //    //new TarEntry
+    //    // new TarWriter(
+    //}
 }
 
 //[PayloadColumn]
