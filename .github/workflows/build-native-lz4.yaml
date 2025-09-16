@@ -471,11 +471,12 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     env:
       NEW_BRANCH_NAME: "automate/lz4-${{ needs.check_new_release.outputs.latest_tag }}"
       LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
@@ -599,5 +600,120 @@ jobs:
           @neuecc
           EOF
 
-          # Create PR
-          gh pr create --title "automate: Update LZ4 to ${LATEST_TAG}" --base main --head "${NEW_BRANCH_NAME}" --body-file artifacts/pr_body.txt
+          # Create PR and capture PR number
+          PR_URL=$(gh pr create --title "automate: Update ZStandard to ${LATEST_TAG}" --base main --head "${NEW_BRANCH_NAME}" --body-file artifacts/pr_body.txt)
+          PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]\+$')
+
+          echo "pr_number=$PR_NUMBER" | tee -a "$GITHUB_OUTPUT"
+          echo "Created PR #$PR_NUMBER: $PR_URL"
+
+      - name: Trigger build validation and report status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.create_pr.outputs.pr_number }}"
+          WORKFLOW_NAME="build-debug.yaml"
+
+          # Add initial comment
+          gh pr comment $PR_NUMBER --body "
+          ## 🔄 Build Validation
+
+          **Status**: Starting build validation...
+          **Workflow**: \`${WORKFLOW_NAME}\`
+
+          This comment will be updated with the build results.
+          "
+
+          # Trigger build-debug workflow on the PR branch
+          echo "Triggering ${WORKFLOW_NAME} for branch: ${NEW_BRANCH_NAME}"
+          WORKFLOW_RUN_ID=$(gh workflow run "${WORKFLOW_NAME}" --ref "${NEW_BRANCH_NAME}" --json id --jq '.id' || echo "failed")
+
+          if [ "$WORKFLOW_RUN_ID" = "failed" ]; then
+            gh pr comment $PR_NUMBER --edit-last --body "
+            ## ❌ Build Validation Failed
+
+            **Status**: Could not trigger build workflow
+            **Error**: Failed to start ${WORKFLOW_NAME}
+
+            Please manually check the build status or trigger the workflow manually.
+            "
+            exit 1
+          fi
+
+          echo "Triggered workflow run ID: $WORKFLOW_RUN_ID"
+
+          # Wait for workflow to complete and report status
+          echo "Waiting for build to complete..."
+          TIMEOUT=1800 # 30 minutes
+          ELAPSED=0
+
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            sleep 30
+            ELAPSED=$((ELAPSED + 30))
+
+            STATUS=$(gh run view $WORKFLOW_RUN_ID --json status --jq '.status')
+            CONCLUSION=$(gh run view $WORKFLOW_RUN_ID --json conclusion --jq '.conclusion')
+
+            echo "Build status: $STATUS, conclusion: $CONCLUSION"
+
+            if [ "$STATUS" = "completed" ]; then
+              WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/$WORKFLOW_RUN_ID"
+
+              if [ "$CONCLUSION" = "success" ]; then
+                gh pr comment $PR_NUMBER --edit-last --body "
+                ## ✅ Build Validation Passed
+
+                - **Status**: All builds completed successfully
+                - **Workflow**: \`${WORKFLOW_NAME}\`
+                - **Duration**: ${ELAPSED}s
+                - **Details**: [View workflow run]($WORKFLOW_URL)
+
+                This PR is ready for review! 🎉
+                "
+
+                # Set commit status
+                COMMIT_SHA=$(git rev-parse HEAD)
+                gh api repos/${{ github.repository }}/statuses/$COMMIT_SHA \
+                  --method POST \
+                  --field state=success \
+                  --field target_url="$WORKFLOW_URL" \
+                  --field description="Build validation passed" \
+                  --field context="ci/build-debug-validation"
+
+              else
+                gh pr comment $PR_NUMBER --edit-last --body "
+                ## ❌ Build Validation Failed
+
+                - **Status**: Build failed with conclusion: \`$CONCLUSION\`
+                - **Workflow**: \`${WORKFLOW_NAME}\`
+                - **Duration**: ${ELAPSED}s
+                - **Details**: [View workflow run]($WORKFLOW_URL)
+
+                Please review the build failures before merging.
+                "
+
+                # Set commit status
+                COMMIT_SHA=$(git rev-parse HEAD)
+                gh api repos/${{ github.repository }}/statuses/$COMMIT_SHA \
+                  --method POST \
+                  --field state=failure \
+                  --field target_url="$WORKFLOW_URL" \
+                  --field description="Build validation failed" \
+                  --field context="ci/build-debug-validation"
+              fi
+
+              break
+            fi
+          done
+
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            gh pr comment $PR_NUMBER --edit-last --body "
+            ## ⏰ Build Validation Timeout
+
+            - **Status**: Build validation timed out after 30 minutes
+            - **Workflow**: \`${WORKFLOW_NAME}\`
+            - **Details**: [View workflow run]($WORKFLOW_URL)
+
+            Please check the workflow status manually.
+            "
+          fi
