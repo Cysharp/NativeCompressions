@@ -1,0 +1,570 @@
+name: Build-Native-ZSTD
+
+# Follow ZStandard latest release by cron update
+# 1.  Check for ZStandard updates - compare submodule commit ID with latest release commit
+# 2.  If no changes, checkout in each build job, build and upload artifacts.
+# 2". If changes exist, update submodule after checkout in each build job, build and upload artifacts
+# 3.  Upload packages to GitHub Actions summary
+# 4.  If changes exist, Create a branch and PR. Separate PRs for each ZStandard release are preferred (avoid updating in a single PR)
+#     PR includes following changes.
+#     - Commit that updates the submodule
+#     - Commit that zstd dynamic lib artifacts placed in src/NativeCompressions.ZStandard.Runtime/runtimes/{platform_name}/native/{lib}
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *' # Every day at 3:00 AM (UTC)
+  push:
+    branches:
+      - zstd
+
+jobs:
+  check_new_release:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      needs_update: ${{ steps.check.outputs.needs_update }}
+      latest_tag: ${{ steps.check.outputs.latest_tag }}
+      latest_commit: ${{ steps.check.outputs.latest_commit }}
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Check zstd latest release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: facebook/zstd
+        run: |
+          # Get latest release tag
+          LATEST_TAG=$(gh release view --json tagName -q '.tagName')
+          LATEST_COMMIT=$(gh api "repos/${GH_REPO}/git/refs/tags/$LATEST_TAG" --jq '.object.sha')
+
+          # Get current submodule tag (if exists)
+          cd zstd
+            CURRENT_TAG=$(git describe --tags --exact-match HEAD 2>/dev/null || echo "")
+            CURRENT_COMMIT=$(git rev-parse HEAD)
+          cd ..
+
+          echo "latest_tag=$LATEST_TAG" | tee -a "$GITHUB_OUTPUT"
+          echo "latest_commit=$LATEST_COMMIT" | tee -a "$GITHUB_OUTPUT"
+
+          echo "Current: $CURRENT_TAG ($CURRENT_COMMIT)"
+          echo "Latest:  $LATEST_TAG ($LATEST_COMMIT)"
+
+          # Compare by tag first, fallback to commit
+          if [ "$CURRENT_TAG" = "$LATEST_TAG" ]; then
+            echo "needs_update=false" | tee -a "$GITHUB_OUTPUT"
+            echo "Already up to date: $CURRENT_TAG"
+          elif [ "$CURRENT_COMMIT" != "$LATEST_COMMIT" ]; then
+            echo "needs_update=true" | tee -a "$GITHUB_OUTPUT"
+            echo "Update needed: $CURRENT_TAG -> $LATEST_TAG"
+          else
+            echo "needs_update=false" | tee -a "$GITHUB_OUTPUT"
+            echo "Already up to date: $CURRENT_COMMIT"
+          fi
+
+  build-windows:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
+    strategy:
+      matrix:
+        arch: [x64]
+        include:
+          - arch: x64
+            platform: x64
+            msys_env: MINGW64
+    permissions:
+      contents: read
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd zstd
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@fb197b72ce45fb24f17bf3f807a388985654d1f2 # v2.29.0
+        with:
+          msystem: ${{ matrix.msys_env }}
+          update: true
+          install: >-
+            ${{ matrix.arch == 'x64' && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-make' || 'mingw-w64-clang-aarch64-gcc mingw-w64-clang-aarch64-make' }}
+            make
+      - name: Build DLL
+        shell: msys2 {0}
+        run: |
+          cd zstd
+          make -C lib libzstd CC=gcc
+          ls -la lib/*.dll
+          file lib/*.dll
+      - name: Prepare artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "artifacts/win-${{ matrix.arch }}"
+          Copy-Item "zstd/lib/dll/*.dll" -Destination "artifacts/win-${{ matrix.arch }}/libzstd.dll"
+      - name: Upload Windows artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: zstd-win-${{ matrix.arch }}
+          path: artifacts/win-${{ matrix.arch }}/*
+
+  build-windows-arm64:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd zstd
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      - name: Build using Docker
+        run: |
+          docker run --rm -v "$PWD:/work" \
+            mstorsjo/llvm-mingw:latest \
+            bash -c "cd /work/zstd && \
+              make -C lib libzstd CC=aarch64-w64-mingw32-gcc CFLAGS='-O3'"
+          file zstd/lib/dll/libzstd.dll
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/win-arm64
+          cp zstd/lib/dll/libzstd.dll artifacts/win-arm64/
+      - name: Upload artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: zstd-win-arm64
+          path: artifacts/win-arm64/*
+
+  build-linux:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+        include:
+          - arch: x64
+            cc: gcc
+          - arch: arm64
+            cc: aarch64-linux-gnu-gcc
+            packages: gcc-aarch64-linux-gnu
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd zstd
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      - name: Install ARM64 cross-compiler
+        if: matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.packages }}
+      - name: Build shared library
+        run: |
+          cd zstd
+          make -C lib libzstd CC="${{ matrix.cc }}"
+          ls -la lib/*.so*
+          file lib/libzstd.so*
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/linux-${{ matrix.arch }}
+          cp zstd/lib/libzstd.so* artifacts/linux-${{ matrix.arch }}/
+          cd artifacts/linux-${{ matrix.arch }}
+          if [ -L libzstd.so ]; then
+            cp -L libzstd.so libzstd.so.tmp
+            mv libzstd.so.tmp libzstd.so
+          fi
+      - name: Upload Linux artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: zstd-linux-${{ matrix.arch }}
+          path: artifacts/linux-${{ matrix.arch }}/*
+
+  build-macos:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+        include:
+          - arch: x64
+            flags: "-arch x86_64"
+          - arch: arm64
+            flags: "-arch arm64"
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd zstd
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      - name: Build dynamic library
+        run: |
+          cd zstd
+          make -C lib libzstd CFLAGS="${{ matrix.flags }} -O3"
+          lipo -info lib/*.dylib
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/osx-${{ matrix.arch }}
+          cp zstd/lib/*.dylib artifacts/osx-${{ matrix.arch }}/
+          cd artifacts/osx-${{ matrix.arch }}
+          for file in *.dylib; do
+            if [ -L "$file" ]; then
+              cp -L "$file" "$file.tmp"
+              mv "$file.tmp" "$file"
+            fi
+          done
+      - name: Upload artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: zstd-osx-${{ matrix.arch }}
+          path: artifacts/osx-${{ matrix.arch }}/*
+
+  build-ios:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+    runs-on: macos-15
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+        include:
+          - arch: arm64
+            sdk: iphoneos
+            target: aarch64-apple-ios11.0
+            cflags: "-arch arm64 -mios-version-min=11.0"
+          - arch: x86_64
+            sdk: iphonesimulator
+            target: x86_64-apple-ios11.0-simulator
+            cflags: "-arch x86_64 -mios-simulator-version-min=11.0"
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd zstd
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      - name: Build static library for iOS
+        run: |
+          SDK_PATH=$(xcrun --sdk ${{ matrix.sdk }} --show-sdk-path)
+
+          # Build static library (iOS App Store requires static linking)
+          cd zstd
+          make -C lib libzstd.a CC="clang" \
+            CFLAGS="${{ matrix.cflags }} -O3 -isysroot $SDK_PATH"
+
+          ls -la lib/libzstd.a
+          file lib/libzstd.a
+          lipo -info lib/libzstd.a
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/ios-${{ matrix.arch }}
+          cp zstd/lib/libzstd.a artifacts/ios-${{ matrix.arch }}/
+      - name: Upload iOS artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: zstd-ios-${{ matrix.arch }}
+          path: artifacts/ios-${{ matrix.arch }}/*
+
+  build-android:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        abi: [armeabi-v7a, arm64-v8a, x86_64]
+        include:
+          - abi: armeabi-v7a
+            arch: arm # Unity require this for mobile app
+            target: armv7a-linux-androideabi21
+            cc: armv7a-linux-androideabi21-clang
+          - abi: arm64-v8a
+            arch: arm64 # Most mobile app
+            target: aarch64-linux-android21
+            cc: aarch64-linux-android21-clang
+          - abi: x86_64
+            arch: x86_64 # Chromebook and Google Play for PC (not emulation)
+            target: x86_64-linux-android21
+            cc: x86_64-linux-android21-clang
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd zstd
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@afb4c9964b521afb97c864b7d40b11e6911bd410 # v1.5.0
+        id: setup-ndk
+        with:
+          ndk-version: r26d
+          add-to-path: false
+      - name: Build shared library for Android
+        run: |
+          export PATH="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+
+          cd zstd
+          make -C lib libzstd CC="${{ matrix.cc }}" CFLAGS="-O3 -fPIC"
+          ls -la lib/libzstd.so*
+          file lib/libzstd.so*
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/android-${{ matrix.arch }}
+          cp zstd/lib/libzstd.so artifacts/android-${{ matrix.arch }}/
+      - name: Upload Android artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: zstd-android-${{ matrix.arch }}
+          path: artifacts/android-${{ matrix.arch }}/*
+
+  package-all:
+    needs: [check_new_release, build-windows, build-windows-arm64, build-linux, build-macos, build-ios, build-android]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Download all artifacts
+        uses: Cysharp/Actions/.github/actions/download-artifact@main
+        with:
+          path: artifacts
+      - name: Create .NET runtime structure
+        run: |
+          mkdir -p release/runtimes/{win-x64,win-arm64}/native
+          mkdir -p release/runtimes/{linux-x64,linux-arm64}/native
+          mkdir -p release/runtimes/{osx-x64,osx-arm64}/native
+          mkdir -p release/runtimes/{android-arm,android-arm64,android-x64}/native
+          mkdir -p release/runtimes/{ios-arm64,ios-x64}/native
+
+          # Windows
+          cp artifacts/zstd-win-x64/*.dll release/runtimes/win-x64/native/libzstd.dll 2>/dev/null || true
+          cp artifacts/zstd-win-arm64/*.dll release/runtimes/win-arm64/native/libzstd.dll 2>/dev/null || true
+
+          # Linux
+          if [ -f artifacts/zstd-linux-x64/libzstd.so ]; then
+            cp artifacts/zstd-linux-x64/libzstd.so release/runtimes/linux-x64/native/
+          fi
+          if [ -f artifacts/zstd-linux-arm64/libzstd.so ]; then
+            cp artifacts/zstd-linux-arm64/libzstd.so release/runtimes/linux-arm64/native/
+          fi
+
+          # macOS
+          for file in artifacts/zstd-osx-x64/*.dylib; do
+            [ -f "$file" ] && cp "$file" release/runtimes/osx-x64/native/libzstd.dylib && break
+          done
+          for file in artifacts/zstd-osx-arm64/*.dylib; do
+            [ -f "$file" ] && cp "$file" release/runtimes/osx-arm64/native/libzstd.dylib && break
+          done
+
+          # iOS
+          if [ -f artifacts/zstd-ios-arm64/libzstd.a ]; then
+            cp artifacts/zstd-ios-arm64/libzstd.a release/runtimes/ios-arm64/native/
+          fi
+          if [ -f artifacts/zstd-ios-x86_64/libzstd.a ]; then
+            cp artifacts/zstd-ios-x86_64/libzstd.a release/runtimes/ios-x64/native/
+          fi
+
+          # Android
+          if [ -f artifacts/zstd-android-arm/libzstd.so ]; then
+            cp artifacts/zstd-android-arm/libzstd.so release/runtimes/android-arm/native/
+          fi
+          if [ -f artifacts/zstd-android-arm64/libzstd.so ]; then
+            cp artifacts/zstd-android-arm64/libzstd.so release/runtimes/android-arm64/native/
+          fi
+          if [ -f artifacts/zstd-android-x86_64/libzstd.so ]; then
+            cp artifacts/zstd-android-x86_64/libzstd.so release/runtimes/android-x64/native/
+          fi
+      - name: Create archives
+        run: |
+          cd release
+          tar czf ../zstd-native-libraries.tar.gz .
+          zip -r ../zstd-native-libraries.zip .
+      - name: Upload package
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: zstd-native-package
+          path: |
+            zstd-native-libraries.tar.gz
+            zstd-native-libraries.zip
+
+  create-pr:
+    needs: [check_new_release, package-all]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      NEW_BRANCH_NAME: "automate/zstd-${{ needs.check_new_release.outputs.latest_tag }}"
+      LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+      - name: Configure Git
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+      - name: Create new branch
+        run: git checkout -b "${NEW_BRANCH_NAME}"
+      # update submodule
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          echo "Updated zstd submodule to ${LATEST_TAG}"
+          cd zstd
+            git fetch --tags
+            git checkout "${LATEST_TAG}"
+          cd ..
+          git add zstd
+          git commit -m "automate: Update ZSTD submodule to ${LATEST_TAG}"
+      # update runtimes
+      - name: Download all artifacts
+        uses: Cysharp/Actions/.github/actions/download-artifact@main
+        with:
+          path: artifacts
+      - name: Place new runtimes
+        env:
+          DEST_BASE_PATH: src/NativeCompressions.ZStandard.Runtime/runtimes
+        run: |
+          echo "Updated zstd runtimes to ${LATEST_TAG}"
+
+          mkdir -p "${DEST_BASE_PATH}/{linux-x64,linux-arm64}/native"
+          mkdir -p "${DEST_BASE_PATH}/{osx-arm64,osx-x64}/native"
+          mkdir -p "${DEST_BASE_PATH}/{win-arm64,win-x64}/native"
+          mkdir -p "${DEST_BASE_PATH}/{ios-arm64,ios-x64}/native"
+          mkdir -p "${DEST_BASE_PATH}/{android-arm,android-arm64,android-x64}/native"
+
+          # Windows
+          if [ -f artifacts/zstd-win-x64/libzstd.dll ]; then
+            cp -f artifacts/zstd-win-x64/libzstd.dll "${DEST_BASE_PATH}/win-x64/native/libzstd.dll"
+          fi
+          if [ -f artifacts/zstd-win-arm64/libzstd.dll ]; then
+            cp -f artifacts/zstd-win-arm64/libzstd.dll "${DEST_BASE_PATH}/win-arm64/native/libzstd.dll"
+          fi
+
+          # Linux
+          if [ -f artifacts/zstd-linux-x64/libzstd.so ]; then
+            cp -f artifacts/zstd-linux-x64/libzstd.so "${DEST_BASE_PATH}/linux-x64/native/libzstd.so"
+          fi
+          if [ -f artifacts/zstd-linux-arm64/libzstd.so ]; then
+            cp -f artifacts/zstd-linux-arm64/libzstd.so "${DEST_BASE_PATH}/linux-arm64/native/libzstd.so"
+          fi
+
+          # macOS
+          if [ -f artifacts/zstd-osx-x64/libzstd.dylib ]; then
+            cp -f artifacts/zstd-osx-x64/libzstd.dylib "${DEST_BASE_PATH}/osx-x64/native/libzstd.dylib"
+          fi
+          if [ -f artifacts/zstd-osx-arm64/libzstd.dylib ]; then
+            cp -f artifacts/zstd-osx-arm64/libzstd.dylib "${DEST_BASE_PATH}/osx-arm64/native/libzstd.dylib"
+          fi
+
+          # iOS
+          if [ -f artifacts/zstd-ios-arm64/libzstd.a ]; then
+            cp -f artifacts/zstd-ios-arm64/libzstd.a "${DEST_BASE_PATH}/ios-arm64/native/libzstd.a"
+          fi
+          if [ -f artifacts/zstd-ios-x86_64/libzstd.a ]; then
+            cp -f artifacts/zstd-ios-x86_64/libzstd.a "${DEST_BASE_PATH}/ios-x64/native/libzstd.a"
+          fi
+
+          # Android
+          if [ -f artifacts/zstd-android-arm/libzstd.so ]; then
+            cp -f artifacts/zstd-android-arm/libzstd.so "${DEST_BASE_PATH}/android-arm/native/libzstd.so"
+          fi
+          if [ -f artifacts/zstd-android-arm64/libzstd.so ]; then
+            cp -f artifacts/zstd-android-arm64/libzstd.so "${DEST_BASE_PATH}/android-arm64/native/libzstd.so"
+          fi
+          if [ -f artifacts/zstd-android-x86_64/libzstd.so ]; then
+            cp -f artifacts/zstd-android-x86_64/libzstd.so "${DEST_BASE_PATH}/android-x64/native/libzstd.so"
+          fi
+
+      #     # Commit runtime updates
+      #     git add "${DEST_BASE_PATH}"
+      #     git commit -m "automate: Update ZStandard native libraries to ${LATEST_TAG}"
+      # # create PR
+      # - name: Push branch and create PR
+      #   env:
+      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: |
+      #     # Push the branch
+      #     git push origin "${NEW_BRANCH_NAME}"
+
+      #     cat <<'EOF' > artifacts/pr_body.txt
+      #     This PR updates ZStandard to the latest release `${{ needs.check_new_release.outputs.latest_tag }}` ([${{ needs.check_new_release.outputs.latest_commit }}](https://github.com/facebook/zstd/commit/${{ needs.check_new_release.outputs.latest_commit }}))
+
+      #     ## Changes
+      #     - Updated ZStandard submodule to ${{ needs.check_new_release.outputs.latest_tag }}
+      #     - Updated native libraries for all platforms:
+      #       - Windows x64/ARM64
+      #       - Linux x64/ARM64
+      #       - macOS x64/ARM64
+      #       - Android ARM/ARM64/x64
+      #       - iOS ARM64/x64 (device/simulator)
+
+      #     ## Build artifacts
+      #     All native libraries have been built and tested in CI.
+
+      #     @neuecc
+      #     EOF
+
+      #     # Create PR
+      #     gh pr create --title "automate: Update ZStandard to ${LATEST_TAG}" --base main --head "${NEW_BRANCH_NAME}" --body-file artifacts/pr_body.txt
