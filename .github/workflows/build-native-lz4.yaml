@@ -609,6 +609,7 @@ jobs:
           echo "Created PR #$PR_NUMBER: $PR_URL"
 
       - name: Trigger build validation and report status
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
