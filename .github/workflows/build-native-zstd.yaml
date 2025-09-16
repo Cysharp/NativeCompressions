@@ -305,8 +305,7 @@ jobs:
 
           # Build static library (iOS App Store requires static linking)
           cd zstd
-          make -C lib libzstd.a CC="clang" \
-            CFLAGS="${{ matrix.cflags }} -O3 -isysroot $SDK_PATH"
+          make -C lib libzstd.a CC="clang" CFLAGS="-DZSTD_MULTITHREAD ${{ matrix.cflags }} -O3 -isysroot $SDK_PATH"
 
           ls -la lib/libzstd.a
           file lib/libzstd.a
