@@ -1,14 +1,14 @@
 name: Build-Native-ZSTD
 
-# Follow ZStandard latest release by cron update
-# 1.  Check for ZStandard updates - compare submodule commit ID with latest release commit
+# Follow Zstandard latest release by cron update
+# 1.  Check for Zstandard updates - compare submodule commit ID with latest release commit
 # 2.  If no changes, checkout in each build job, build and upload artifacts.
 # 2". If changes exist, update submodule after checkout in each build job, build and upload artifacts
 # 3.  Upload packages to GitHub Actions summary
-# 4.  If changes exist, Create a branch and PR. Separate PRs for each ZStandard release are preferred (avoid updating in a single PR)
+# 4.  If changes exist, Create a branch and PR. Separate PRs for each Zstandard release are preferred (avoid updating in a single PR)
 #     PR includes following changes.
 #     - Commit that updates the submodule
-#     - Commit that zstd dynamic lib artifacts placed in src/NativeCompressions.ZStandard.Runtime/runtimes/{platform_name}/native/{lib}
+#     - Commit that zstd dynamic lib artifacts placed in src/NativeCompressions.Zstandard.Runtime/runtimes/{platform_name}/native/{lib}
 on:
   workflow_dispatch:
   schedule:
@@ -491,7 +491,7 @@ jobs:
           path: artifacts
       - name: Place new runtimes
         env:
-          DEST_BASE_PATH: src/NativeCompressions.ZStandard.Runtime/runtimes
+          DEST_BASE_PATH: src/NativeCompressions.Zstandard.Runtime/runtimes
         run: |
           echo "Updated zstd runtimes to ${LATEST_TAG}"
 
@@ -559,7 +559,7 @@ jobs:
           echo "::group::git commit"
             # Commit runtime updates
             git add "${DEST_BASE_PATH}"
-            git commit -m "automate: Update ZStandard native libraries to ${LATEST_TAG}"
+            git commit -m "automate: Update Zstandard native libraries to ${LATEST_TAG}"
           echo "::endgroup::"
       # create PR
       - name: Push branch and create PR
@@ -571,10 +571,10 @@ jobs:
           git push origin "${NEW_BRANCH_NAME}"
 
           cat <<'EOF' > artifacts/pr_body.txt
-          This PR updates ZStandard to the latest release `${{ needs.check_new_release.outputs.latest_tag }}` ([${{ needs.check_new_release.outputs.latest_commit }}](https://github.com/facebook/zstd/commit/${{ needs.check_new_release.outputs.latest_commit }}))
+          This PR updates Zstandard to the latest release `${{ needs.check_new_release.outputs.latest_tag }}` ([${{ needs.check_new_release.outputs.latest_commit }}](https://github.com/facebook/zstd/commit/${{ needs.check_new_release.outputs.latest_commit }}))
 
           ## Changes
-          - Updated ZStandard submodule to ${{ needs.check_new_release.outputs.latest_tag }}
+          - Updated Zstandard submodule to ${{ needs.check_new_release.outputs.latest_tag }}
           - Updated native libraries for all platforms:
             - Windows x64/ARM64
             - Linux x64/ARM64
@@ -589,7 +589,7 @@ jobs:
           EOF
 
           # Create PR and capture PR number
-          PR_URL=$(gh pr create --title "automate: Update ZStandard to ${LATEST_TAG}" --base main --head "${NEW_BRANCH_NAME}" --body-file artifacts/pr_body.txt)
+          PR_URL=$(gh pr create --title "automate: Update Zstandard to ${LATEST_TAG}" --base main --head "${NEW_BRANCH_NAME}" --body-file artifacts/pr_body.txt)
           PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]\+$')
 
           echo "pr_number=$PR_NUMBER" | tee -a "$GITHUB_OUTPUT"
