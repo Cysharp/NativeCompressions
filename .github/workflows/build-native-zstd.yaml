@@ -622,7 +622,7 @@ jobs:
           gh workflow run "${WORKFLOW_NAME}" --ref "${NEW_BRANCH_NAME}"
 
           if [ $? -ne 0 ]; then
-            gh pr comment $PR_NUMBER --body "
+            gh pr comment $PR_NUMBER --edit-last --body "
             ## ❌ Build Validation Failed
 
             - **Status**: Could not trigger build workflow
@@ -653,7 +653,7 @@ jobs:
           done
 
           if [ -z "$WORKFLOW_RUN_ID" ] || [ "$WORKFLOW_RUN_ID" = "$BEFORE_RUN_ID" ]; then
-            gh pr comment $PR_NUMBER --body "
+            gh pr comment $PR_NUMBER --edit-last --body "
             ## ❌ Build Validation Failed
 
             - **Status**: Could not find triggered workflow run
