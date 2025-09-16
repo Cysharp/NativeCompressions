@@ -576,6 +576,7 @@ jobs:
           echo "::endgroup::"
       # create PR
       - name: Push branch and create PR
+        id: create_pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
