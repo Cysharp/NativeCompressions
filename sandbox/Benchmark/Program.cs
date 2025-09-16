@@ -22,13 +22,9 @@ BenchmarkSwitcher.FromAssembly(Assembly.GetEntryAssembly()!).Run(args, config);
 
 global::System.Console.WriteLine("DEBUG BUILD.");
 
-var decode = new Lz4SimpleDecode();
-// var a = await decode.NativeCompressions_LZ4_CompressMultiThread();
-var b = decode.NativeCompressions_LZ4_Decompress();
-var c = decode.K4os_LZ4_Decode();
-var d = decode.K4os_LZ4_FrameDecode();
-
-
+var bench = new ZStandardSimpleEncode();
+var i = bench.NativeCompressions_ZStandard_Compress_Multithread();
+Console.WriteLine(i);
 
 return;
 

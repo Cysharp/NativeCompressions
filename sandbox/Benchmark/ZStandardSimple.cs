@@ -47,17 +47,17 @@ public class ZStandardSimpleEncode
         return NativeCompressions.ZStandard.ZStandard.Compress(src, dest, -4);
     }
 
-    [Benchmark]
-    public int NativeCompressions_ZStandard_Compress_Max()
-    {
-        return NativeCompressions.ZStandard.ZStandard.Compress(src, dest, ZStandard.MaxCompressionLevel);
-    }
-
     //[Benchmark]
-    //public int NativeCompressions_ZStandard_Compress_Multithread()
+    //public int NativeCompressions_ZStandard_Compress_Max()
     //{
-    //    return NativeCompressions.ZStandard.ZStandard.Compress(src, dest, ZStandardCompressionOptions.Default with { NbWorkers = 4 });
+    //    return NativeCompressions.ZStandard.ZStandard.Compress(src, dest, ZStandard.MaxCompressionLevel);
     //}
+
+    [Benchmark]
+    public int NativeCompressions_ZStandard_Compress_Multithread()
+    {
+        return NativeCompressions.ZStandard.ZStandard.Compress(src, dest, ZStandardCompressionOptions.Default with { NbWorkers = 4 });
+    }
 }
 
 //[PayloadColumn]

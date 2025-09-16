@@ -18,6 +18,15 @@ using System.Threading.Tasks;
 using NativeCompressions.ZStandard;
 
 
+unsafe
+{
+    var ctx = NativeCompressions.ZStandard.Raw.NativeMethods.ZSTD_createCCtx();
+
+    var x = NativeCompressions.ZStandard.Raw.NativeMethods.ZSTD_CCtx_setParameter(ctx, 400, 4);
+    var xxx = NativeCompressions.ZStandard.Raw.NativeMethods.ZSTD_getErrorName(x);
+    Console.WriteLine(new string((sbyte*)xxx));
+}
+
 Console.WriteLine(ZStandard.Version);
 Console.WriteLine(ZStandard.MinCompressionLevel);
 Console.WriteLine(ZStandard.MaxCompressionLevel);
