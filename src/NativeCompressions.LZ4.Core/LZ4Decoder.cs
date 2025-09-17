@@ -24,7 +24,17 @@ public unsafe partial struct LZ4Decoder : IDisposable
     /// Initializes a new instance of the <see cref="LZ4Decoder"/> struct.
     /// </summary>
     /// <exception cref="LZ4Exception">Thrown when the decompression context cannot be created.</exception>
-    public LZ4Decoder(LZ4CompressionDictionary? dictionary = null)
+    public LZ4Decoder()
+        : this(null)
+    {
+
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LZ4Decoder"/> struct.
+    /// </summary>
+    /// <exception cref="LZ4Exception">Thrown when the decompression context cannot be created.</exception>
+    public LZ4Decoder(LZ4CompressionDictionary? dictionary)
     {
         // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         LZ4F_dctx_s* ptr = default;
