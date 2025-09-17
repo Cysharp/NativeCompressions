@@ -247,7 +247,7 @@ jobs:
       - name: Build dynamic library
         run: |
           cd zstd/lib
-          make lib-release MOREFLAGS="-DZSTD_MULTITHREAD ${{ matrix.flags }} -flto" -j$(nproc)
+          make lib-release MOREFLAGS="-DZSTD_MULTITHREAD ${{ matrix.flags }} -flto" -j$(sysctl -n hw.ncpu)
           lipo -info *.dylib
       - name: Prepare artifacts
         run: |
@@ -306,7 +306,7 @@ jobs:
 
           # Build static library (iOS App Store requires static linking)
           cd zstd/lib
-          make lib-mt CC="clang" CFLAGS="-O3 ${{ matrix.flags }} -flto -isysroot $SDK_PATH" DEBUGFLAGS="" -j$(nproc)
+          make lib-mt CC="clang" CFLAGS="-O3 ${{ matrix.flags }} -flto -isysroot $SDK_PATH" DEBUGFLAGS="" -j$(sysctl -n hw.ncpu)
 
           ls -la libzstd.a
           file libzstd.a
