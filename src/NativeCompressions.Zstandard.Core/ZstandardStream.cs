@@ -505,10 +505,6 @@ public sealed class ZstandardStream : Stream
                 stream.Dispose();
             }
         }
-        catch
-        {
-            // in dispose, ignore exceptions.
-        }
         finally
         {
             if (buffer != null)
@@ -544,10 +540,6 @@ public sealed class ZstandardStream : Stream
             {
                 stream.Dispose();
             }
-        }
-        catch
-        {
-            // in dispose, ignore exceptions.
         }
         finally
         {

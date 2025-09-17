@@ -483,10 +483,6 @@ public sealed class LZ4Stream : Stream
                 stream.Dispose();
             }
         }
-        catch
-        {
-            // in dispose, ignore exceptions.
-        }
         finally
         {
             if (buffer != null)
@@ -519,10 +515,6 @@ public sealed class LZ4Stream : Stream
             {
                 stream.Dispose();
             }
-        }
-        catch
-        {
-            // in dispose, ignore exceptions.
         }
         finally
         {
