@@ -594,3 +594,10 @@ jobs:
 
           echo "pr_number=$PR_NUMBER" | tee -a "$GITHUB_OUTPUT"
           echo "Created PR #$PR_NUMBER: $PR_URL"
+
+  build:
+    needs: [check_new_release, create-pr]
+    if: ${{ needs.create-pr.result == 'success' }}
+    uses: ./.github/workflows/build-debug.yaml
+    with:
+      git-ref: "automate/zstd-${{ needs.check_new_release.outputs.latest_tag }}"

@@ -2,6 +2,11 @@ name: Build-Debug
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      git-ref:
+        required: true
+        type: string
   push:
     branches:
       - "main"
@@ -30,6 +35,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
+        if: ${{ github.event_name != 'workflow_call' }}
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        if: ${{ github.event_name == 'workflow_call' }}
+        with:
+          ref: ${{ inputs.git-ref }}
       - uses: Cysharp/Actions/.github/actions/setup-dotnet@main
         with:
           dotnet-version: |
