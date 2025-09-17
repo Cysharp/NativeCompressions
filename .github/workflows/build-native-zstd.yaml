@@ -114,7 +114,7 @@ jobs:
         shell: msys2 {0}
         run: |
           cd zstd/lib
-          make lib-release TARGET_SYSTEM=Windows CC=gcc MOREFLAGS="-DZSTD_MULTITHREAD" -j$(nproc)
+          make lib-release TARGET_SYSTEM=Windows CC=gcc MOREFLAGS="-DZSTD_MULTITHREAD" -j "$(nproc)"
       - name: Prepare artifacts
         shell: pwsh
         run: |
@@ -201,8 +201,8 @@ jobs:
       - name: Build shared library
         run: |
           cd zstd/lib
-          make lib-release CC="${{ matrix.cc }}" MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j$(nproc)
-          ls -la *.so*
+          make lib-release CC="${{ matrix.cc }}" MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j "$(nproc)"
+          ls -la ./*.so*
           file libzstd.so*
       - name: Prepare artifacts
         run: |
@@ -249,8 +249,8 @@ jobs:
       - name: Build dynamic library
         run: |
           cd zstd/lib
-          make lib-release MOREFLAGS="-DZSTD_MULTITHREAD ${{ matrix.flags }} -fPIC -flto" -j$(sysctl -n hw.ncpu)
-          lipo -info *.dylib
+          make lib-release MOREFLAGS="-DZSTD_MULTITHREAD ${{ matrix.flags }} -fPIC -flto" -j "$(sysctl -n hw.ncpu)"
+          lipo -info ./*.dylib
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/osx-${{ matrix.arch }}
@@ -309,7 +309,7 @@ jobs:
 
           # Build static library (iOS App Store requires static linking)
           cd zstd/lib
-          make lib-mt CC="clang" CFLAGS="-O3 ${{ matrix.flags }} -flto -isysroot $SDK_PATH" DEBUGFLAGS="" -j$(sysctl -n hw.ncpu)
+          make lib-mt CC="clang" CFLAGS="-O3 ${{ matrix.flags }} -flto -isysroot $SDK_PATH" DEBUGFLAGS="" -j "$(sysctl -n hw.ncpu)"
 
           ls -la libzstd.a
           file libzstd.a
@@ -370,7 +370,7 @@ jobs:
         run: |
           export PATH="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
           cd zstd/lib
-          make lib-release CC="${{ matrix.cc }}" MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j$(nproc)
+          make lib-release CC="${{ matrix.cc }}" MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j "$(nproc)"
           ls -la libzstd.so*
           file libzstd.so*
       - name: Prepare artifacts
@@ -460,7 +460,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      actions: write
     env:
       NEW_BRANCH_NAME: "automate/zstd-${{ needs.check_new_release.outputs.latest_tag }}"
       LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
@@ -601,6 +600,8 @@ jobs:
   build:
     needs: [check_new_release, create-pr]
     if: ${{ needs.create-pr.result == 'success' }}
+    permissions:
+      contents: read
     uses: ./.github/workflows/build-debug.yaml
     with:
       git-ref: "automate/zstd-${{ needs.check_new_release.outputs.latest_tag }}"
