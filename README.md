@@ -5,11 +5,9 @@ NativeCompressions
 
 NativeCompressions provides native library bindings, streaming processing, and multi-threading support for [LZ4](https://github.com/lz4/lz4) with its excellent decompression speed, and [Zstandard](https://github.com/facebook/zstd) with its superior balance of compression ratio and performance.
 
-![](https://github.com/user-attachments/assets/5ab559ef-86ca-42ba-add7-b6904a335409)
+![](https://github.com/user-attachments/assets/abd4f2fe-9737-422d-aeb9-d2b222b13b69)
 
-![](https://github.com/user-attachments/assets/3eed676a-e3b5-411b-95c7-6be6896f991a)
-
-> Encode [silesia.tar](https://en.wikipedia.org/wiki/Silesia_corpus) corpus(200MB) with default LZ4 options / Zstandard options. Sorry, while LZ4 and Zstandard are processing the same payload, the benchmarks cannot be compared because they were measured on different machines. This figure will be replaced later.
+> Encode/Decode [silesia.tar](https://en.wikipedia.org/wiki/Silesia_corpus) corpus(202.13MB)
 
 Compression is crucial for any application, but .NET has had limited options. NativeCompressions builds state-of-the-art algorithms (LZ4, Zstandard) with allocation-free, stream-less streaming APIs. Furthermore, by leveraging modern C# APIs (`Span<T>`, `RandomAccess`, `PipeReader/Writer`) to provide high-level multi-threading APIs, we achieve high-performance compression in any environment.
 
@@ -259,6 +257,8 @@ TODO
 Zstandard
 ---
 It is generally similar to the LZ4 API. The `Zstandard` class has static methods, and there are `ZstandardEncoder` and `ZstandardDecoder` as Streamless-streaming APIs. Currently, the PipeReader/PipeWriter API is not implemented, but it will eventually be provided.
+
+`ZstandardEncoder` and `ZstandardDecoder` API is completely same as `BrotliEncoder`/`BrotliDecoder` unlike `LZ4Encoder/Decoder`. In other words, Compress returns an `OperationStatus`, which contains `int bytesConsumed`, `int bytesWritten`, and `bool isFinalBlock`.
 
 Detailed documentation will also be prepared later.
 
