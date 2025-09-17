@@ -112,7 +112,7 @@ jobs:
         shell: msys2 {0}
         run: |
           cd zstd
-          make -C lib libzstd CC=gcc CFLAGS="-DZSTD_MULTITHREAD" TARGET_SYSTEM=Windows
+          make -C lib libzstd CC=gcc CFLAGS="-O3 -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow -Wstrict-aliasing=1 -Wswitch-enum -Wdeclaration-after-statement -Wstrict-prototypes -Wundef -Wpointer-arith -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings -Wredundant-decls -Wmissing-prototypes -Wc++-compat -DZSTD_MULTITHREAD" TARGET_SYSTEM=Windows
           ls -la lib/dll/*.dll
           file lib/dll/*.dll
       - name: Prepare artifacts
@@ -150,7 +150,7 @@ jobs:
           docker run --rm -v "$PWD:/work" \
             mstorsjo/llvm-mingw:latest \
             bash -c "cd /work/zstd && \
-              make -C lib libzstd CC=aarch64-w64-mingw32-gcc CFLAGS='-O3' CFLAGS="-DZSTD_MULTITHREAD" TARGET_SYSTEM=Windows"
+              make -C lib libzstd CC=aarch64-w64-mingw32-gcc CFLAGS='-O3 -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow -Wstrict-aliasing=1 -Wswitch-enum -Wdeclaration-after-statement -Wstrict-prototypes -Wundef -Wpointer-arith -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings -Wredundant-decls -Wmissing-prototypes -Wc++-compat' CFLAGS="-DZSTD_MULTITHREAD" TARGET_SYSTEM=Windows"
           file zstd/lib/dll/libzstd.dll
       - name: Prepare artifacts
         run: |
@@ -199,7 +199,7 @@ jobs:
       - name: Build shared library
         run: |
           cd zstd
-          make -C lib libzstd CC="${{ matrix.cc }}"
+          make -C lib libzstd CC="${{ matrix.cc }}" CFLAGS="-O3 -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow -Wstrict-aliasing=1 -Wswitch-enum -Wdeclaration-after-statement -Wstrict-prototypes -Wundef -Wpointer-arith -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings -Wredundant-decls -Wmissing-prototypes -Wc++-compat -fPIC -DZSTD_MULTITHREAD"
           ls -la lib/*.so*
           file lib/libzstd.so*
       - name: Prepare artifacts
@@ -247,7 +247,7 @@ jobs:
       - name: Build dynamic library
         run: |
           cd zstd
-          make -C lib libzstd CFLAGS="${{ matrix.flags }} -O3"
+          make -C lib libzstd CFLAGS="${{ matrix.flags }} -O3 -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow -Wstrict-aliasing=1 -Wswitch-enum -Wdeclaration-after-statement -Wstrict-prototypes -Wundef -Wpointer-arith -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings -Wredundant-decls -Wmissing-prototypes -Wc++-compat -DZSTD_MULTITHREAD"
           lipo -info lib/*.dylib
       - name: Prepare artifacts
         run: |
@@ -305,7 +305,7 @@ jobs:
 
           # Build static library (iOS App Store requires static linking)
           cd zstd
-          make lib-mt CC="clang" CFLAGS="-DZSTD_MULTITHREAD ${{ matrix.cflags }} -O3 -isysroot $SDK_PATH"
+          make lib-mt CC="clang" CFLAGS="-O3 -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow -Wstrict-aliasing=1 -Wswitch-enum -Wdeclaration-after-statement -Wstrict-prototypes -Wundef -Wpointer-arith -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings -Wredundant-decls -Wmissing-prototypes -Wc++-compat -DZSTD_MULTITHREAD ${{ matrix.cflags }} -isysroot $SDK_PATH"
 
           ls -la lib/libzstd.a
           file lib/libzstd.a
@@ -367,7 +367,7 @@ jobs:
           export PATH="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
 
           cd zstd
-          make -C lib libzstd CC="${{ matrix.cc }}" CFLAGS="-O3 -fPIC"
+          make -C lib libzstd CC="${{ matrix.cc }}" CFLAGS="-O3 -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow -Wstrict-aliasing=1 -Wswitch-enum -Wdeclaration-after-statement -Wstrict-prototypes -Wundef -Wpointer-arith -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings -Wredundant-decls -Wmissing-prototypes -Wc++-compat -DZSTD_MULTITHREAD -fPIC"
           ls -la lib/libzstd.so*
           file lib/libzstd.so*
       - name: Prepare artifacts
