@@ -460,7 +460,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      actions: write
     env:
       NEW_BRANCH_NAME: "automate/zstd-${{ needs.check_new_release.outputs.latest_tag }}"
       LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
@@ -601,6 +600,8 @@ jobs:
   build:
     needs: [check_new_release, create-pr]
     if: ${{ needs.create-pr.result == 'success' }}
+    permissions:
+      contents: read
     uses: ./.github/workflows/build-debug.yaml
     with:
       git-ref: "automate/zstd-${{ needs.check_new_release.outputs.latest_tag }}"
