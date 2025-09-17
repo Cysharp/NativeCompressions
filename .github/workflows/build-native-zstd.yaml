@@ -108,13 +108,12 @@ jobs:
           install: >-
             ${{ matrix.arch == 'x64' && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-make' || 'mingw-w64-clang-aarch64-gcc mingw-w64-clang-aarch64-make' }}
             make
+      # Windows lib-mt-release build not apply -DZSTD_MULTITHREAD, so use lib-release instead + `MOREFLAGS="-DZSTD_MULTITHREAD -flto"`
       - name: Build DLL
         shell: msys2 {0}
         run: |
           cd zstd
-          make -C lib libzstd CC=gcc CFLAGS="-O3 -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow -Wstrict-aliasing=1 -Wswitch-enum -Wdeclaration-after-statement -Wstrict-prototypes -Wundef -Wpointer-arith -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings -Wredundant-decls -Wmissing-prototypes -Wc++-compat -DZSTD_MULTITHREAD" TARGET_SYSTEM=Windows
-          ls -la lib/dll/*.dll
-          file lib/dll/*.dll
+          make lib-release TARGET_SYSTEM=Windows CC=gcc MOREFLAGS="-DZSTD_MULTITHREAD -flto" -j$(nproc)
       - name: Prepare artifacts
         shell: pwsh
         run: |
@@ -145,12 +144,13 @@ jobs:
             git checkout ${{ needs.check_new_release.outputs.latest_tag }}
           cd ..
           echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      # Windows lib-mt-release build not apply -DZSTD_MULTITHREAD, so use lib-release instead + `MOREFLAGS="-DZSTD_MULTITHREAD -flto"`
       - name: Build using Docker
         run: |
           docker run --rm -v "$PWD:/work" \
             mstorsjo/llvm-mingw:latest \
             bash -c "cd /work/zstd && \
-              make -C lib libzstd CC=aarch64-w64-mingw32-gcc CFLAGS='-O3 -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow -Wstrict-aliasing=1 -Wswitch-enum -Wdeclaration-after-statement -Wstrict-prototypes -Wundef -Wpointer-arith -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings -Wredundant-decls -Wmissing-prototypes -Wc++-compat' CFLAGS="-DZSTD_MULTITHREAD" TARGET_SYSTEM=Windows"
+              make lib-release TARGET_SYSTEM=Windows CC=aarch64-w64-mingw32-gcc MOREFLAGS='-DZSTD_MULTITHREAD -flto'"
           file zstd/lib/dll/libzstd.dll
       - name: Prepare artifacts
         run: |
@@ -192,14 +192,14 @@ jobs:
           cd ..
           echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Install ARM64 cross-compiler
-        if: matrix.arch == 'arm64'
+        if: ${{ matrix.arch == 'arm64' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y ${{ matrix.packages }}
       - name: Build shared library
         run: |
           cd zstd
-          make -C lib libzstd CC="${{ matrix.cc }}" CFLAGS="-O3 -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow -Wstrict-aliasing=1 -Wswitch-enum -Wdeclaration-after-statement -Wstrict-prototypes -Wundef -Wpointer-arith -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings -Wredundant-decls -Wmissing-prototypes -Wc++-compat -fPIC -DZSTD_MULTITHREAD"
+          make lib-release CC="${{ matrix.cc }}" MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j$(nproc)
           ls -la lib/*.so*
           file lib/libzstd.so*
       - name: Prepare artifacts
@@ -247,7 +247,7 @@ jobs:
       - name: Build dynamic library
         run: |
           cd zstd
-          make -C lib libzstd CFLAGS="${{ matrix.flags }} -O3 -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow -Wstrict-aliasing=1 -Wswitch-enum -Wdeclaration-after-statement -Wstrict-prototypes -Wundef -Wpointer-arith -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings -Wredundant-decls -Wmissing-prototypes -Wc++-compat -DZSTD_MULTITHREAD"
+          make lib-release MOREFLAGS="-DZSTD_MULTITHREAD ${{ matrix.flags }} -flto" -j$(nproc)
           lipo -info lib/*.dylib
       - name: Prepare artifacts
         run: |
@@ -281,11 +281,11 @@ jobs:
           - arch: arm64
             sdk: iphoneos
             target: aarch64-apple-ios11.0
-            cflags: "-arch arm64 -mios-version-min=11.0"
+            flags: "-arch arm64 -mios-version-min=11.0"
           - arch: x86_64
             sdk: iphonesimulator
             target: x86_64-apple-ios11.0-simulator
-            cflags: "-arch x86_64 -mios-simulator-version-min=11.0"
+            flags: "-arch x86_64 -mios-simulator-version-min=11.0"
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
@@ -305,7 +305,7 @@ jobs:
 
           # Build static library (iOS App Store requires static linking)
           cd zstd
-          make lib-mt CC="clang" CFLAGS="-O3 -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow -Wstrict-aliasing=1 -Wswitch-enum -Wdeclaration-after-statement -Wstrict-prototypes -Wundef -Wpointer-arith -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings -Wredundant-decls -Wmissing-prototypes -Wc++-compat -DZSTD_MULTITHREAD ${{ matrix.cflags }} -isysroot $SDK_PATH"
+          make lib-release MOREFLAGS="-DZSTD_MULTITHREAD ${{ matrix.flags }} -flto -isysroot $SDK_PATH" -j$(nproc)
 
           ls -la lib/libzstd.a
           file lib/libzstd.a
@@ -365,9 +365,8 @@ jobs:
       - name: Build shared library for Android
         run: |
           export PATH="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
-
           cd zstd
-          make -C lib libzstd CC="${{ matrix.cc }}" CFLAGS="-O3 -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow -Wstrict-aliasing=1 -Wswitch-enum -Wdeclaration-after-statement -Wstrict-prototypes -Wundef -Wpointer-arith -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings -Wredundant-decls -Wmissing-prototypes -Wc++-compat -DZSTD_MULTITHREAD -fPIC"
+          make lib-release CC="${{ matrix.cc }}" MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j$(nproc)
           ls -la lib/libzstd.so*
           file lib/libzstd.so*
       - name: Prepare artifacts
