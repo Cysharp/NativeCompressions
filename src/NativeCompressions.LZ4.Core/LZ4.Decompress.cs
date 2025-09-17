@@ -58,7 +58,7 @@ public static partial class LZ4
 
             var dest = arrayProvider.GetSpan();
             var status = OperationStatus.DestinationTooSmall;
-            while (status == OperationStatus.DestinationTooSmall && source.Length > 0)
+            while (status == OperationStatus.DestinationTooSmall)
             {
                 status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
                 if (bytesWritten == 0 && bytesConsumed == 0 && status == OperationStatus.DestinationTooSmall)
@@ -76,7 +76,7 @@ public static partial class LZ4
                 }
             }
 
-            if (status == OperationStatus.NeedMoreData)
+            if (status != OperationStatus.Done)
             {
                 throw new InvalidOperationException("Invalid LZ4 frame.");
             }
@@ -97,7 +97,7 @@ public static partial class LZ4
 
         var totalWritten = 0;
         var status = OperationStatus.DestinationTooSmall;
-        while (status == OperationStatus.DestinationTooSmall && source.Length > 0)
+        while (status == OperationStatus.DestinationTooSmall)
         {
             status = decoder.Decompress(source, destination, out var bytesConsumed, out var bytesWritten);
             if (bytesWritten == 0 && bytesConsumed == 0 && status == OperationStatus.DestinationTooSmall)
@@ -110,7 +110,7 @@ public static partial class LZ4
             totalWritten += bytesWritten;
         }
 
-        if (status == OperationStatus.NeedMoreData)
+        if (status != OperationStatus.Done)
         {
             throw new InvalidOperationException("Invalid LZ4 frame.");
         }
@@ -136,7 +136,7 @@ public static partial class LZ4
         if (!supportMultithreadDecode)
         {
             var status = OperationStatus.DestinationTooSmall;
-            while (status == OperationStatus.DestinationTooSmall && source.Length > 0)
+            while (status == OperationStatus.DestinationTooSmall)
             {
                 var dest = destination.GetSpan(maxBlockSize);
 
@@ -150,7 +150,7 @@ public static partial class LZ4
                 await destination.FlushAsync(cancellationToken);
             }
 
-            if (status == OperationStatus.NeedMoreData)
+            if (status != OperationStatus.Done)
             {
                 throw new InvalidOperationException("Invalid LZ4 frame.");
             }
@@ -280,7 +280,20 @@ public static partial class LZ4
                 await destination.FlushAsync(cancellationToken);
             }
 
-            if (status == OperationStatus.NeedMoreData)
+            while (status == OperationStatus.DestinationTooSmall)
+            {
+                dest = destination.GetSpan(maxBlockSize);
+
+                status = decoder.Decompress([], dest, out _, out var bytesWritten);
+                if (bytesWritten == 0 && status == OperationStatus.DestinationTooSmall)
+                {
+                    throw new InvalidOperationException("Decoder stuck");
+                }
+                destination.Advance(bytesWritten);
+                await destination.FlushAsync(cancellationToken);
+            }
+
+            if (status != OperationStatus.Done)
             {
                 throw new InvalidOperationException("Invalid LZ4 frame.");
             }
