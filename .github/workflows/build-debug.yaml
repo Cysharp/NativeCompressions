@@ -35,9 +35,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
-        if: ${{ github.event_name != 'workflow_call' }}
+        if: ${{ github.event.workflow == '.github/workflows/build-debug.yaml' }}
       - uses: Cysharp/Actions/.github/actions/checkout@main
-        if: ${{ github.event_name == 'workflow_call' }}
+        if: ${{ github.event.workflow != '.github/workflows/build-debug.yaml' }}
         with:
           ref: ${{ inputs.git-ref }}
       - uses: Cysharp/Actions/.github/actions/setup-dotnet@main
