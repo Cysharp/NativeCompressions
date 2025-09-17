@@ -114,7 +114,7 @@ jobs:
         shell: msys2 {0}
         run: |
           cd zstd/lib
-          make lib-release TARGET_SYSTEM=Windows CC=gcc MOREFLAGS="-DZSTD_MULTITHREAD -flto" -j$(nproc)
+          make lib-release TARGET_SYSTEM=Windows CC=gcc MOREFLAGS="-DZSTD_MULTITHREAD" -j$(nproc)
       - name: Prepare artifacts
         shell: pwsh
         run: |
@@ -152,7 +152,7 @@ jobs:
           docker run --rm -v "$PWD:/work" \
             mstorsjo/llvm-mingw:latest \
             bash -c "cd /work/zstd/lib && \
-              make lib-release TARGET_SYSTEM=Windows CC=aarch64-w64-mingw32-gcc MOREFLAGS='-DZSTD_MULTITHREAD -flto'"
+              make lib-release TARGET_SYSTEM=Windows CC=aarch64-w64-mingw32-gcc MOREFLAGS='-DZSTD_MULTITHREAD'"
           file zstd/lib/dll/libzstd.dll
       - name: Prepare artifacts
         run: |
