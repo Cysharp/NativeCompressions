@@ -1,5 +1,6 @@
 ﻿using Benchmark.BenchmarkNetUtilities;
 using Benchmark.Models;
+//using ;
 using NativeCompressions.LZ4;
 using System.Buffers;
 using System.IO.Pipelines;
@@ -7,6 +8,8 @@ using System.Text;
 using System.Text.Json;
 
 namespace Benchmark;
+
+
 
 [PayloadColumn]
 public class Lz4SimpleEncode
@@ -29,6 +32,8 @@ public class Lz4SimpleEncode
 
     public Lz4SimpleEncode()
     {
+
+
         src = Resources.Silesia;
         var maxSize = NativeCompressions.LZ4.LZ4.GetMaxCompressedLength(src.Length, LZ4FrameOptions.Default);
         dest = new byte[maxSize];

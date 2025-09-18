@@ -18,6 +18,9 @@ var config = ManualConfig.CreateMinimumViable()
 
 BenchmarkSwitcher.FromAssembly(Assembly.GetEntryAssembly()!).Run(args, config);
 
+
+//BenchmarkDotNet.Running.BenchmarkRunner.Run<Lz4Simple2>(config, args);
+
 #else
 
 global::System.Console.WriteLine("DEBUG BUILD.");

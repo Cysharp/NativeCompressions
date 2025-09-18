@@ -38,9 +38,19 @@ public static partial class LZ4
     public static uint FrameVersion => LZ4F_getVersion();
 
     /// <summary>
-    /// Get the maximum allowed compression level.
+    /// Get the minimum compression level.
+    /// </summary>
+    public static int MinCompressionLevel => 1;
+
+    /// <summary>
+    /// Get the maximum compression level.
     /// </summary>
     public static int MaxCompressionLevel => LZ4F_compressionLevel_max();
+
+    /// <summary>
+    /// Gets the default compression level.
+    /// </summary>
+    public const int DefaultCompressionLevel = 1;
 
     /// <summary>
     /// Gets the minimum number of bytes required to determine the LZ4 frame header size.
