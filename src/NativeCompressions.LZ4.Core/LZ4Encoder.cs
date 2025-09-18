@@ -264,10 +264,8 @@ public unsafe partial struct LZ4Encoder : IDisposable
 
     void ValidateDisposed()
     {
-        if (disposed)
-        {
-            Throws.ObjectDisposedException();
-        }
+        if (disposed) Throws.ObjectDisposedException();
+        if (context == null) Throws.InvalidContextNullException();
     }
 
     /// <summary>

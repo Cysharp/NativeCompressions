@@ -11,4 +11,9 @@ internal static class Throws
     {
         throw new ArgumentOutOfRangeException(paramName);
     }
+
+    public static void InvalidContextNullException()
+    {
+        throw new InvalidOperationException("The native context is null. There may be an error in the initialization (such as using default instead of a constructor).");
+    }
 }

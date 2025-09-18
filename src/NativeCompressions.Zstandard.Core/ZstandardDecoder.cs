@@ -127,6 +127,7 @@ public unsafe struct ZstandardDecoder : IDisposable
     void ValidateDisposed()
     {
         if (disposed) Throws.ObjectDisposedException();
+        if (context == null) Throws.InvalidContextNullException();
     }
 
     public void Dispose()
