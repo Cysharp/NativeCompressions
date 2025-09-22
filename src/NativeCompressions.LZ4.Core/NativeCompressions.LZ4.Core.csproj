@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.1;net8.0;net9.0;</TargetFrameworks>
     <RootNamespace>NativeCompressions</RootNamespace>
+    <Description>Core binding of native LZ4 high-performance streaming compression for .NET.</Description>
   </PropertyGroup>
 
   <ItemGroup>

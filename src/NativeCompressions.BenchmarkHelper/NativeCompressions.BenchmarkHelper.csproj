@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
+    <Description>BenchmarkDotNet helper to compare compression performance.</Description>
   </PropertyGroup>
 
   <ItemGroup>
