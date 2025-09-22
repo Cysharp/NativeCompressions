@@ -1,7 +1,6 @@
 ﻿using Benchmark.BenchmarkNetUtilities;
 using Benchmark.Models;
-//using ;
-using NativeCompressions.LZ4;
+using NativeCompressions;
 using System.Buffers;
 using System.IO.Pipelines;
 using System.Text;
@@ -35,7 +34,7 @@ public class Lz4SimpleEncode
 
 
         src = Resources.Silesia;
-        var maxSize = NativeCompressions.LZ4.LZ4.GetMaxCompressedLength(src.Length, LZ4FrameOptions.Default);
+        var maxSize = NativeCompressions.LZ4.GetMaxCompressedLength(src.Length, LZ4FrameOptions.Default);
         dest = new byte[maxSize];
         writer = new ArrayBufferPipeWriter(maxSize);
     }
@@ -55,14 +54,14 @@ public class Lz4SimpleEncode
     [Benchmark]
     public int NativeCompressions_LZ4_Compress()
     {
-        return NativeCompressions.LZ4.LZ4.Compress(src, dest);
+        return NativeCompressions.LZ4.Compress(src, dest);
     }
 
     [Benchmark]
     public async Task<int> NativeCompressions_LZ4_CompressMultiThread()
     {
         writer.ResetWrittenCount();
-        await NativeCompressions.LZ4.LZ4.CompressAsync(src, writer, LZ4FrameOptions.Default);
+        await NativeCompressions.LZ4.CompressAsync(src, writer, LZ4FrameOptions.Default);
         return (int)writer.WrittenCount;
     }
 }
@@ -117,14 +116,14 @@ public class Lz4SimpleDecode
     [Benchmark]
     public int NativeCompressions_LZ4_Decompress()
     {
-        return NativeCompressions.LZ4.LZ4.Decompress(srcNativeCompressions, dest);
+        return NativeCompressions.LZ4.Decompress(srcNativeCompressions, dest);
     }
 
     [Benchmark]
     public async Task<int> NativeCompressions_LZ4_DecompressMultiThread()
     {
         writer.ResetWrittenCount();
-        await NativeCompressions.LZ4.LZ4.DecompressAsync(srcNativeCompressionsMultithread, writer);
+        await NativeCompressions.LZ4.DecompressAsync(srcNativeCompressionsMultithread, writer);
         return (int)writer.WrittenCount;
     }
 }

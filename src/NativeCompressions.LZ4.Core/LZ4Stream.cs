@@ -5,7 +5,7 @@ using System.Buffers;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 
-namespace NativeCompressions.LZ4;
+namespace NativeCompressions;
 
 public sealed class LZ4Stream : Stream
 {

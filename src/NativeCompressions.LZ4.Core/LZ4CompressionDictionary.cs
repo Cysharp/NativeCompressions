@@ -1,8 +1,8 @@
-﻿using NativeCompressions.LZ4.Raw;
-using System.Runtime.InteropServices;
-using static NativeCompressions.LZ4.Raw.NativeMethods;
+﻿using System.Runtime.InteropServices;
+using NativeCompressions.Raw;
+using static NativeCompressions.Raw.LZ4NativeMethods;
 
-namespace NativeCompressions.LZ4;
+namespace NativeCompressions;
 
 public sealed class LZ4CompressionDictionary : SafeHandle
 {

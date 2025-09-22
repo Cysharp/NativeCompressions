@@ -1,14 +1,14 @@
 ﻿using Microsoft.Win32.SafeHandles;
 using NativeCompressions.Internal;
-using NativeCompressions.LZ4.Raw;
+using NativeCompressions.Raw;
 using System.Buffers;
 using System.Diagnostics;
 using System.IO.Pipelines;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
-using static NativeCompressions.LZ4.Raw.NativeMethods;
+using static NativeCompressions.Raw.LZ4NativeMethods;
 
-namespace NativeCompressions.LZ4;
+namespace NativeCompressions;
 
 public static partial class LZ4
 {

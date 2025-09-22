@@ -1,4 +1,4 @@
-﻿namespace NativeCompressions.LZ4;
+﻿namespace NativeCompressions;
 
 public class LZ4Exception(string message)
     : Exception(message)

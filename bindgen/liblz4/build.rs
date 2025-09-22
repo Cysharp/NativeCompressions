@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .csharp_entry_point_prefix("")
         .csharp_method_prefix("")
         .csharp_class_accessibility("public")
-        .generate_to_file("src/lz4_ffi.rs", "../../src/NativeCompressions.LZ4.Core/Raw/NativeMethods.cs")
+        .generate_to_file("src/lz4_ffi.rs", "../../src/NativeCompressions.LZ4.Core/Raw/LZ4NativeMethods.cs")
         .unwrap();
 
     // cc::Build::new()

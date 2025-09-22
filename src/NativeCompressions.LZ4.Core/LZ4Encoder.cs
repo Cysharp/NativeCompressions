@@ -1,9 +1,9 @@
 ﻿using NativeCompressions.Internal;
-using NativeCompressions.LZ4.Raw;
 using System.Runtime.CompilerServices;
-using static NativeCompressions.LZ4.Raw.NativeMethods;
+using NativeCompressions.Raw;
+using static NativeCompressions.Raw.LZ4NativeMethods;
 
-namespace NativeCompressions.LZ4;
+namespace NativeCompressions;
 
 // cctx = Compression Context
 // dctx = Decompression Context

@@ -1,5 +1,4 @@
-﻿using NativeCompressions.LZ4;
-using NativeCompressions.BenchmarkHelper;
+﻿using NativeCompressions.BenchmarkHelper;
 
 namespace Benchmark;
 

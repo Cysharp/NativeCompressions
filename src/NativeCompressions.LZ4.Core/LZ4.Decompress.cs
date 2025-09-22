@@ -12,7 +12,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 
-namespace NativeCompressions.LZ4;
+namespace NativeCompressions;
 
 public static partial class LZ4
 {

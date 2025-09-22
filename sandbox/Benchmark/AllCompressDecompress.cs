@@ -1,8 +1,8 @@
 ﻿using Benchmark.BenchmarkNetUtilities;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
-using NativeCompressions.LZ4;
 using NativeCompressions.Zstandard;
+using NativeCompressions;
 using Orleans.Serialization.Buffers;
 using System.ComponentModel;
 using System.IO.Compression;
@@ -109,7 +109,7 @@ public class AllCompressDecompress
     [BenchmarkCategory("Compress")]
     public int NativeCompressions_LZ4_Compress()
     {
-        return NativeCompressions.LZ4.LZ4.Compress(src, dest);
+        return NativeCompressions.LZ4.Compress(src, dest);
     }
 
     [Benchmark]
@@ -117,7 +117,7 @@ public class AllCompressDecompress
     public async Task<int> NativeCompressions_LZ4_CompressMultiThread()
     {
         writer.ResetWrittenCount();
-        await NativeCompressions.LZ4.LZ4.CompressAsync(src, writer, LZ4FrameOptions.Default);
+        await NativeCompressions.LZ4.CompressAsync(src, writer, LZ4FrameOptions.Default);
         return (int)writer.WrittenCount;
     }
 
@@ -185,7 +185,7 @@ public class AllCompressDecompress
     [BenchmarkCategory("Decompress")]
     public int NativeCompressions_LZ4_Decompress()
     {
-        return NativeCompressions.LZ4.LZ4.Decompress(compressed3, dest);
+        return NativeCompressions.LZ4.Decompress(compressed3, dest);
     }
 
     [Benchmark]
@@ -193,7 +193,7 @@ public class AllCompressDecompress
     public async Task<int> NativeCompressions_LZ4_DecompressMultiThread()
     {
         writer.ResetWrittenCount();
-        await NativeCompressions.LZ4.LZ4.DecompressAsync(compressed4, writer);
+        await NativeCompressions.LZ4.DecompressAsync(compressed4, writer);
         return writer.WrittenCount;
     }
 

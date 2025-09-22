@@ -1,8 +1,8 @@
-﻿using NativeCompressions.LZ4.Raw;
-using System.Runtime.CompilerServices;
-using static NativeCompressions.LZ4.Raw.NativeMethods;
+﻿using System.Runtime.CompilerServices;
+using NativeCompressions.Raw;
+using static NativeCompressions.Raw.LZ4NativeMethods;
 
-namespace NativeCompressions.LZ4;
+namespace NativeCompressions;
 
 public static partial class LZ4
 {
