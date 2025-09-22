@@ -28,7 +28,7 @@ dotnet add package NativeCompressions
 
 ```csharp
 // for LZ4
-using NativeCompressions.LZ4;
+using NativeCompressions;
 
 // Simple compression
 byte[] compressed = LZ4.Compress(sourceData);
@@ -37,7 +37,7 @@ byte[] decompressed = LZ4.Decompress(compressed);
 
 ```csharp
 // for Zstandard
-using NativeCompressions.Zstandard;
+using NativeCompressions;
 
 // Simple compression
 byte[] compressed = Zstandard.Compress(sourceData);
@@ -55,7 +55,7 @@ LZ4 has both block format and frame format. We adopt frame format for all APIs f
 Simple API to convert from `ReadOnlySpan<T>` to `byte[]`, or write/read to/from `Span<T>`. These encode/decode in frame format, not block format. Also automatically sets ContentSize in the frame header.
 
 ```csharp
-using NativeCompressions.LZ4;
+using NativeCompressions;
 
 // ReadOnlySpan<byte> convert to byte[]
 byte[] compressed = LZ4.Compress(source);
@@ -75,7 +75,7 @@ These APIs can be customized by passing `LZ4FrameOptions` or `LZ4CompressionDict
 APIs similar to [BrotliEncoder](https://learn.microsoft.com/en-us/dotnet/api/system.io.compression.brotliencoder)/[BrotliDecoder](https://learn.microsoft.com/en-us/dotnet/api/system.io.compression.brotliencoder) in System.IO.Compression to encode and decode data in a streamless, non-allocating, and performant manner using the LZ4 frame format specification.
 
 ```csharp
-using NativeCompressions.LZ4;
+using NativeCompressions;
 
 // for example, use for IBufferWriter<byte>
 IBufferWriter<byte> bufferWriter;
