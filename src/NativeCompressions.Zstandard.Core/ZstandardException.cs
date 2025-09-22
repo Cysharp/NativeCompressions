@@ -1,4 +1,4 @@
-﻿namespace NativeCompressions.Zstandard;
+﻿namespace NativeCompressions;
 
 public class ZstandardException(string message)
     : Exception(message)

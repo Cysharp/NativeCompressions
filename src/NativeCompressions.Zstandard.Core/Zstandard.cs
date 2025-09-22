@@ -1,10 +1,10 @@
 ﻿using NativeCompressions.Internal;
-using NativeCompressions.Zstandard.Raw;
 using System.Drawing;
 using System.Runtime.CompilerServices;
-using static NativeCompressions.Zstandard.Raw.NativeMethods;
+using NativeCompressions.Raw;
+using static NativeCompressions.Raw.ZstandardNativeMethods;
 
-namespace NativeCompressions.Zstandard;
+namespace NativeCompressions;
 
 public static partial class Zstandard
 {

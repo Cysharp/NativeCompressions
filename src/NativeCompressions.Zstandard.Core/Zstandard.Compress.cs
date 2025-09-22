@@ -1,8 +1,8 @@
 ﻿using System.Buffers;
 using System.IO.Pipelines;
-using static NativeCompressions.Zstandard.Raw.NativeMethods;
+using static NativeCompressions.Raw.ZstandardNativeMethods;
 
-namespace NativeCompressions.Zstandard;
+namespace NativeCompressions;
 
 public static partial class Zstandard
 {

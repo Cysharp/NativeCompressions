@@ -5,7 +5,7 @@ using System.Buffers;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 
-namespace NativeCompressions.Zstandard;
+namespace NativeCompressions;
 
 public sealed class ZstandardStream : Stream
 {

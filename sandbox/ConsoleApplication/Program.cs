@@ -1,6 +1,6 @@
 ﻿//using K4os.Compression.LZ4.Streams;
 using Microsoft.Win32.SafeHandles;
-using NativeCompressions.LZ4;
+using NativeCompressions;
 using System;
 using System.Buffers;
 using System.ComponentModel.DataAnnotations;
@@ -15,17 +15,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using NativeCompressions.Zstandard;
-
-
-unsafe
-{
-    var ctx = NativeCompressions.Zstandard.Raw.NativeMethods.ZSTD_createCCtx();
-
-    var x = NativeCompressions.Zstandard.Raw.NativeMethods.ZSTD_CCtx_setParameter(ctx, 400, 4);
-    var xxx = NativeCompressions.Zstandard.Raw.NativeMethods.ZSTD_getErrorName(x);
-    Console.WriteLine(new string((sbyte*)xxx));
-}
 
 Console.WriteLine(Zstandard.Version);
 Console.WriteLine(Zstandard.MinCompressionLevel);

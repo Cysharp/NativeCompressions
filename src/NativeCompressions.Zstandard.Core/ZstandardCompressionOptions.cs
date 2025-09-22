@@ -1,9 +1,9 @@
-﻿using NativeCompressions.Zstandard.Raw;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using static NativeCompressions.Zstandard.Raw.NativeMethods;
+using NativeCompressions.Raw;
+using static NativeCompressions.Raw.ZstandardNativeMethods;
 
-namespace NativeCompressions.Zstandard;
+namespace NativeCompressions;
 
 /// <summary>
 /// Represents as ZSTD_cParameter.

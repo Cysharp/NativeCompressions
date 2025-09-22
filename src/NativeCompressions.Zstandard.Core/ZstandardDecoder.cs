@@ -1,9 +1,9 @@
 ﻿using NativeCompressions.Internal;
-using NativeCompressions.Zstandard.Raw;
 using System.Buffers;
-using static NativeCompressions.Zstandard.Raw.NativeMethods;
+using NativeCompressions.Raw;
+using static NativeCompressions.Raw.ZstandardNativeMethods;
 
-namespace NativeCompressions.Zstandard;
+namespace NativeCompressions;
 
 /// <summary>
 /// Provides streaming decompression functionality for Zstandard format.

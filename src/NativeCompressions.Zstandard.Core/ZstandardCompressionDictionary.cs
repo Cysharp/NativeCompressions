@@ -1,8 +1,8 @@
-﻿using NativeCompressions.Zstandard.Raw;
-using System.Runtime.InteropServices;
-using static NativeCompressions.Zstandard.Raw.NativeMethods;
+﻿using System.Runtime.InteropServices;
+using NativeCompressions.Raw;
+using static NativeCompressions.Raw.ZstandardNativeMethods;
 
-namespace NativeCompressions.Zstandard;
+namespace NativeCompressions;
 
 public sealed class ZstandardCompressionDictionary : SafeHandle
 {

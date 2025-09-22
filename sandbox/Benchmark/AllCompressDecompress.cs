@@ -1,7 +1,6 @@
 ﻿using Benchmark.BenchmarkNetUtilities;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
-using NativeCompressions.Zstandard;
 using NativeCompressions;
 using Orleans.Serialization.Buffers;
 using System.ComponentModel;
@@ -36,7 +35,7 @@ public class AllCompressDecompress
     public AllCompressDecompress()
     {
         src = Resources.Silesia;
-        var maxSize = NativeCompressions.Zstandard.Zstandard.GetMaxCompressedLength(src.Length);
+        var maxSize = NativeCompressions.Zstandard.GetMaxCompressedLength(src.Length);
         dest = new byte[maxSize];
         writer = new ArrayBufferPipeWriter(maxSize);
 
@@ -125,21 +124,21 @@ public class AllCompressDecompress
     [BenchmarkCategory("Compress")]
     public int NativeCompressions_Zstandard_Compress_Default()
     {
-        return NativeCompressions.Zstandard.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default);
+        return NativeCompressions.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default);
     }
 
     [Benchmark]
     [BenchmarkCategory("Compress")]
     public int NativeCompressions_Zstandard_Compress_Minus4()
     {
-        return NativeCompressions.Zstandard.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default with { CompressionLevel = -4 });
+        return NativeCompressions.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default with { CompressionLevel = -4 });
     }
 
     [Benchmark]
     [BenchmarkCategory("Compress")]
     public int NativeCompressions_Zstandard_Compress_Multithread()
     {
-        return NativeCompressions.Zstandard.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default with { NbWorkers = Environment.ProcessorCount });
+        return NativeCompressions.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default with { NbWorkers = Environment.ProcessorCount });
     }
 
     [Benchmark]
@@ -201,14 +200,14 @@ public class AllCompressDecompress
     [BenchmarkCategory("Decompress")]
     public int NativeCompressions_Zstandard_Decompress_Default()
     {
-        return NativeCompressions.Zstandard.Zstandard.Decompress(compressed5, dest);
+        return NativeCompressions.Zstandard.Decompress(compressed5, dest);
     }
 
     [Benchmark]
     [BenchmarkCategory("Decompress")]
     public int NativeCompressions_Zstandard_Decompress_Minus4()
     {
-        return NativeCompressions.Zstandard.Zstandard.Decompress(compressed7, dest);
+        return NativeCompressions.Zstandard.Decompress(compressed7, dest);
     }
 
     [Benchmark]

@@ -8,9 +8,9 @@ using System;
 using System.Runtime.InteropServices;
 
 
-namespace NativeCompressions.Zstandard.Raw
+namespace NativeCompressions.Raw
 {
-    public static unsafe partial class NativeMethods
+    public static unsafe partial class ZstandardNativeMethods
     {
         const string __DllName = "libzstd";
 
