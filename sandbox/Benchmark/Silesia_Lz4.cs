@@ -3,18 +3,15 @@ using NativeCompressions.BenchmarkHelper;
 
 namespace Benchmark;
 
-public class Lz4Simple2 : CompressionBenchmarkBase<int>
+public class Silesia_Lz4 : CompressionBenchmarkBase<int>
 {
-    // public TCompressionLevel[] CompressionLevels =>
-    public int[] CompressionLevels => [1, 2];
+    public override IEnumerable<int> GetCompressionLevels() => CompressionLevels;
 
-    /*
-    Enumerable.Sequence(
-        //start: NativeCompressions.LZ4.LZ4.MinCompressionLevel,
-        //endInclusive: NativeCompressions.LZ4.LZ4.MaxCompressionLevel,
-        start:1,
-        endInclusive:2,
-        step: 1).ToArray();*/
+    // TODO: remove it.
+    public IEnumerable<int> CompressionLevels => Enumerable.Sequence(
+        start: NativeCompressions.LZ4.LZ4.MinCompressionLevel,
+        endInclusive: NativeCompressions.LZ4.LZ4.MaxCompressionLevel,
+        step: 1);
 
     protected override int GetMaxCompressedLength(int inputSize, int compressionLevel)
     {
@@ -26,12 +23,12 @@ public class Lz4Simple2 : CompressionBenchmarkBase<int>
         return Resources.Silesia;
     }
 
-    protected override long CompressCore(byte[] source, byte[] destination, int compressionLevel)
+    protected override int CompressCore(byte[] source, byte[] destination, int compressionLevel)
     {
         return NativeCompressions.LZ4.LZ4.Compress(source, destination, LZ4FrameOptions.Default with { CompressionLevel = compressionLevel });
     }
 
-    protected override long DecompressCore(byte[] source, byte[] destination)
+    protected override int DecompressCore(byte[] source, byte[] destination)
     {
         return NativeCompressions.LZ4.LZ4.Decompress(source, destination);
     }

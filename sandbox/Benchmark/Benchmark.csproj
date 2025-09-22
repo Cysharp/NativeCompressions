@@ -5,6 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <LangVersion>14</LangVersion>
     <Nullable>enable</Nullable>
     <TieredPGO>true</TieredPGO>
     <IsPackable>false</IsPackable>
