@@ -1,6 +1,7 @@
 ﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
+using NativeCompressions.LZ4;
 using System.Collections.Concurrent;
 
 namespace NativeCompressions.BenchmarkHelper;
@@ -79,5 +80,34 @@ public abstract class CompressionBenchmarkBase<TCompressionLevel>
         }
 
         return payloadDictionary[(type, parameterLevel)];
+    }
+}
+
+public abstract class Lz4BenchmarkBase : CompressionBenchmarkBase<int>
+{
+    public override IEnumerable<int> GetCompressionLevels() => CompressionLevels;
+
+    // TODO: remove it.
+    public IEnumerable<int> CompressionLevels => Enumerable.Sequence(
+        start: NativeCompressions.LZ4.LZ4.MinCompressionLevel,
+        endInclusive: NativeCompressions.LZ4.LZ4.MaxCompressionLevel,
+        step: 1);
+
+    public virtual LZ4FrameOptions LZ4FrameOptions => LZ4FrameOptions.Default;
+    public virtual LZ4CompressionDictionary? LZ4CompressionDictionary => null;
+
+    protected override int GetMaxCompressedLength(int inputSize, int compressionLevel)
+    {
+        return LZ4.LZ4.GetMaxCompressedLength(inputSize, LZ4FrameOptions with { CompressionLevel = compressionLevel });
+    }
+
+    protected override int CompressCore(byte[] source, byte[] destination, int compressionLevel)
+    {
+        return NativeCompressions.LZ4.LZ4.Compress(source, destination, LZ4FrameOptions.Default with { CompressionLevel = compressionLevel }, LZ4CompressionDictionary);
+    }
+
+    protected override int DecompressCore(byte[] source, byte[] destination)
+    {
+        return NativeCompressions.LZ4.LZ4.Decompress(source, destination, LZ4CompressionDictionary);
     }
 }
