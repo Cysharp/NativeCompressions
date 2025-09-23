@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Benchmark": {
+      "commandName": "Project",
+      "commandLineArgs": ""
+    },
+    "Silesia": {
+      "commandName": "Project",
+      "commandLineArgs": "--filter Benchmark.Silesia_*"
+    }
+  }
+}

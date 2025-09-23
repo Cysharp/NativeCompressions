@@ -1,8 +1,8 @@
 ﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
-using NativeCompressions;
 using System.Collections.Concurrent;
+using System.IO.Compression;
 
 namespace NativeCompressions.BenchmarkHelper;
 
@@ -18,7 +18,7 @@ public abstract class CompressionBenchmarkBase<TCompressionLevel>
     public abstract IEnumerable<TCompressionLevel> GetCompressionLevels();
 
     protected abstract int GetMaxCompressedLength(int inputSize, TCompressionLevel compressionLevel);
-    protected abstract byte[] GetTargetSource(TCompressionLevel compressionLevel);
+    protected abstract byte[] GetTargetSource();
 
     [ParamsSource("CompressionLevels")] // TODO: modify to GetCompressionLevels after v0.15.4 released
     public TCompressionLevel Level { get; set; } = default!;
@@ -32,7 +32,7 @@ public abstract class CompressionBenchmarkBase<TCompressionLevel>
     [GlobalSetup]
     public void Init()
     {
-        source = GetTargetSource(Level);
+        source = GetTargetSource();
         destination = new byte[GetMaxCompressedLength(source.Length, Level)];
 
         var written = Compress(); // call compress in init.
@@ -71,7 +71,7 @@ public abstract class CompressionBenchmarkBase<TCompressionLevel>
 
             foreach (var level in GetCompressionLevels())
             {
-                var source = GetTargetSource(level);
+                var source = GetTargetSource();
                 var destination = new byte[GetMaxCompressedLength(source.Length, level)];
                 var written = CompressCore(source, destination, level);
 
@@ -85,13 +85,13 @@ public abstract class CompressionBenchmarkBase<TCompressionLevel>
 
 public abstract class Lz4BenchmarkBase : CompressionBenchmarkBase<int>
 {
-    public override IEnumerable<int> GetCompressionLevels() => CompressionLevels;
-
-    // TODO: remove it.
-    public IEnumerable<int> CompressionLevels => Enumerable.Sequence(
+    public override IEnumerable<int> GetCompressionLevels() => Enumerable.Sequence(
         start: LZ4.MinCompressionLevel,
         endInclusive: LZ4.MaxCompressionLevel,
         step: 1);
+
+    // TODO: remove it after benchmarkdotnet v0.15.4 released.
+    public IEnumerable<int> CompressionLevels => GetCompressionLevels();
 
     public virtual LZ4FrameOptions LZ4FrameOptions => LZ4FrameOptions.Default;
     public virtual LZ4CompressionDictionary? LZ4CompressionDictionary => null;
@@ -109,5 +109,119 @@ public abstract class Lz4BenchmarkBase : CompressionBenchmarkBase<int>
     protected override int DecompressCore(byte[] source, byte[] destination)
     {
         return LZ4.Decompress(source, destination, LZ4CompressionDictionary);
+    }
+}
+
+public abstract class ZstandardBenchmarkBase : CompressionBenchmarkBase<int>
+{
+    public override IEnumerable<int> GetCompressionLevels() => Enumerable.Sequence(
+        start: -4, // Zstandard's min compression level is -131072 so use -4 instead.
+        endInclusive: Zstandard.MaxCompressionLevel,
+        step: 1);
+
+    // TODO: remove it after benchmarkdotnet v0.15.4 released.
+    public IEnumerable<int> CompressionLevels => GetCompressionLevels();
+
+    public virtual ZstandardCompressionOptions ZstandardCompressionOptions => ZstandardCompressionOptions.Default;
+    public virtual ZstandardCompressionDictionary? ZstandardCompressionDictionary => null;
+
+    protected override int GetMaxCompressedLength(int inputSize, int compressionLevel)
+    {
+        return Zstandard.GetMaxCompressedLength(inputSize);
+    }
+
+    protected override int CompressCore(byte[] source, byte[] destination, int compressionLevel)
+    {
+        var options = ZstandardCompressionOptions;
+        if (ZstandardCompressionDictionary == null && options.IsDefault) // TODO: this optimize should handle in Zstandard.Compress
+        {
+            return Zstandard.Compress(source, destination, compressionLevel);
+        }
+
+        return Zstandard.Compress(source, destination, options with { CompressionLevel = compressionLevel }, ZstandardCompressionDictionary);
+    }
+
+    protected override int DecompressCore(byte[] source, byte[] destination)
+    {
+        return Zstandard.Decompress(source, destination, ZstandardCompressionDictionary);
+    }
+}
+
+public abstract class BrotliBenchmarkBase : CompressionBenchmarkBase<int>
+{
+    //internal static partial class BrotliUtils
+    //  public const int Quality_Min = 0;
+    //  public const int Quality_Default = 4;
+    //  public const int Quality_Max = 11;
+    //  public const int WindowBits_Min = 10;
+    //  public const int WindowBits_Default = 22;
+    //  public const int WindowBits_Max = 24;
+    public override IEnumerable<int> GetCompressionLevels() => Enumerable.Sequence(
+        start: 0,
+        endInclusive: 11,
+        step: 1);
+
+    // TODO: remove it after benchmarkdotnet v0.15.4 released.
+    public IEnumerable<int> CompressionLevels => GetCompressionLevels();
+
+    protected override int GetMaxCompressedLength(int inputSize, int compressionLevel)
+    {
+        return Zstandard.GetMaxCompressedLength(inputSize);
+    }
+
+    protected override int CompressCore(byte[] source, byte[] destination, int compressionLevel)
+    {
+        BrotliEncoder.TryCompress(source, destination, out var bytesWritten, quality: compressionLevel, window: 22);
+        return bytesWritten;
+    }
+
+    protected override int DecompressCore(byte[] source, byte[] destination)
+    {
+        BrotliDecoder.TryDecompress(source, destination, out var bytesWritten);
+        return bytesWritten;
+    }
+}
+
+public abstract class GZipBenchmarkBase : CompressionBenchmarkBase<CompressionLevel>
+{
+    public override IEnumerable<CompressionLevel> GetCompressionLevels() => [
+        CompressionLevel.Fastest,
+        CompressionLevel.Optimal,
+#if NET6_0_OR_GREATER
+        CompressionLevel.SmallestSize
+#endif
+    ];
+
+    // TODO: remove it after benchmarkdotnet v0.15.4 released.
+    public IEnumerable<CompressionLevel> CompressionLevels => GetCompressionLevels();
+
+    protected override int GetMaxCompressedLength(int inputSize, CompressionLevel compressionLevel)
+    {
+        long overhead = 18;
+        long blockOverhead = (inputSize / 65535) * 5;
+        if (inputSize % 65535 != 0) blockOverhead += 5;
+        return checked((int)(inputSize + overhead + blockOverhead));
+    }
+
+    protected override int CompressCore(byte[] source, byte[] destination, CompressionLevel compressionLevel)
+    {
+        using var ms = new MemoryStream(destination, writable: true);
+        using var gzip = new GZipStream(ms, compressionLevel, leaveOpen: true);
+
+        gzip.Write(source, 0, source.Length);
+        gzip.Flush();
+        gzip.Close();
+
+        return (int)ms.Position;
+    }
+
+    protected override int DecompressCore(byte[] source, byte[] destination)
+    {
+        using var ms = new MemoryStream(source);
+        using var gzip = new GZipStream(ms, CompressionMode.Decompress, leaveOpen: true);
+        using var destMs = new MemoryStream(destination, writable: true);
+
+        gzip.CopyTo(destMs);
+        return (int)destMs.Position;
     }
 }
