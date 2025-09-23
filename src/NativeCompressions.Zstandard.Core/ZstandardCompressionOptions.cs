@@ -1,7 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeCompressions.Raw;
-using static NativeCompressions.Raw.ZstandardNativeMethods;
+using NativeCompressions.Interop;
+using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
 

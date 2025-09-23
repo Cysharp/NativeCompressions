@@ -1,12 +1,12 @@
 ﻿using Microsoft.Win32.SafeHandles;
 using NativeCompressions.Internal;
-using NativeCompressions.Raw;
+using NativeCompressions.Interop;
 using System.Buffers;
 using System.Diagnostics;
 using System.IO.Pipelines;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
-using static NativeCompressions.Raw.LZ4NativeMethods;
+using static NativeCompressions.Interop.LZ4NativeMethods;
 
 namespace NativeCompressions;
 

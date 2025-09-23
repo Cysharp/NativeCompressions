@@ -1,6 +1,6 @@
 ﻿using System.Buffers;
 using System.IO.Pipelines;
-using static NativeCompressions.Raw.ZstandardNativeMethods;
+using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
 

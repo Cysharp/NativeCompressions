@@ -1,8 +1,8 @@
 ﻿using System.Collections.ObjectModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeCompressions.Raw;
-using static NativeCompressions.Raw.LZ4NativeMethods;
+using NativeCompressions.Interop;
+using static NativeCompressions.Interop.LZ4NativeMethods;
 
 namespace NativeCompressions;
 

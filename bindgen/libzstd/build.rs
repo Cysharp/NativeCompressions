@@ -20,13 +20,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         .rust_file_header("use super::zstd;")
         .rust_method_type_path("zstd")
         .csharp_class_name("NativeMethods")
-        .csharp_namespace("NativeCompressions.Raw")
+        .csharp_namespace("NativeCompressions.Interop")
         .csharp_dll_name("libzstd")
         // .csharp_dll_name_if("UNITY_IOS && !UNITY_EDITOR", "__Internal")
         .csharp_entry_point_prefix("")
         .csharp_method_prefix("")
         .csharp_class_accessibility("public")
-        .generate_to_file("src/zstd_ffi.rs", "../../src/NativeCompressions.Zstandard.Core/Raw/ZstandardNativeMethods.cs")?;
+        .generate_to_file("src/zstd_ffi.rs", "../../src/NativeCompressions.Zstandard.Core/Interop/ZstandardNativeMethods.cs")?;
 
     Ok(())
 }

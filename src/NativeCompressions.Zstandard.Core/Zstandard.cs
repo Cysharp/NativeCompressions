@@ -1,8 +1,8 @@
 ﻿using NativeCompressions.Internal;
 using System.Drawing;
 using System.Runtime.CompilerServices;
-using NativeCompressions.Raw;
-using static NativeCompressions.Raw.ZstandardNativeMethods;
+using NativeCompressions.Interop;
+using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
 

@@ -23,13 +23,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         .rust_file_header("use super::lz4;")
         .rust_method_type_path("lz4")
         .csharp_class_name("NativeMethods")
-        .csharp_namespace("NativeCompressions.LZ4.Raw")
+        .csharp_namespace("NativeCompressions.LZ4.Interop")
         .csharp_dll_name("lz4")
         // .csharp_dll_name_if("UNITY_IOS && !UNITY_EDITOR", "__Internal")
         .csharp_entry_point_prefix("")
         .csharp_method_prefix("")
         .csharp_class_accessibility("public")
-        .generate_to_file("src/lz4_ffi.rs", "../../src/NativeCompressions.LZ4.Core/Raw/LZ4NativeMethods.cs")
+        .generate_to_file("src/lz4_ffi.rs", "../../src/NativeCompressions.LZ4.Core/Interop/LZ4NativeMethods.cs")
         .unwrap();
 
     // cc::Build::new()

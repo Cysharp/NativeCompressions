@@ -1,5 +1,5 @@
-﻿using NativeCompressions.Raw;
-using static NativeCompressions.Raw.LZ4NativeMethods;
+﻿using NativeCompressions.Interop;
+using static NativeCompressions.Interop.LZ4NativeMethods;
 
 namespace NativeCompressions;
 
