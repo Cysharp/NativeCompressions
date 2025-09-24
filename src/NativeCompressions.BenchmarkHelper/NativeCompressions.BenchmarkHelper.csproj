@@ -7,6 +7,9 @@
     <LangVersion>latest</LangVersion>
     <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
     <Description>BenchmarkDotNet helper to compare compression performance.</Description>
+
+    <!-- NuGet -->
+    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
