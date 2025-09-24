@@ -58,28 +58,32 @@ public abstract class CompressionBenchmarkBase<TCompressionLevel>
     protected abstract int DecompressCore(byte[] source, byte[] destination);
 
     // for PayloadColumn, need to generate data for summary
-    static ConcurrentDictionary<(Type, object), PayloadData>? payloadDictionary;
+    static readonly object gate = new object();
+    static Dictionary<(Type, object), PayloadData>? payloadDictionary;
 
     // this method called from reflection so all fields are not initialized.
     internal PayloadData GetPayloadData(object parameterLevel)
     {
         var type = this.GetType();
 
-        if (payloadDictionary == null) // setup only once
+        lock (gate)
         {
-            payloadDictionary = new();
-
-            foreach (var level in GetCompressionLevels())
+            if (payloadDictionary == null) // setup only once
             {
-                var source = GetTargetSource();
-                var destination = new byte[GetMaxCompressedLength(source.Length, level)];
-                var written = CompressCore(source, destination, level);
+                payloadDictionary = new();
 
-                payloadDictionary[(type, level!)] = new PayloadData(source, destination.AsSpan(0, (int)written).ToArray());
+                foreach (var level in GetCompressionLevels())
+                {
+                    var source = GetTargetSource();
+                    var destination = new byte[GetMaxCompressedLength(source.Length, level)];
+                    var written = CompressCore(source, destination, level);
+
+                    payloadDictionary[(type, level!)] = new PayloadData(source, destination.AsSpan(0, (int)written).ToArray());
+                }
             }
-        }
 
-        return payloadDictionary[(type, parameterLevel)];
+            return payloadDictionary[(type, parameterLevel)];
+        }
     }
 }
 
