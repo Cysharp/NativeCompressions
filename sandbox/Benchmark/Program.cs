@@ -19,5 +19,5 @@ var config = ManualConfig.CreateMinimumViable()
 
 
 
-BenchmarkRunner.Run<Silesia_GZip>(config, args);
-// BenchmarkSwitcher.FromAssembly(Assembly.GetEntryAssembly()!).Run(args, config);
+//BenchmarkRunner.Run<Silesia_GZip>(config, args);
+BenchmarkSwitcher.FromAssembly(Assembly.GetEntryAssembly()!).Run(args, config);

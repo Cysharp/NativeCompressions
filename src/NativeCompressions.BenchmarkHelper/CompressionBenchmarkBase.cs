@@ -81,7 +81,9 @@ public abstract class CompressionBenchmarkBase<TCompressionLevel>
                 }
             }
 
-            return payloadDictionary[(type, parameterLevel)];
+            return payloadDictionary.TryGetValue((type, parameterLevel), out var payloadData)
+                ? payloadData
+                : throw new InvalidOperationException($"Payload data not found for {type} with parameter {parameterLevel}");
         }
     }
 }
