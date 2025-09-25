@@ -5,12 +5,8 @@ edition = "2021"
 
 [lib]
 name = "zstd"
-crate-type = ["staticlib", "cdylib"]
-
-[dependencies]
-csbindgen = "1.7.3"
+crate-type = ["cdylib"]
 
 [build-dependencies]
-cmake = "0.1.49"
-bindgen = "0.64.0"
-csbindgen = "1.7.3"
+bindgen = "0.72.1"
+csbindgen = "1.9.5"

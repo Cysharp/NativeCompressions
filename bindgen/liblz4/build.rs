@@ -1,46 +1,22 @@
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-   let size_t_is_usize = match std::env::var("TARGET").unwrap().as_str() {
-     "aarch64-linux-android" => false,
-     _ => true,
-   };
-
    bindgen::Builder::default()
         .header("../../lz4/lib/lz4.c")
         .header("../../lz4/lib/lz4hc.c")
         .header("../../lz4/lib/lz4frame.c")
         .header("../../lz4/lib/xxhash.c")
-        .size_t_is_usize(size_t_is_usize)
-        .generate()
-        .unwrap()
-        .write_to_file("src/lz4.rs")
-        .unwrap();
+        .generate()?
+        .write_to_file("src/lz4.rs")?;
 
     csbindgen::Builder::default()
         .input_bindgen_file("src/lz4.rs")
         .method_filter(|x| x.starts_with("LZ4"))
-        .rust_file_header("use super::lz4;")
-        .rust_method_type_path("lz4")
-        .csharp_class_name("NativeMethods")
-        .csharp_namespace("NativeCompressions.LZ4.Interop")
+        .csharp_class_name("LZ4NativeMethods")
+        .csharp_namespace("NativeCompressions.Interop")
         .csharp_dll_name("lz4")
-        // .csharp_dll_name_if("UNITY_IOS && !UNITY_EDITOR", "__Internal")
-        .csharp_entry_point_prefix("")
-        .csharp_method_prefix("")
         .csharp_class_accessibility("public")
-        .generate_to_file("src/lz4_ffi.rs", "../../src/NativeCompressions.LZ4.Core/Interop/LZ4NativeMethods.cs")
-        .unwrap();
-
-    // cc::Build::new()
-    //     .files([
-    //         "../../lz4/lib/lz4.c",
-    //         "../../lz4/lib/lz4hc.c",
-    //         "../../lz4/lib/lz4frame.c",
-    //         "../../lz4/lib/xxhash.c",
-    //     ])
-    //     .opt_level(3)
-    //     .compile("lz4");
+        .generate_csharp_file("../../src/NativeCompressions.LZ4.Core/Interop/LZ4NativeMethods.cs")?;
 
     Ok(())
 }

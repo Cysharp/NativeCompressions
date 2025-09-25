@@ -8,7 +8,6 @@
     <LangVersion>14</LangVersion>
     <Nullable>enable</Nullable>
     <TieredPGO>true</TieredPGO>
-    <IsPackable>false</IsPackable>
     <NoWarn>CS8600;CS8604;NU1608</NoWarn>
   </PropertyGroup>
 

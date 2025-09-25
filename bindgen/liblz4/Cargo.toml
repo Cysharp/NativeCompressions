@@ -5,12 +5,8 @@ edition = "2021"
 
 [lib]
 name = "lz4"
-crate-type = ["staticlib", "cdylib"]
-
-[dependencies]
-csbindgen = "1.7.3"
+crate-type = ["cdylib"]
 
 [build-dependencies]
-cc = "1.0.79"
-bindgen = "0.64.0"
-csbindgen = "1.7.3"
+bindgen = "0.72.1"
+csbindgen = "1.9.5"
