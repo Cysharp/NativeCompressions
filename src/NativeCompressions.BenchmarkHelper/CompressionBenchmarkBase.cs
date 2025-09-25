@@ -1,7 +1,6 @@
 ﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
-using System.Collections.Concurrent;
 using System.IO.Compression;
 
 namespace NativeCompressions.BenchmarkHelper;
@@ -20,7 +19,7 @@ public abstract class CompressionBenchmarkBase<TCompressionLevel>
     protected abstract int GetMaxCompressedLength(int inputSize, TCompressionLevel compressionLevel);
     protected abstract byte[] GetTargetSource();
 
-    [ParamsSource("CompressionLevels")] // TODO: modify to GetCompressionLevels after v0.15.4 released
+    [ParamsSource(nameof(GetCompressionLevels))]
     public TCompressionLevel Level { get; set; } = default!;
 
     byte[] source = default!;
@@ -94,9 +93,6 @@ public abstract class Lz4BenchmarkBase : CompressionBenchmarkBase<int>
         endInclusive: LZ4.MaxCompressionLevel,
         step: 1);
 
-    // TODO: remove it after benchmarkdotnet v0.15.4 released.
-    public IEnumerable<int> CompressionLevels => GetCompressionLevels();
-
     public virtual LZ4FrameOptions LZ4FrameOptions => LZ4FrameOptions.Default;
     public virtual LZ4CompressionDictionary? LZ4CompressionDictionary => null;
 
@@ -122,9 +118,6 @@ public abstract class ZstandardBenchmarkBase : CompressionBenchmarkBase<int>
         start: -4, // Zstandard's min compression level is -131072 so use -4 instead.
         endInclusive: Zstandard.MaxCompressionLevel,
         step: 1);
-
-    // TODO: remove it after benchmarkdotnet v0.15.4 released.
-    public IEnumerable<int> CompressionLevels => GetCompressionLevels();
 
     public virtual ZstandardCompressionOptions ZstandardCompressionOptions => ZstandardCompressionOptions.Default;
     public virtual ZstandardCompressionDictionary? ZstandardCompressionDictionary => null;
@@ -165,9 +158,6 @@ public abstract class BrotliBenchmarkBase : CompressionBenchmarkBase<int>
         endInclusive: 11,
         step: 1);
 
-    // TODO: remove it after benchmarkdotnet v0.15.4 released.
-    public IEnumerable<int> CompressionLevels => GetCompressionLevels();
-
     protected override int GetMaxCompressedLength(int inputSize, int compressionLevel)
     {
         return Zstandard.GetMaxCompressedLength(inputSize);
@@ -195,9 +185,6 @@ public abstract class GZipBenchmarkBase : CompressionBenchmarkBase<CompressionLe
         CompressionLevel.SmallestSize
 #endif
     ];
-
-    // TODO: remove it after benchmarkdotnet v0.15.4 released.
-    public IEnumerable<CompressionLevel> CompressionLevels => GetCompressionLevels();
 
     protected override int GetMaxCompressedLength(int inputSize, CompressionLevel compressionLevel)
     {
