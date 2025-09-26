@@ -67,21 +67,26 @@ public abstract class CompressionBenchmarkBase<TCompressionLevel>
 
         lock (gate)
         {
-            if (payloadDictionary == null) // setup only once
+            if (payloadDictionary == null)
             {
                 payloadDictionary = new();
-
-                foreach (var level in GetCompressionLevels())
-                {
-                    var source = GetTargetSource();
-                    var destination = new byte[GetMaxCompressedLength(source.Length, level)];
-                    var written = CompressCore(source, destination, level);
-
-                    payloadDictionary[(type, level!)] = new PayloadData(source, destination.AsSpan(0, (int)written).ToArray());
-                }
             }
 
-            return payloadDictionary.TryGetValue((type, parameterLevel), out var payloadData)
+            if (payloadDictionary.TryGetValue((type, parameterLevel), out var payloadData))
+            {
+                return payloadData;
+            }
+
+            foreach (var level in GetCompressionLevels())
+            {
+                var source = GetTargetSource();
+                var destination = new byte[GetMaxCompressedLength(source.Length, level)];
+                var written = CompressCore(source, destination, level);
+
+                payloadDictionary[(type, level!)] = new PayloadData(source, destination.AsSpan(0, (int)written).ToArray());
+            }
+
+            return payloadDictionary.TryGetValue((type, parameterLevel), out payloadData)
                 ? payloadData
                 : throw new InvalidOperationException($"Payload data not found for {type} with parameter {parameterLevel}");
         }
