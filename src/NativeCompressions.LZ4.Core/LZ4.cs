@@ -1,51 +1,43 @@
-﻿using System.Runtime.CompilerServices;
-using NativeCompressions.Interop;
+﻿using NativeCompressions.Interop;
+using System.Runtime.CompilerServices;
 using static NativeCompressions.Interop.LZ4NativeMethods;
 
 namespace NativeCompressions;
 
 public static partial class LZ4
 {
-    static string? version;
+    static unsafe LZ4()
+    {
+        Version = new string((sbyte*)LZ4_versionString());
+        VersionNumber = LZ4_versionNumber();
+        FrameVersion = LZ4F_getVersion();
+        MaxCompressionLevel = LZ4F_compressionLevel_max();
+    }
 
     /// <summary>
     /// Gets the version string of the LZ4 library.
     /// </summary>
-    public static string Version
-    {
-        get
-        {
-            if (version == null)
-            {
-                unsafe
-                {
-                    // null-terminated
-                    version = new string((sbyte*)LZ4_versionString());
-                }
-            }
-            return version;
-        }
-    }
+    public static readonly string Version;
 
     /// <summary>
     /// Gets the version number of the LZ4 library.
     /// </summary>
-    public static int VersionNumber => LZ4_versionNumber();
+    public static readonly int VersionNumber;
 
     /// <summary>
     /// Gets the version of the LZ4 frame format supported by the library.
     /// </summary>
-    public static uint FrameVersion => LZ4F_getVersion();
+    public static readonly uint FrameVersion;
 
     /// <summary>
     /// Get the minimum compression level.
     /// </summary>
-    public static int MinCompressionLevel => 1;
+    public const int MinCompressionLevel = 1;
 
     /// <summary>
     /// Get the maximum compression level.
     /// </summary>
-    public static int MaxCompressionLevel => LZ4F_compressionLevel_max();
+    public static readonly int MaxCompressionLevel;
 
     /// <summary>
     /// Gets the default compression level.

@@ -1,34 +1,31 @@
-﻿using System.Collections.ObjectModel;
-using System.Runtime.CompilerServices;
+﻿using NativeCompressions.Interop;
 using System.Runtime.InteropServices;
-using NativeCompressions.Interop;
-using static NativeCompressions.Interop.LZ4NativeMethods;
 
 namespace NativeCompressions;
 
-// LZ4FrameOptions is NativeMethods.LZ4F_preferences_t
-// LZ4FrameInfo is NativeMethods.LZ4F_frameInfo_t
+// LZ4FrameOptions is NativeMethods.LZ4F_preferences_t + NativeMethods.LZ4F_frameInfo_t + hold Dictionary
 
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Auto)]
 public readonly record struct LZ4FrameOptions
 {
     public static readonly LZ4FrameOptions Default = new LZ4FrameOptions();
-
-    readonly LZ4FrameInfo frameInfo;
 
     readonly int compressionLevel;
     readonly uint autoFlush;
     readonly uint favorDecompressionSpeed;
 
-    readonly uint reserved0; // fixed uint[3]
-    readonly uint reserved1;
-    readonly uint reserved2;
+    // flatten FrameInfo
 
-    public LZ4FrameInfo FrameInfo
-    {
-        get => frameInfo;
-        init => frameInfo = value;
-    }
+    readonly BlockSizeId blockSizeID;
+    readonly BlockMode blockMode;
+    readonly ContentChecksum contentChecksumFlag;
+    readonly FrameType frameType;
+    readonly ulong contentSize;
+    readonly uint dictionaryID;
+    readonly BlockChecksum blockChecksumFlag;
+
+    // other reference
+    readonly LZ4CompressionDictionary? compressionDictionary;
 
     /// <summary>0: default (fast mode); values > LZ4HC_CLEVEL_MAX count as LZ4HC_CLEVEL_MAX; values < 0 trigger "fast acceleration"</summary>
     public int CompressionLevel
@@ -61,43 +58,66 @@ public readonly record struct LZ4FrameOptions
         init => favorDecompressionSpeed = value;
     }
 
-    public LZ4FrameOptions WithContentSize(int contentSize) => WithContentSize((ulong)contentSize);
+    /// <summary>max64KB, max256KB, max1MB, max4MB; 0 == default (LZ4F_max64KB)</summary>
+    public BlockSizeId BlockSizeID { get => blockSizeID; init => blockSizeID = value; }
 
-    public LZ4FrameOptions WithContentSize(ulong contentSize)
+    /// <summary>LZ4F_blockLinked, LZ4F_blockIndependent; 0 == default (LZ4F_blockLinked)</summary>
+    public BlockMode BlockMode { get => blockMode; init => blockMode = value; }
+
+    /// <summary>1: add a 32-bit checksum of frame's decompressed data; 0 == default (disabled)</summary>
+    public ContentChecksum ContentChecksumFlag { get => contentChecksumFlag; init => contentChecksumFlag = value; }
+
+    /// <summary>LZ4F_frame or LZ4F_skippableFrame</summary>
+    public FrameType FrameType { get => frameType; init => frameType = value; }
+
+    /// <summary>Size of uncompressed content ; 0 == unknown</summary>
+    public ulong ContentSize { get => contentSize; init => contentSize = value; }
+
+    /// <summary>Dictionary ID, sent by compressor to help decoder select correct dictionary; 0 == no dictID provided</summary>
+    public uint DictionaryID { get => dictionaryID; init => dictionaryID = value; }
+
+    /// <summary>1: each block followed by a checksum of block's compressed data; 0 == default (disabled)</summary>
+    public BlockChecksum BlockChecksumFlag { get => blockChecksumFlag; init => blockChecksumFlag = value; }
+
+    public LZ4CompressionDictionary? Dictionary
     {
-        var copy = this;
-        ref var view = ref Unsafe.As<LZ4FrameOptions, LZ4F_preferences_t>(ref Unsafe.AsRef(in copy));
-        view.frameInfo.contentSize = contentSize;
-        return copy;
+        get
+        {
+            return compressionDictionary;
+        }
+        init
+        {
+            dictionaryID = (value == null)
+                ? 0
+                : value.DictionaryId;
+            compressionDictionary = value;
+        }
     }
 
-    public LZ4FrameOptions WithDictionaryId(uint dictionaryID)
+    internal unsafe LZ4F_preferences_t ToPreferences()
     {
-        var copy = this;
-        ref var view = ref Unsafe.As<LZ4FrameOptions, LZ4F_preferences_t>(ref Unsafe.AsRef(in copy));
-        view.frameInfo.dictID = dictionaryID;
-        return copy;
-    }
+        var prefs = new LZ4F_preferences_t
+        {
+            autoFlush = autoFlush,
+            compressionLevel = compressionLevel,
+            favorDecSpeed = favorDecompressionSpeed,
+            frameInfo = new LZ4F_frameInfo_t
+            {
+                blockSizeID = (int)blockSizeID,
+                blockMode = (int)blockMode,
+                contentChecksumFlag = (int)contentChecksumFlag,
+                frameType = (int)frameType,
+                contentSize = contentSize,
+                dictID = dictionaryID,
+                blockChecksumFlag = (int)blockChecksumFlag,
+            }
+        };
 
-    public LZ4FrameOptions WithContentSizeAndDictionaryId(int contentSize, uint dictionaryID) => WithContentSizeAndDictionaryId((ulong)contentSize, dictionaryID);
-
-    public LZ4FrameOptions WithContentSizeAndDictionaryId(ulong contentSize, uint dictionaryID)
-    {
-        var copy = this;
-        ref var view = ref Unsafe.As<LZ4FrameOptions, LZ4F_preferences_t>(ref Unsafe.AsRef(in copy));
-        view.frameInfo.contentSize = contentSize;
-        view.frameInfo.dictID = dictionaryID;
-        return copy;
-    }
-
-    internal unsafe LZ4F_preferences_t* ToPreferences()
-    {
-        ref var self = ref Unsafe.As<LZ4FrameOptions, LZ4F_preferences_t>(ref Unsafe.AsRef(in this));
-        var ptr = Unsafe.AsPointer(ref self);
-        return (LZ4F_preferences_t*)ptr;
+        return prefs;
     }
 }
 
+// same as NativeMethods.LZ4F_frameInfo_t
 [StructLayout(LayoutKind.Sequential)]
 public readonly record struct LZ4FrameInfo
 {

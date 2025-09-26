@@ -23,7 +23,7 @@ public sealed class LZ4Stream : Stream
     int readBufferOffset; // for decompress
     int readBufferCount; // for decompress
 
-    public LZ4Stream(Stream stream, CompressionMode mode, LZ4CompressionDictionary? compressionDictionary = null, bool leaveOpen = false)
+    public LZ4Stream(Stream stream, CompressionMode mode, bool leaveOpen = false)
     {
         this.mode = mode;
         this.stream = stream;
@@ -32,21 +32,22 @@ public sealed class LZ4Stream : Stream
 
         if (mode == CompressionMode.Decompress)
         {
-            this.decoder = new LZ4Decoder(compressionDictionary);
+            this.decoder = new LZ4Decoder(); // TODO: can not create Decoder with Dictionary
         }
         else
         {
-            this.encoder = new LZ4Encoder(LZ4FrameOptions.Default, compressionDictionary);
+            this.encoder = new LZ4Encoder(LZ4FrameOptions.Default);
         }
     }
 
-    public LZ4Stream(Stream stream, in LZ4FrameOptions frameOptions, LZ4CompressionDictionary? compressionDictionary = null, bool leaveOpen = false)
+    // TODO: LZ4FrameOptions -> LZ4CompressionOptions and create LZ4DecompressionOptions overload?
+    public LZ4Stream(Stream stream, in LZ4FrameOptions frameOptions, bool leaveOpen = false)
     {
         this.mode = CompressionMode.Compress;
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.readBufferCount = 0;
-        this.encoder = new LZ4Encoder(frameOptions, compressionDictionary);
+        this.encoder = new LZ4Encoder(frameOptions);
     }
 
     public override bool CanRead => mode == CompressionMode.Decompress && stream != null && stream.CanRead;

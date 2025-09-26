@@ -25,8 +25,7 @@ namespace NativeCompressions;
 public unsafe partial struct LZ4Encoder : IDisposable
 {
     LZ4F_cctx_s* context;
-    LZ4FrameOptions header; // LZ4F_preferences_t
-    LZ4CompressionDictionary? compressionDictionary;
+    LZ4FrameOptions options; // TODO: change to preference once?
 
     bool isWrittenHeader;
     bool disposed;
@@ -37,7 +36,7 @@ public unsafe partial struct LZ4Encoder : IDisposable
     /// Initializes a new instance of the <see cref="LZ4Encoder"/> struct with default settings.
     /// </summary>
     public LZ4Encoder()
-        : this(LZ4FrameOptions.Default, null)
+        : this(LZ4FrameOptions.Default)
     {
     }
 
@@ -45,17 +44,15 @@ public unsafe partial struct LZ4Encoder : IDisposable
     /// Initializes a new instance of the <see cref="LZ4Encoder"/> struct with specified options.
     /// </summary>
     /// <param name="frameOptions">Frame format options such as block size, compression level, and checksums. Pass LZ4FrameOptions.Default for defaults.</param>
-    /// <param name="compressionDictionary">Optional pre-built dictionary for improved compression ratio. Pass null if not using dictionary compression.</param>
     /// <exception cref="LZ4Exception">Thrown when the compression context cannot be created.</exception>
-    public LZ4Encoder(in LZ4FrameOptions frameOptions, LZ4CompressionDictionary? compressionDictionary = null)
+    public LZ4Encoder(in LZ4FrameOptions frameOptions)
     {
         // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         LZ4F_cctx_s* ptr = default;
         var code = LZ4F_createCompressionContext(&ptr, LZ4.FrameVersion);
         LZ4.ThrowIfError(code);
         this.context = ptr;
-        this.header = frameOptions;
-        this.compressionDictionary = compressionDictionary;
+        this.options = frameOptions;
     }
 
     /// <summary>
@@ -76,8 +73,8 @@ public unsafe partial struct LZ4Encoder : IDisposable
     /// </remarks>
     public unsafe int GetMaxCompressedLength(int inputSize, bool includingHeader = true, bool includingFooter = true)
     {
-        var preferences = header.ToPreferences();
-        var bound = (int)LZ4F_compressBound((nuint)inputSize, preferences);
+        var preferences = options.ToPreferences();
+        var bound = (int)LZ4F_compressBound((nuint)inputSize, &preferences);
 
         if (includingHeader && includingFooter)
         {
@@ -107,12 +104,12 @@ public unsafe partial struct LZ4Encoder : IDisposable
     {
         int size = 7; // Base size (magic, FLG, BD, HC)
 
-        if (header.FrameInfo.ContentSize > 0)
+        if (options.ContentSize > 0)
         {
             size += 8; // Content size field
         }
 
-        if (header.FrameInfo.DictionaryID != 0)
+        if (options.DictionaryID != 0)
         {
             size += 4; // Dictionary ID field
         }
@@ -128,7 +125,7 @@ public unsafe partial struct LZ4Encoder : IDisposable
     {
         int size = 4; // End mark (always present)
 
-        if (header.FrameInfo.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
+        if (options.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
         {
             size += 4; // Content checksum
         }
@@ -159,11 +156,11 @@ public unsafe partial struct LZ4Encoder : IDisposable
         {
             fixed (byte* dest = destination)
             {
-                var preferencePtr = header.ToPreferences();
+                var preference = options.ToPreferences();
 
-                var writtenOrErrorCode = (compressionDictionary == null)
-                    ? LZ4F_compressBegin(context, dest, (nuint)destination.Length, preferencePtr)
-                    : LZ4F_compressBegin_usingCDict(context, dest, (nuint)destination.Length, compressionDictionary.Handle, preferencePtr);
+                var writtenOrErrorCode = (options.Dictionary == null)
+                    ? LZ4F_compressBegin(context, dest, (nuint)destination.Length, &preference)
+                    : LZ4F_compressBegin_usingCDict(context, dest, (nuint)destination.Length, options.Dictionary.Handle, &preference);
                 LZ4.ThrowIfError(writtenOrErrorCode);
                 isWrittenHeader = true;
 
@@ -274,7 +271,7 @@ public unsafe partial struct LZ4Encoder : IDisposable
     /// <param name="options">The LZ4 frame options to apply. Can be <see langword="null"/> to reset the header to its default state.</param>
     public void SetHeader(in LZ4FrameOptions options)
     {
-        this.header = options;
+        this.options = options;
     }
 
     /// <summary>
