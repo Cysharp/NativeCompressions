@@ -116,7 +116,7 @@ public class AllCompressDecompress
     public async Task<int> NativeCompressions_LZ4_CompressMultiThread()
     {
         writer.ResetWrittenCount();
-        await NativeCompressions.LZ4.CompressAsync(src, writer, LZ4FrameOptions.Default);
+        await NativeCompressions.LZ4.CompressAsync(src, writer, LZ4CompressionOptions.Default);
         return (int)writer.WrittenCount;
     }
 

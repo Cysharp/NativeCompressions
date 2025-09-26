@@ -21,7 +21,7 @@ public static partial class LZ4
             }
         }
 
-        public static unsafe int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, LZ4CompressionDictionary? dictionary = null)
+        public static unsafe int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, LZ4Dictionary? dictionary = null)
         {
             fixed (byte* src = source)
             fixed (byte* dest = destination)

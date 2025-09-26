@@ -11,11 +11,10 @@ public sealed class LZ4Stream : Stream
 {
     const int DecoderBufferSize = 65536;
 
-    LZ4Encoder encoder;
-    LZ4Decoder decoder;
+    LZ4Encoder? encoder;
+    LZ4Decoder? decoder;
 
     Stream stream;
-    CompressionMode mode;
     bool leaveOpen;
     bool isDisposed;
 
@@ -25,33 +24,38 @@ public sealed class LZ4Stream : Stream
 
     public LZ4Stream(Stream stream, CompressionMode mode, bool leaveOpen = false)
     {
-        this.mode = mode;
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.readBufferCount = 0;
 
         if (mode == CompressionMode.Decompress)
         {
-            this.decoder = new LZ4Decoder(); // TODO: can not create Decoder with Dictionary
+            this.decoder = new LZ4Decoder(LZ4DecompressionOptions.Default);
         }
         else
         {
-            this.encoder = new LZ4Encoder(LZ4FrameOptions.Default);
+            this.encoder = new LZ4Encoder(LZ4CompressionOptions.Default);
         }
     }
 
-    // TODO: LZ4FrameOptions -> LZ4CompressionOptions and create LZ4DecompressionOptions overload?
-    public LZ4Stream(Stream stream, in LZ4FrameOptions frameOptions, bool leaveOpen = false)
+    public LZ4Stream(Stream stream, in LZ4CompressionOptions options, bool leaveOpen = false)
     {
-        this.mode = CompressionMode.Compress;
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.readBufferCount = 0;
-        this.encoder = new LZ4Encoder(frameOptions);
+        this.encoder = new LZ4Encoder(options);
     }
 
-    public override bool CanRead => mode == CompressionMode.Decompress && stream != null && stream.CanRead;
-    public override bool CanWrite => mode == CompressionMode.Compress && stream != null && stream.CanWrite;
+    public LZ4Stream(Stream stream, in LZ4DecompressionOptions options, bool leaveOpen = false)
+    {
+        this.stream = stream;
+        this.leaveOpen = leaveOpen;
+        this.readBufferCount = 0;
+        this.decoder = new LZ4Decoder(options);
+    }
+
+    public override bool CanRead => decoder != null && stream.CanRead;
+    public override bool CanWrite => encoder != null && stream.CanWrite;
     public override bool CanSeek => false;
     public override long Length => throw new NotSupportedException();
     public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
@@ -109,7 +113,7 @@ public sealed class LZ4Stream : Stream
     public override void Flush()
     {
         ValidateDisposed();
-        if (mode != CompressionMode.Compress)
+        if (encoder == null)
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
@@ -124,7 +128,7 @@ public sealed class LZ4Stream : Stream
     public override async Task FlushAsync(CancellationToken cancellationToken)
     {
         ValidateDisposed();
-        if (mode != CompressionMode.Compress)
+        if (encoder == null)
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
@@ -138,7 +142,7 @@ public sealed class LZ4Stream : Stream
     void WriteCore(ReadOnlySpan<byte> source)
     {
         ValidateDisposed();
-        if (mode != CompressionMode.Compress)
+        if (encoder == null)
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
@@ -168,7 +172,7 @@ public sealed class LZ4Stream : Stream
     async ValueTask WriteCoreAsync(ReadOnlyMemory<byte> source, CancellationToken cancellationToken)
     {
         ValidateDisposed();
-        if (mode != CompressionMode.Compress)
+        if (encoder == null)
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
@@ -246,7 +250,7 @@ public sealed class LZ4Stream : Stream
     int ReadCore(Span<byte> destination)
     {
         if (destination.IsEmpty) return 0;
-        if (mode != CompressionMode.Decompress)
+        if (decoder == null)
         {
             throw new InvalidOperationException("Read operation must be Decompress mode.");
         }
@@ -355,7 +359,7 @@ public sealed class LZ4Stream : Stream
     async ValueTask<int> ReadCoreAsync(Memory<byte> destination, CancellationToken cancellationToken)
     {
         if (destination.IsEmpty) return 0;
-        if (mode != CompressionMode.Decompress)
+        if (decoder == null)
         {
             throw new InvalidOperationException("Read operation must be Decompress mode.");
         }
@@ -472,7 +476,7 @@ public sealed class LZ4Stream : Stream
 
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            if (buffer != null && encoder != null)
             {
                 // Dispose is called from Close so share implementation.
                 var written = encoder.Close(buffer);
@@ -491,8 +495,8 @@ public sealed class LZ4Stream : Stream
                 ArrayPool<byte>.Shared.Return(buffer);
             }
 
-            encoder.Dispose();
-            decoder.Dispose();
+            encoder?.Dispose();
+            decoder?.Dispose();
 
             isDisposed = true;
             base.Dispose(disposing);
@@ -505,7 +509,7 @@ public sealed class LZ4Stream : Stream
 
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            if (buffer != null && encoder != null)
             {
                 // Dispose is called from Close so share implementation.
                 var written = encoder.Close(buffer);
@@ -524,8 +528,8 @@ public sealed class LZ4Stream : Stream
                 ArrayPool<byte>.Shared.Return(buffer);
             }
 
-            encoder.Dispose();
-            decoder.Dispose();
+            encoder?.Dispose();
+            decoder?.Dispose();
 
             isDisposed = true;
             base.Dispose();

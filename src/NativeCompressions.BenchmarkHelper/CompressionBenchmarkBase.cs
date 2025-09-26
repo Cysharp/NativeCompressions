@@ -100,7 +100,7 @@ public abstract class Lz4BenchmarkBase : CompressionBenchmarkBase<int>
         endInclusive: LZ4.MaxCompressionLevel,
         step: 1);
 
-    public virtual LZ4FrameOptions LZ4FrameOptions => LZ4FrameOptions.Default;
+    public virtual LZ4CompressionOptions LZ4FrameOptions => LZ4CompressionOptions.Default;
 
     protected override int GetMaxCompressedLength(int inputSize, int compressionLevel)
     {
@@ -109,7 +109,7 @@ public abstract class Lz4BenchmarkBase : CompressionBenchmarkBase<int>
 
     protected override int CompressCore(byte[] source, byte[] destination, int compressionLevel)
     {
-        return LZ4.Compress(source, destination, LZ4FrameOptions.Default with { CompressionLevel = compressionLevel });
+        return LZ4.Compress(source, destination, LZ4CompressionOptions.Default with { CompressionLevel = compressionLevel });
     }
 
     protected override int DecompressCore(byte[] source, byte[] destination)

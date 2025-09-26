@@ -16,9 +16,11 @@ namespace NativeCompressions;
 
 public static partial class LZ4
 {
-    public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, LZ4CompressionDictionary? dictionary = null, bool trustedData = false)
+    public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, bool trustedData = false) => Decompress(source, LZ4DecompressionOptions.Default, trustedData);
+
+    public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, in LZ4DecompressionOptions options, bool trustedData = false)
     {
-        using var decoder = new LZ4Decoder(dictionary);
+        using var decoder = new LZ4Decoder(options);
 
         if (trustedData)
         {
@@ -91,9 +93,11 @@ public static partial class LZ4
         }
     }
 
-    public static unsafe int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, LZ4CompressionDictionary? dictionary = null)
+    public static unsafe int Decompress(ReadOnlySpan<byte> source, Span<byte> destination) => Decompress(source, destination, LZ4DecompressionOptions.Default);
+
+    public static unsafe int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, in LZ4DecompressionOptions options)
     {
-        using var decoder = new LZ4Decoder(dictionary);
+        using var decoder = new LZ4Decoder(options);
 
         var totalWritten = 0;
         var status = OperationStatus.DestinationTooSmall;
@@ -118,9 +122,10 @@ public static partial class LZ4
         return totalWritten;
     }
 
-    public static async ValueTask DecompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    // TODO: null maxDegreeOfParallelism change to don't parallel(as default)
+    public static async ValueTask DecompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-        using var decoder = new LZ4Decoder(dictionary);
+        using var decoder = new LZ4Decoder(options ?? LZ4DecompressionOptions.Default);
 
         var frameInfo = decoder.GetFrameInfo(source.Span, out var bytesConsumed);
         source = source.Slice(bytesConsumed);
@@ -204,7 +209,7 @@ public static partial class LZ4
                 inputChannel.Writer.Complete();
             });
 
-            Task[] inputConsumerOutputProducers = StartDecompressBlock(dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
+            Task[] inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
             Task outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, channelToken);
 
             try
@@ -222,9 +227,9 @@ public static partial class LZ4
         }
     }
 
-    public static async ValueTask DecompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static async ValueTask DecompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-        using var decoder = new LZ4Decoder(dictionary);
+        using var decoder = new LZ4Decoder(options ?? LZ4DecompressionOptions.Default);
 
         Span<byte> temp = stackalloc byte[MaxFrameHeaderLength];
         source.Slice(0, Math.Min(source.Length, temp.Length)).CopyTo(temp);
@@ -349,7 +354,7 @@ public static partial class LZ4
                 inputChannel.Writer.Complete();
             });
 
-            Task[] inputConsumerOutputProducers = StartDecompressBlock(dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
+            Task[] inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
             Task outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, channelToken);
 
             try
@@ -367,12 +372,12 @@ public static partial class LZ4
         }
     }
 
-    public static ValueTask DecompressAsync(SafeFileHandle source, PipeWriter destination, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static ValueTask DecompressAsync(SafeFileHandle source, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-        return DecompressAsync(source, 0, destination, dictionary, maxDegreeOfParallelism, cancellationToken);
+        return DecompressAsync(source, 0, destination, options, maxDegreeOfParallelism, cancellationToken);
     }
 
-    public static async ValueTask DecompressAsync(SafeFileHandle source, long offset, PipeWriter destination, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static async ValueTask DecompressAsync(SafeFileHandle source, long offset, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
 #if NETSTANDARD2_1 || NET5_0
         var fs = new FileStream(source, FileAccess.Read, 1, isAsync: true);
@@ -380,10 +385,10 @@ public static partial class LZ4
         {
             fs.Seek(offset, SeekOrigin.Begin);
         }
-        await DecompressAsync(fs, destination, dictionary, maxDegreeOfParallelism, cancellationToken);
+        await DecompressAsync(fs, destination, options, maxDegreeOfParallelism, cancellationToken);
         return;
 #else
-        using var decoder = new LZ4Decoder(dictionary);
+        using var decoder = new LZ4Decoder(options ?? LZ4DecompressionOptions.Default);
 
         var sourceLength = RandomAccess.GetLength(source);
 
@@ -555,7 +560,7 @@ public static partial class LZ4
                 }
             });
 
-            Task[] inputConsumerOutputProducers = StartDecompressBlock(dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
+            Task[] inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
             Task outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, channelToken);
 
             try
@@ -574,32 +579,32 @@ public static partial class LZ4
 #endif
     }
 
-    public static async ValueTask DecompressAsync(Stream source, PipeWriter destination, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static async ValueTask DecompressAsync(Stream source, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
         // change to fast-path
 
         if (source is MemoryStream ms && ms.TryGetBuffer(out var buffer))
         {
-            await DecompressAsync((ReadOnlyMemory<byte>)buffer, destination, dictionary, maxDegreeOfParallelism, cancellationToken);
+            await DecompressAsync((ReadOnlyMemory<byte>)buffer, destination, options, maxDegreeOfParallelism, cancellationToken);
             return;
         }
 
 #if !(NETSTANDARD2_1 || NET5_0)
         if (source is FileStream fs && fs.CanSeek)
         {
-            await DecompressAsync(fs.SafeFileHandle, fs.Position, destination, dictionary, maxDegreeOfParallelism, cancellationToken);
+            await DecompressAsync(fs.SafeFileHandle, fs.Position, destination, options, maxDegreeOfParallelism, cancellationToken);
             return;
         }
 #endif
 
         var pipeReader = PipeReader.Create(source, LeaveOpenPipeReaderOptions);
-        await DecompressAsync(pipeReader, destination, dictionary, maxDegreeOfParallelism, cancellationToken);
+        await DecompressAsync(pipeReader, destination, options, maxDegreeOfParallelism, cancellationToken);
         await pipeReader.CompleteAsync();
     }
 
-    public static async ValueTask DecompressAsync(PipeReader source, PipeWriter destination, LZ4CompressionDictionary? dictionary = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static async ValueTask DecompressAsync(PipeReader source, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-        using var decoder = new LZ4Decoder(dictionary);
+        using var decoder = new LZ4Decoder(options ?? LZ4DecompressionOptions.Default);
 
         LZ4FrameInfo frameInfo;
 
@@ -749,7 +754,7 @@ public static partial class LZ4
                 inputChannel.Writer.Complete();
             });
 
-            Task[] inputConsumerOutputProducers = StartDecompressBlock(dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
+            Task[] inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
             Task outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, channelToken);
 
             try
@@ -808,7 +813,7 @@ public static partial class LZ4
         return outputConsumer;
     }
 
-    static Task[] StartDecompressBlock(LZ4CompressionDictionary? dictionary, int maxBlockSize, int threadCount, Channel<DecompressionInputBuffer> inputChannel, Channel<DecompressionOutputBuffer> outputChannel, CancellationTokenSource channelToken)
+    static Task[] StartDecompressBlock(LZ4Dictionary? dictionary, int maxBlockSize, int threadCount, Channel<DecompressionInputBuffer> inputChannel, Channel<DecompressionOutputBuffer> outputChannel, CancellationTokenSource channelToken)
     {
         var inputConsumerOutputProducers = new Task[threadCount];
         for (var i = 0; i < inputConsumerOutputProducers.Length; i++)

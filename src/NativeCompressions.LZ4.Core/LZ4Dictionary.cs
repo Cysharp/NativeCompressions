@@ -4,7 +4,7 @@ using static NativeCompressions.Interop.LZ4NativeMethods;
 
 namespace NativeCompressions;
 
-public sealed class LZ4CompressionDictionary : SafeHandle
+public sealed class LZ4Dictionary : SafeHandle
 {
     readonly byte[] dictionaryData;
 
@@ -17,7 +17,7 @@ public sealed class LZ4CompressionDictionary : SafeHandle
 
     internal unsafe LZ4F_CDict_s* Handle => ((LZ4F_CDict_s*)handle);
 
-    public LZ4CompressionDictionary(ReadOnlySpan<byte> dictionaryData, uint dictionaryId)
+    public LZ4Dictionary(ReadOnlySpan<byte> dictionaryData, uint dictionaryId)
         : base(IntPtr.Zero, true)
     {
         if (dictionaryData.Length == 0) throw new ArgumentException("Dictionary data cannot be empty", nameof(dictionaryData));

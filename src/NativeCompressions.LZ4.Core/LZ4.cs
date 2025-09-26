@@ -79,15 +79,15 @@ public static partial class LZ4
     /// </remarks>
     public const int MaxFrameFooterLength = 8;  // EndMarkSize + ChecksumSize
 
-    public static int GetMaxCompressedLength(int inputSize) => GetMaxCompressedLength(inputSize, LZ4FrameOptions.Default);
+    public static int GetMaxCompressedLength(int inputSize) => GetMaxCompressedLength(inputSize, LZ4CompressionOptions.Default);
 
-    public static int GetMaxCompressedLength(int inputSize, in LZ4FrameOptions options) => checked((int)GetMaxCompressedLongLength(inputSize, options));
+    public static int GetMaxCompressedLength(int inputSize, in LZ4CompressionOptions options) => checked((int)GetMaxCompressedLongLength(inputSize, options));
 
-    public static long GetMaxCompressedLongLength(int inputSize) => GetMaxCompressedLongLength(inputSize, LZ4FrameOptions.Default);
+    public static long GetMaxCompressedLongLength(int inputSize) => GetMaxCompressedLongLength(inputSize, LZ4CompressionOptions.Default);
 
-    public static long GetMaxCompressedLongLength(int inputSize, in LZ4FrameOptions options)
+    public static long GetMaxCompressedLongLength(int inputSize, in LZ4CompressionOptions options)
     {
-        ref var preferences_t = ref Unsafe.As<LZ4FrameOptions, LZ4F_preferences_t>(ref Unsafe.AsRef(in options));
+        ref var preferences_t = ref Unsafe.As<LZ4CompressionOptions, LZ4F_preferences_t>(ref Unsafe.AsRef(in options));
         unsafe
         {
             // calculate bound for LZ4F_compressFrame

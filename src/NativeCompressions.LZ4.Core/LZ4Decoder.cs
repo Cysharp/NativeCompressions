@@ -1,7 +1,9 @@
 ﻿using NativeCompressions.Internal;
+using NativeCompressions.Interop;
+using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
-using NativeCompressions.Interop;
+using System.Runtime.InteropServices;
 using static NativeCompressions.Interop.LZ4NativeMethods;
 
 namespace NativeCompressions;
@@ -14,36 +16,38 @@ namespace NativeCompressions;
 /// The decoder automatically handles frame headers, block headers, and validates checksums if present.
 /// It can decompress data incrementally, making it suitable for streaming scenarios.
 /// </remarks>
-public unsafe partial struct LZ4Decoder : IDisposable
+public unsafe class LZ4Decoder : SafeHandle
 {
-    LZ4F_dctx_s* context;
-    LZ4CompressionDictionary? dictionary;
-    bool disposed;
+    // LZ4F_dctx_s* base.handle;
+    LZ4F_decompressOptions_t options;
+    LZ4Dictionary? dictionary;
+
+    public override bool IsInvalid => handle == IntPtr.Zero;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="LZ4Decoder"/> struct.
+    /// Initializes a new instance of the <see cref="LZ4Decoder"/>.
     /// </summary>
     /// <exception cref="LZ4Exception">Thrown when the decompression context cannot be created.</exception>
     public LZ4Decoder()
-        : this(null)
+        : this(LZ4DecompressionOptions.Default)
     {
 
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="LZ4Decoder"/> struct.
+    /// Initializes a new instance of the <see cref="LZ4Decoder"/>.
     /// </summary>
     /// <exception cref="LZ4Exception">Thrown when the decompression context cannot be created.</exception>
-    public LZ4Decoder(LZ4CompressionDictionary? dictionary)
+    public LZ4Decoder(in LZ4DecompressionOptions options)
+        : base(IntPtr.Zero, true)
     {
-        // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
         LZ4F_dctx_s* ptr = default;
         var code = LZ4F_createDecompressionContext(&ptr, LZ4.FrameVersion);
         LZ4.ThrowIfError(code);
 
-        this.context = ptr;
-        this.disposed = false;
-        this.dictionary = dictionary;
+        SetHandle((IntPtr)ptr); // assign to SafeHandle
+        this.options = options.ToDecompressOptions();
+        this.dictionary = options.Dictionary;
     }
 
     /// <summary>
@@ -71,7 +75,8 @@ public unsafe partial struct LZ4Decoder : IDisposable
     /// </remarks>
     public int GetHeaderSize(ReadOnlySpan<byte> source)
     {
-        ValidateDisposed();
+        Validate();
+        var context = (LZ4F_dctx_s*)handle;
 
         fixed (byte* src = source)
         {
@@ -116,7 +121,8 @@ public unsafe partial struct LZ4Decoder : IDisposable
     /// </remarks>
     public LZ4FrameInfo GetFrameInfo(ReadOnlySpan<byte> source, out int bytesConsumed)
     {
-        ValidateDisposed();
+        Validate();
+        var context = (LZ4F_dctx_s*)handle;
 
         fixed (byte* src = source)
         {
@@ -230,10 +236,12 @@ public unsafe partial struct LZ4Decoder : IDisposable
     /// </remarks>
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, out int hintOfNextSrcSize)
     {
-        ValidateDisposed();
+        Validate();
+        var context = (LZ4F_dctx_s*)handle;
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)
+        fixed (LZ4F_decompressOptions_t* optionsPtr = &options)
         {
             var consumed = (nuint)source.Length;
             var written = (nuint)destination.Length;
@@ -241,15 +249,14 @@ public unsafe partial struct LZ4Decoder : IDisposable
             nuint hintOrErrorCode;
             if (dictionary == null)
             {
-                // LZ4F_decompressOptions_t is currently unused in LZ4 implementation, so we pass null.
-                hintOrErrorCode = LZ4F_decompress(context, dest, &written, src, &consumed, dOptPtr: null);
+                hintOrErrorCode = LZ4F_decompress(context, dest, &written, src, &consumed, dOptPtr: optionsPtr);
             }
             else
             {
                 var dict = dictionary.RawDictionary;
                 fixed (void* dictPtr = dict)
                 {
-                    hintOrErrorCode = LZ4F_decompress_usingDict(context, dest, &written, src, &consumed, dictPtr, (nuint)dict.Length, decompressOptionsPtr: null);
+                    hintOrErrorCode = LZ4F_decompress_usingDict(context, dest, &written, src, &consumed, dictPtr, (nuint)dict.Length, decompressOptionsPtr: optionsPtr);
                 }
             }
 
@@ -294,9 +301,6 @@ public unsafe partial struct LZ4Decoder : IDisposable
     /// <summary>
     /// Resets the decoder state to prepare for decompressing a new frame.
     /// </summary>
-    /// <exception cref="ObjectDisposedException">
-    /// Thrown when the decoder has been disposed.
-    /// </exception>
     /// <remarks>
     /// This method clears the internal state and prepares the decoder for a new frame.
     /// It is automatically called internally when a frame is completely decompressed
@@ -313,31 +317,20 @@ public unsafe partial struct LZ4Decoder : IDisposable
     /// </remarks>
     public void Reset()
     {
-        ValidateDisposed();
-        LZ4F_resetDecompressionContext(context);
+        Validate();
+        LZ4F_resetDecompressionContext((LZ4F_dctx_s*)handle);
     }
 
-    void ValidateDisposed()
+    void Validate()
     {
-        if (disposed) Throws.ObjectDisposedException();
-        if (context == null) Throws.InvalidContextNullException();
+        if (IsInvalid) Throws.InvalidContextNullException();
     }
 
-    /// <summary>
-    /// Releases the unmanaged resources used by the <see cref="LZ4Decoder"/>.
-    /// </summary>
-    /// <remarks>
-    /// Always call Dispose when finished with the decoder to free the decompression context.
-    /// It is safe to call Dispose multiple times.
-    /// </remarks>
-    public void Dispose()
+    protected override bool ReleaseHandle()
     {
-        if (context != null)
-        {
-            // LZ4F_freeDecompressionContext always returns success, no need to check
-            LZ4F_freeDecompressionContext(context);
-            context = null;
-            disposed = true;
-        }
+        // LZ4F_freeDecompressionContext always returns success, no need to check
+        LZ4F_freeDecompressionContext((LZ4F_dctx_s*)handle);
+        handle = IntPtr.Zero;
+        return true;
     }
 }

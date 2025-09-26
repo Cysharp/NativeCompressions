@@ -34,7 +34,7 @@ public class Lz4SimpleEncode
 
 
         src = Resources.Silesia;
-        var maxSize = NativeCompressions.LZ4.GetMaxCompressedLength(src.Length, LZ4FrameOptions.Default);
+        var maxSize = NativeCompressions.LZ4.GetMaxCompressedLength(src.Length, LZ4CompressionOptions.Default);
         dest = new byte[maxSize];
         writer = new ArrayBufferPipeWriter(maxSize);
     }
@@ -61,7 +61,7 @@ public class Lz4SimpleEncode
     public async Task<int> NativeCompressions_LZ4_CompressMultiThread()
     {
         writer.ResetWrittenCount();
-        await NativeCompressions.LZ4.CompressAsync(src, writer, LZ4FrameOptions.Default);
+        await NativeCompressions.LZ4.CompressAsync(src, writer, LZ4CompressionOptions.Default);
         return (int)writer.WrittenCount;
     }
 }

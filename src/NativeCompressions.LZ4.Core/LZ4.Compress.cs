@@ -16,13 +16,12 @@ public static partial class LZ4
 
     static readonly StreamPipeReaderOptions LeaveOpenPipeReaderOptions = new StreamPipeReaderOptions(leaveOpen: true);
 
-    public static byte[] Compress(ReadOnlySpan<byte> source) => Compress(source, LZ4FrameOptions.Default);
+    public static byte[] Compress(ReadOnlySpan<byte> source) => Compress(source, LZ4CompressionOptions.Default);
 
-    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, in LZ4FrameOptions frameOptions)
+    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, in LZ4CompressionOptions options)
     {
-        var newOptions = frameOptions with { ContentSize = (ulong)source.Length };
-        var dictionary = frameOptions.Dictionary;
-        var pref = newOptions.ToPreferences();
+        var dictionary = options.Dictionary;
+        var pref = options.ToPreferencesWithContentSize(options.ContentSize);
 
         var maxLength = LZ4F_compressFrameBound((uint)source.Length, &pref);
         var buffer = ArrayPool<byte>.Shared.Rent((int)maxLength);
@@ -61,13 +60,12 @@ public static partial class LZ4
         }
     }
 
-    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination) => Compress(source, destination, LZ4FrameOptions.Default);
+    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination) => Compress(source, destination, LZ4CompressionOptions.Default);
 
-    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in LZ4FrameOptions frameOptions)
+    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in LZ4CompressionOptions options)
     {
-        var newOptions = frameOptions with { ContentSize = (ulong)source.Length };
-        var dictionary = frameOptions.Dictionary;
-        var pref = newOptions.ToPreferences();
+        var dictionary = options.Dictionary;
+        var pref = options.ToPreferencesWithContentSize((ulong)source.Length);
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)
@@ -101,11 +99,11 @@ public static partial class LZ4
     // single thread only(unknown size can't determine block-size): Stream, PipeReader
 
     // TODO: null maxDegreeOfParallelism change to don't parallel(as default)
-    public static async ValueTask CompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4FrameOptions? frameOptions = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static async ValueTask CompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-        var options = frameOptions ?? LZ4FrameOptions.Default;
+        var newOptions = options ?? LZ4CompressionOptions.Default;
 
-        options = options with
+        newOptions = newOptions with
         {
             AutoFlush = true, // set auto-flush
             ContentSize = (ulong)source.Length,
@@ -116,16 +114,16 @@ public static partial class LZ4
             // multi-block, single-thread
 
             // if default block size, determine block size from source length.
-            if (options.BlockSizeID == BlockSizeId.Default)
+            if (newOptions.BlockSizeID == BlockSizeId.Default)
             {
-                options = options with
+                newOptions = newOptions with
                 {
                     BlockSizeID = DetermineBlockSize(source.Length, isMultiThread: false)
                 };
             }
 
-            var actualChunkSize = GetMaxBlockSize(options.BlockSizeID);
-            using var encoder = new LZ4Encoder(options);
+            var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
+            using var encoder = new LZ4Encoder(newOptions);
 
             while (!source.IsEmpty)
             {
@@ -149,20 +147,20 @@ public static partial class LZ4
         {
             // multi-block, multi-thread
 
-            if (options.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
+            if (newOptions.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
             {
                 throw new NotSupportedException("Content checksum is not supported in async compress.");
             }
 
-            options = options with
+            newOptions = newOptions with
             {
-                BlockSizeID = (options.BlockSizeID == BlockSizeId.Default)
+                BlockSizeID = (newOptions.BlockSizeID == BlockSizeId.Default)
                         ? DetermineBlockSize(source.Length, isMultiThread: true)
-                        : options.BlockSizeID,
+                        : newOptions.BlockSizeID,
                 BlockMode = BlockMode.BlockIndependent // for parallel
             };
 
-            var actualChunkSize = GetMaxBlockSize(options.BlockSizeID);
+            var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
 
             var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
             // modify thread count for avoid too many buffer.
@@ -181,7 +179,7 @@ public static partial class LZ4
             using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             // write header at first. NOTE: can't reuse Encoder because not called LZ4F_compressEnd(Close).
-            using (var headerEncoder = new LZ4Encoder(options) { IsWriteHeader = true })
+            using (var headerEncoder = new LZ4Encoder(newOptions) { IsWriteHeader = true })
             {
                 var dest = destination.GetSpan(headerEncoder.GetActualFrameHeaderLength());
                 var written = headerEncoder.Compress([], dest);
@@ -200,7 +198,7 @@ public static partial class LZ4
                     using (LZ4ActivitySource.Start("InputCompressLoop", tagKey: "LoopId", tagValue: producerId))
                     {
                         ActivityContext? linkContext = null;
-                        using var encoder = new LZ4Encoder(options) { IsWriteHeader = false };
+                        using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
                         while (true)
                         {
                             var id = Interlocked.Increment(ref bufferId);
@@ -231,7 +229,7 @@ public static partial class LZ4
                 });
             }
 
-            var outputConsumer = StartWriteCompressedBuffer(destination, options, outputChannel, channelToken);
+            var outputConsumer = StartWriteCompressedBuffer(destination, newOptions, outputChannel, channelToken);
 
             try
             {
@@ -247,12 +245,12 @@ public static partial class LZ4
         }
     }
 
-    public static async ValueTask CompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, LZ4FrameOptions? frameOptions = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static async ValueTask CompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-        var options = frameOptions ?? LZ4FrameOptions.Default;
+        var newOptions = options ?? LZ4CompressionOptions.Default;
 
         // not auto-flush
-        options = options with
+        newOptions = newOptions with
         {
             ContentSize = (ulong)source.Length,
         };
@@ -262,16 +260,16 @@ public static partial class LZ4
             // multi-block, single-thread
 
             // if default block size, determine block size from source length.
-            if (options.BlockSizeID == BlockSizeId.Default)
+            if (newOptions.BlockSizeID == BlockSizeId.Default)
             {
-                options = options with
+                newOptions = newOptions with
                 {
                     BlockSizeID = DetermineBlockSize(source.Length, isMultiThread: false)
                 };
             }
 
-            var actualChunkSize = GetMaxBlockSize(options.BlockSizeID);
-            using var encoder = new LZ4Encoder(options);
+            var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
+            using var encoder = new LZ4Encoder(newOptions);
 
             foreach (var sequenceBuffer in source)
             {
@@ -301,20 +299,20 @@ public static partial class LZ4
         {
             // multi-block, multi-thread
 
-            if (options.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
+            if (newOptions.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
             {
                 throw new NotSupportedException("Content checksum is not supported in async compress.");
             }
 
-            options = options with
+            newOptions = newOptions with
             {
-                BlockSizeID = (options.BlockSizeID == BlockSizeId.Default)
+                BlockSizeID = (newOptions.BlockSizeID == BlockSizeId.Default)
                         ? DetermineBlockSize(source.Length, isMultiThread: true)
-                        : options.BlockSizeID,
+                        : newOptions.BlockSizeID,
                 BlockMode = BlockMode.BlockIndependent // for parallel
             };
 
-            var actualChunkSize = GetMaxBlockSize(options.BlockSizeID);
+            var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
 
             var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
             // modify thread count for avoid too many buffer.
@@ -333,7 +331,7 @@ public static partial class LZ4
             using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             // write header at first.
-            using (var headerEncoder = new LZ4Encoder(options) { IsWriteHeader = true })
+            using (var headerEncoder = new LZ4Encoder(newOptions) { IsWriteHeader = true })
             {
                 var dest = destination.GetSpan(headerEncoder.GetActualFrameHeaderLength());
                 var written = headerEncoder.Compress([], dest);
@@ -348,7 +346,7 @@ public static partial class LZ4
             {
                 outputProducers[i] = Task.Run(async () =>
                 {
-                    using var encoder = new LZ4Encoder(options) { IsWriteHeader = false };
+                    using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
 
                     while (true)
                     {
@@ -384,7 +382,7 @@ public static partial class LZ4
                 });
             }
 
-            var outputConsumer = StartWriteCompressedBuffer(destination, options, outputChannel, channelToken);
+            var outputConsumer = StartWriteCompressedBuffer(destination, newOptions, outputChannel, channelToken);
 
             try
             {
@@ -400,12 +398,12 @@ public static partial class LZ4
         }
     }
 
-    public static ValueTask CompressAsync(SafeFileHandle source, PipeWriter destination, LZ4FrameOptions? frameOptions = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static ValueTask CompressAsync(SafeFileHandle source, PipeWriter destination, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-        return CompressAsync(source, 0, destination, frameOptions, maxDegreeOfParallelism, cancellationToken);
+        return CompressAsync(source, 0, destination, options, maxDegreeOfParallelism, cancellationToken);
     }
 
-    public static async ValueTask CompressAsync(SafeFileHandle source, long offset, PipeWriter destination, LZ4FrameOptions? frameOptions = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static async ValueTask CompressAsync(SafeFileHandle source, long offset, PipeWriter destination, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
         if (source == null || source.IsInvalid || source.IsClosed)
         {
@@ -417,13 +415,13 @@ public static partial class LZ4
         {
             fs.Position = offset;
         }
-        await CompressAsync(fs, destination, frameOptions, cancellationToken);
+        await CompressAsync(fs, destination, options, cancellationToken);
         return;
 #else
-        var options = frameOptions ?? LZ4FrameOptions.Default;
+        var newOptions = options ?? LZ4CompressionOptions.Default;
         long sourceLength = RandomAccess.GetLength(source) - offset; // we can accept `long` length(over 2GB file), don't cast to int.
 
-        options = options with
+        newOptions = newOptions with
         {
             AutoFlush = true,
             ContentSize = (ulong)sourceLength,
@@ -434,16 +432,16 @@ public static partial class LZ4
             // multi-block, single-thread
 
             // if default block size, determine block size from source length.
-            if (options.BlockSizeID == BlockSizeId.Default)
+            if (newOptions.BlockSizeID == BlockSizeId.Default)
             {
-                options = options with
+                newOptions = newOptions with
                 {
                     BlockSizeID = DetermineBlockSize(sourceLength, isMultiThread: false)
                 };
             }
 
-            var actualChunkSize = GetMaxBlockSize(options.BlockSizeID);
-            using var encoder = new LZ4Encoder(options);
+            var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
+            using var encoder = new LZ4Encoder(newOptions);
 
             var srcBuffer = ArrayPool<byte>.Shared.Rent(actualChunkSize);
 
@@ -470,20 +468,20 @@ public static partial class LZ4
         {
             // multi-block, multi-thread
 
-            if (options.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
+            if (newOptions.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
             {
                 throw new NotSupportedException("Content checksum is not supported in async compress.");
             }
 
-            options = options with
+            newOptions = newOptions with
             {
-                BlockSizeID = (options.BlockSizeID == BlockSizeId.Default)
+                BlockSizeID = (newOptions.BlockSizeID == BlockSizeId.Default)
                     ? DetermineBlockSize(sourceLength, isMultiThread: true)
-                    : options.BlockSizeID,
+                    : newOptions.BlockSizeID,
                 BlockMode = BlockMode.BlockIndependent // for parallel
             };
 
-            var actualChunkSize = GetMaxBlockSize(options.BlockSizeID);
+            var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
 
             var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
             // modify thread count for avoid too many buffer.
@@ -502,7 +500,7 @@ public static partial class LZ4
             using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             // write header at first.
-            using (var headerEncoder = new LZ4Encoder(options) { IsWriteHeader = true })
+            using (var headerEncoder = new LZ4Encoder(newOptions) { IsWriteHeader = true })
             {
                 var dest = destination.GetSpan(headerEncoder.GetActualFrameHeaderLength());
                 var written = headerEncoder.Compress([], dest);
@@ -518,7 +516,7 @@ public static partial class LZ4
                 var initialOffset = offset;
                 outputProducers[i] = Task.Run(async () =>
                 {
-                    using var encoder = new LZ4Encoder(options) { IsWriteHeader = false };
+                    using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
 
                     var srcBuffer = ArrayPool<byte>.Shared.Rent(actualChunkSize); // src buffer rent once
                     try
@@ -556,7 +554,7 @@ public static partial class LZ4
                 });
             }
 
-            var outputConsumer = StartWriteCompressedBuffer(destination,  options, outputChannel, channelToken);
+            var outputConsumer = StartWriteCompressedBuffer(destination, newOptions, outputChannel, channelToken);
 
             try
             {
@@ -573,36 +571,36 @@ public static partial class LZ4
 #endif
     }
 
-    public static async ValueTask CompressAsync(Stream source, PipeWriter destination, LZ4FrameOptions? frameOptions = null, CancellationToken cancellationToken = default)
+    public static async ValueTask CompressAsync(Stream source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
         // change to fast-path but concurrency is always one.
 
         if (source is MemoryStream ms && ms.TryGetBuffer(out var buffer))
         {
-            await CompressAsync((ReadOnlyMemory<byte>)buffer, destination, frameOptions, maxDegreeOfParallelism: 1, cancellationToken);
+            await CompressAsync((ReadOnlyMemory<byte>)buffer, destination, options, maxDegreeOfParallelism: 1, cancellationToken);
             return;
         }
 
 #if !(NETSTANDARD2_1 || NET5_0)
         if (source is FileStream fs && fs.CanSeek)
         {
-            await CompressAsync(fs.SafeFileHandle, fs.Position, destination, frameOptions, maxDegreeOfParallelism: 1, cancellationToken);
+            await CompressAsync(fs.SafeFileHandle, fs.Position, destination, options, maxDegreeOfParallelism: 1, cancellationToken);
             return;
         }
 #endif
 
         var pipeReader = PipeReader.Create(source, LeaveOpenPipeReaderOptions);
-        await CompressAsync(pipeReader, destination, frameOptions, cancellationToken);
+        await CompressAsync(pipeReader, destination, options, cancellationToken);
         await pipeReader.CompleteAsync();
     }
 
-    public static async ValueTask CompressAsync(PipeReader source, PipeWriter destination, LZ4FrameOptions? frameOptions = null, CancellationToken cancellationToken = default)
+    public static async ValueTask CompressAsync(PipeReader source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var options = frameOptions ?? LZ4FrameOptions.Default;
+        var newOptions = options ?? LZ4CompressionOptions.Default;
 
         // multi-block, single-thread
-        var actualChunkSize = GetMaxBlockSize(options.BlockSizeID);
-        using var encoder = new LZ4Encoder(options);
+        var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
+        using var encoder = new LZ4Encoder(newOptions);
 
         ReadResult result = default;
         while (!result.IsCompleted)
@@ -637,7 +635,7 @@ public static partial class LZ4
         await destination.FlushAsync(cancellationToken);
     }
 
-    static Task StartWriteCompressedBuffer(PipeWriter destination, LZ4FrameOptions options, Channel<CompressionBuffer> outputChannel, CancellationTokenSource channelToken)
+    static Task StartWriteCompressedBuffer(PipeWriter destination, LZ4CompressionOptions options, Channel<CompressionBuffer> outputChannel, CancellationTokenSource channelToken)
     {
         // common operation to write compressed buffer to destination
         return Task.Run(async () =>
