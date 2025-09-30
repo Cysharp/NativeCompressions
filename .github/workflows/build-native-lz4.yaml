@@ -601,7 +601,7 @@ jobs:
           EOF
 
           # Create PR and capture PR number
-          PR_URL=$(gh pr create --title "automate: Update ZStandard to ${LATEST_TAG}" --base main --head "${NEW_BRANCH_NAME}" --body-file artifacts/pr_body.txt)
+          PR_URL=$(gh pr create --title "automate: Update LZ4 to ${LATEST_TAG}" --base main --head "${NEW_BRANCH_NAME}" --body-file artifacts/pr_body.txt)
           PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]\+$')
 
           echo "pr_number=$PR_NUMBER" | tee -a "$GITHUB_OUTPUT"
