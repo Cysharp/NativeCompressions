@@ -151,10 +151,10 @@ jobs:
           docker run --rm -v "$PWD:/work" \
             mstorsjo/llvm-mingw:latest \
             bash -c "cd /work/lz4/lib && \
-              aarch64-w64-mingw32-gcc -O3 -shared \
-              -DLZ4_DLL_EXPORT=1 -DXXH_NAMESPACE=LZ4_ \
-              lz4.c lz4hc.c lz4frame.c xxhash.c \
-              -o lz4.dll"
+              make BUILD_STATIC=no BUILD_SHARED=yes \
+              TARGET_OS=Windows_NT LIBLZ4_NAME=lz4 \
+              CC=aarch64-w64-mingw32-gcc WINDRES=aarch64-w64-mingw32-windres \
+              SRCFILES='lz4.c lz4hc.c lz4frame.c xxhash.c'"
           file lz4/lib/lz4.dll
       - name: Prepare artifacts
         run: |
