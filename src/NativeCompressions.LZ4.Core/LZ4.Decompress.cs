@@ -209,13 +209,13 @@ public static partial class LZ4
                 inputChannel.Writer.Complete();
             });
 
-            Task[] inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
+            Task inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
             Task outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, channelToken);
 
             try
             {
                 await inputProducer;
-                await Task.WhenAll(inputConsumerOutputProducers);
+                await inputConsumerOutputProducers;
                 outputChannel.Writer.Complete();
                 await outputConsumer;
             }
@@ -354,13 +354,13 @@ public static partial class LZ4
                 inputChannel.Writer.Complete();
             });
 
-            Task[] inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
+            Task inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
             Task outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, channelToken);
 
             try
             {
                 await inputProducer;
-                await Task.WhenAll(inputConsumerOutputProducers);
+                await inputConsumerOutputProducers;
                 outputChannel.Writer.Complete();
                 await outputConsumer;
             }
@@ -560,13 +560,13 @@ public static partial class LZ4
                 }
             });
 
-            Task[] inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
+            Task inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
             Task outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, channelToken);
 
             try
             {
                 await inputProducer;
-                await Task.WhenAll(inputConsumerOutputProducers);
+                await inputConsumerOutputProducers;
                 outputChannel.Writer.Complete();
                 await outputConsumer;
             }
@@ -754,13 +754,13 @@ public static partial class LZ4
                 inputChannel.Writer.Complete();
             });
 
-            Task[] inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
+            Task inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
             Task outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, channelToken);
 
             try
             {
                 await inputProducer;
-                await Task.WhenAll(inputConsumerOutputProducers);
+                await inputConsumerOutputProducers;
                 outputChannel.Writer.Complete();
                 await outputConsumer;
             }
@@ -813,12 +813,50 @@ public static partial class LZ4
         return outputConsumer;
     }
 
-    static Task[] StartDecompressBlock(LZ4Dictionary? dictionary, int maxBlockSize, int threadCount, Channel<DecompressionInputBuffer> inputChannel, Channel<DecompressionOutputBuffer> outputChannel, CancellationTokenSource channelToken)
+    static Task StartDecompressBlock(LZ4Dictionary? dictionary, int maxBlockSize, int threadCount, Channel<DecompressionInputBuffer> inputChannel, Channel<DecompressionOutputBuffer> outputChannel, CancellationTokenSource channelToken)
     {
-        var inputConsumerOutputProducers = new Task[threadCount];
-        for (var i = 0; i < inputConsumerOutputProducers.Length; i++)
+        Task inputConsumerOutputProducers;
+#if NET8_0_OR_GREATER
+        inputConsumerOutputProducers = Parallel.ForAsync(0, threadCount, async (i, _) =>
         {
-            inputConsumerOutputProducers[i] = Task.Run(async () =>
+            while (await inputChannel.Reader.WaitToReadAsync(channelToken.Token))
+            {
+                while (inputChannel.Reader.TryRead(out var item))
+                {
+                    var destination = ArrayPool<byte>.Shared.Rent(maxBlockSize);
+                    int written;
+                    if (item.IsUncompressed)
+                    {
+                        item.CompressedBuffer.CopyTo(destination);
+                        written = item.CompressedBuffer.Length;
+                    }
+                    else
+                    {
+                        // use LZ4 raw block decompress
+                        written = LZ4.Block.Decompress(item.CompressedBuffer.Span, destination, dictionary);
+                    }
+
+                    if (item.IsBufferRentFromPool && MemoryMarshal.TryGetArray(item.CompressedBuffer, out var segment))
+                    {
+                        ArrayPool<byte>.Shared.Return(segment.Array!, clearArray: false);
+                    }
+
+                    var item2 = new DecompressionOutputBuffer
+                    {
+                        Id = item.Id,
+                        DecompressedBuffer = destination,
+                        Count = written
+                    };
+
+                    await outputChannel.Writer.WriteAsync(item2, channelToken.Token);
+                }
+            }
+        });
+#else
+        var inputConsumerOutputProducerTasks = new Task[threadCount];
+        for (var i = 0; i < inputConsumerOutputProducerTasks.Length; i++)
+        {
+            inputConsumerOutputProducerTasks[i] = Task.Run(async () =>
             {
                 while (await inputChannel.Reader.WaitToReadAsync(channelToken.Token))
                 {
@@ -837,7 +875,8 @@ public static partial class LZ4
                             written = LZ4.Block.Decompress(item.CompressedBuffer.Span, destination, dictionary);
                         }
 
-                        if (item.IsBufferRentFromPool && MemoryMarshal.TryGetArray(item.CompressedBuffer, out var segment))
+                        if (item.IsBufferRentFromPool &&
+                            MemoryMarshal.TryGetArray(item.CompressedBuffer, out var segment))
                         {
                             ArrayPool<byte>.Shared.Return(segment.Array!, clearArray: false);
                         }
@@ -855,6 +894,9 @@ public static partial class LZ4
             });
         }
 
+        inputConsumerOutputProducers = Task.WhenAll(inputConsumerOutputProducerTasks);
+#endif
+    
         return inputConsumerOutputProducers;
     }
 

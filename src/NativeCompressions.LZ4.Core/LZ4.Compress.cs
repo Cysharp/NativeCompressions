@@ -189,11 +189,49 @@ public static partial class LZ4
 
             // producer: slice buffer and compress, send compressed buffer.
             var bufferId = -1;
-            var outputProducers = new Task[threadCount];
-            for (int i = 0; i < outputProducers.Length; i++)
+            Task outputProducers;
+
+#if NET8_0_OR_GREATER
+            outputProducers = Parallel.ForAsync(0, threadCount, async (producerId, _) =>
+            {
+                using (LZ4ActivitySource.Start("InputCompressLoop", tagKey: "LoopId", tagValue: producerId))
+                {
+                    ActivityContext? linkContext = null;
+                    using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
+                    while (true)
+                    {
+                        var id = Interlocked.Increment(ref bufferId);
+                        var offset = unchecked(id * actualChunkSize);
+                        if (offset < 0) break; // overflow
+
+                        var remaining = source.Length - offset;
+                        if (remaining <= 0) break;
+
+                        var src = source.Span.Slice(offset, Math.Min(remaining, actualChunkSize));
+                        var bufferLength = encoder.GetMaxCompressedLength(src.Length, includingHeader: false, includingFooter: false);
+                        var dest = ArrayPool<byte>.Shared.Rent(bufferLength);
+
+                        int written;
+                        using (LZ4ActivitySource.Start("Compress", ref linkContext))
+                        {
+                            written = encoder.Compress(src, dest);
+                        }
+
+                        await outputChannel.Writer.WriteAsync(new CompressionBuffer
+                        {
+                            CompressedBuffer = dest,
+                            Count = written,
+                            Id = id
+                        }, channelToken.Token);
+                    }
+                }
+            });
+#else
+            var producerTasks = new Task[threadCount];
+            for (int i = 0; i < producerTasks.Length; i++)
             {
                 var producerId = i;
-                outputProducers[i] = Task.Run(async () =>
+                producerTasks[i] = Task.Run(async () =>
                 {
                     using (LZ4ActivitySource.Start("InputCompressLoop", tagKey: "LoopId", tagValue: producerId))
                     {
@@ -229,11 +267,14 @@ public static partial class LZ4
                 });
             }
 
+            outputProducers = Task.WhenAll(producerTasks);
+#endif
+
             var outputConsumer = StartWriteCompressedBuffer(destination, newOptions, outputChannel, channelToken);
 
             try
             {
-                await Task.WhenAll(outputProducers);
+                await outputProducers;
                 outputChannel.Writer.Complete(); // all reader complete, input is finished.
                 await outputConsumer; // wait for complete flush compressed data
             }
@@ -341,10 +382,49 @@ public static partial class LZ4
 
             // producer: slice buffer and compress, send compressed buffer.
             var bufferId = -1;
-            var outputProducers = new Task[threadCount];
-            for (int i = 0; i < outputProducers.Length; i++)
+            Task outputProducers;
+#if NET8_0_OR_GREATER
+            outputProducers = Parallel.ForAsync(0, threadCount, async (producerId, _) =>
             {
-                outputProducers[i] = Task.Run(async () =>
+                using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
+
+                while (true)
+                {
+                    var id = Interlocked.Increment(ref bufferId);
+                    var offset = id * actualChunkSize;
+
+                    var remaining = source.Length - offset;
+                    if (remaining <= 0)
+                    {
+                        break;
+                    }
+
+                    var src = source.Slice(offset, Math.Min(remaining, actualChunkSize));
+                    var bufferLength = encoder.GetMaxCompressedLength((int)src.Length, includingHeader: false, includingFooter: false);
+                    var destBuffer = ArrayPool<byte>.Shared.Rent(bufferLength);
+
+                    var written = 0;
+                    var dest = destBuffer.AsSpan(0, bufferLength);
+                    foreach (var item in src)
+                    {
+                        written += encoder.Compress(item.Span, dest);
+                        dest = dest.Slice(written);
+                    }
+                    written += encoder.Flush(dest); // must flush after compress ReadOnlySequence chunks
+
+                    await outputChannel.Writer.WriteAsync(new CompressionBuffer
+                    {
+                        CompressedBuffer = destBuffer,
+                        Count = written,
+                        Id = id
+                    }, channelToken.Token);
+                }
+            });
+#else
+            var producerTasks = new Task[threadCount];
+            for (int i = 0; i < producerTasks.Length; i++)
+            {
+                producerTasks[i] = Task.Run(async () =>
                 {
                     using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
 
@@ -381,6 +461,9 @@ public static partial class LZ4
                     }
                 });
             }
+
+            outputProducers = Task.WhenAll(producerTasks);
+#endif
 
             var outputConsumer = StartWriteCompressedBuffer(destination, newOptions, outputChannel, channelToken);
 
@@ -510,11 +593,54 @@ public static partial class LZ4
 
             // producer: slice buffer and compress, send compressed buffer.
             var bufferId = -1;
-            var outputProducers = new Task[threadCount];
-            for (int i = 0; i < outputProducers.Length; i++)
+            Task outputProducers;
+#if NET8_0_OR_GREATER
+            var initialOffset = offset;
+
+            outputProducers = Parallel.ForAsync(0, threadCount, async (i, _) =>
+            {
+                using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
+
+                var srcBuffer = ArrayPool<byte>.Shared.Rent(actualChunkSize); // src buffer rent once
+                try
+                {
+                    while (true)
+                    {
+                        var id = Interlocked.Increment(ref bufferId);
+                        var offset = initialOffset + id * (long)actualChunkSize; // long for over 2GB file
+
+                        var remaining = sourceLength - offset;
+                        if (remaining <= 0)
+                        {
+                            break;
+                        }
+
+                        var read = await RandomAccess.ReadAsync(source, srcBuffer.AsMemory(0, (int)Math.Min(remaining, actualChunkSize)), offset, channelToken.Token);
+                        var src = srcBuffer.AsSpan(0, read);
+                        var bufferLength = encoder.GetMaxCompressedLength((int)src.Length, includingHeader: false, includingFooter: false);
+                        var dest = ArrayPool<byte>.Shared.Rent(bufferLength);
+
+                        var written = encoder.Compress(src, dest); // autoFlush
+
+                        await outputChannel.Writer.WriteAsync(new CompressionBuffer
+                        {
+                            CompressedBuffer = dest,
+                            Count = written,
+                            Id = id
+                        }, channelToken.Token);
+                    }
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(srcBuffer, clearArray: false);
+                }
+            });
+#else
+            var producerTasks = new Task[threadCount];
+            for (int i = 0; i < producerTasks.Length; i++)
             {
                 var initialOffset = offset;
-                outputProducers[i] = Task.Run(async () =>
+                producerTasks[i] = Task.Run(async () =>
                 {
                     using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
 
@@ -554,6 +680,9 @@ public static partial class LZ4
                 });
             }
 
+            outputProducers = Task.WhenAll(producerTasks);
+#endif
+
             var outputConsumer = StartWriteCompressedBuffer(destination, newOptions, outputChannel, channelToken);
 
             try
@@ -569,7 +698,7 @@ public static partial class LZ4
             }
         }
 #endif
-    }
+        }
 
     public static async ValueTask CompressAsync(Stream source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
