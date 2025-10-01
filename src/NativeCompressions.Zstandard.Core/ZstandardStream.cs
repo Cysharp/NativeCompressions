@@ -11,11 +11,11 @@ public sealed class ZstandardStream : Stream
 {
     const int BufferSize = 65536;
 
-    ZstandardEncoder encoder;
-    ZstandardDecoder decoder;
+    ZstandardEncoder? encoder;
+    ZstandardDecoder? decoder;
+    bool needDisposeNativeCompressor;
 
     Stream stream;
-    CompressionMode mode;
     bool leaveOpen;
     bool isDisposed;
 
@@ -25,10 +25,9 @@ public sealed class ZstandardStream : Stream
 
     public ZstandardStream(Stream stream, CompressionMode mode, ZstandardCompressionDictionary? compressionDictionary = null, bool leaveOpen = false)
     {
-        this.mode = mode;
         this.stream = stream;
         this.leaveOpen = leaveOpen;
-        this.readBufferCount = 0;
+        this.needDisposeNativeCompressor = true;
 
         if (mode == CompressionMode.Decompress)
         {
@@ -42,24 +41,36 @@ public sealed class ZstandardStream : Stream
 
     public ZstandardStream(Stream stream, in ZstandardCompressionOptions compressionOptions, ZstandardCompressionDictionary? compressionDictionary, bool leaveOpen = false)
     {
-        this.mode = CompressionMode.Compress;
         this.stream = stream;
         this.leaveOpen = leaveOpen;
-        this.readBufferCount = 0;
+        this.needDisposeNativeCompressor = true;
         this.encoder = new ZstandardEncoder(compressionOptions, compressionDictionary);
     }
 
     public ZstandardStream(Stream stream, in ZstandardDecompressionOptions decompressionOptions, ZstandardCompressionDictionary? compressionDictionary, bool leaveOpen = false)
     {
-        this.mode = CompressionMode.Decompress;
         this.stream = stream;
         this.leaveOpen = leaveOpen;
-        this.readBufferCount = 0;
+        this.needDisposeNativeCompressor = true;
         this.decoder = new ZstandardDecoder(decompressionOptions, compressionDictionary);
     }
 
-    public override bool CanRead => mode == CompressionMode.Decompress && stream != null && stream.CanRead;
-    public override bool CanWrite => mode == CompressionMode.Compress && stream != null && stream.CanWrite;
+    public ZstandardStream(Stream stream, ZstandardEncoder encoder, bool leaveOpen = false)
+    {
+        this.stream = stream;
+        this.leaveOpen = leaveOpen;
+        this.encoder = encoder;
+    }
+
+    public ZstandardStream(Stream stream, ZstandardDecoder decoder, bool leaveOpen = false)
+    {
+        this.stream = stream;
+        this.leaveOpen = leaveOpen;
+        this.decoder = decoder;
+    }
+
+    public override bool CanRead => decoder != null && stream.CanRead;
+    public override bool CanWrite => encoder != null && stream.CanWrite;
     public override bool CanSeek => false;
     public override long Length => throw new NotSupportedException();
     public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
@@ -117,7 +128,7 @@ public sealed class ZstandardStream : Stream
     public override void Flush()
     {
         ValidateDisposed();
-        if (mode != CompressionMode.Compress)
+        if (encoder == null)
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
@@ -139,7 +150,7 @@ public sealed class ZstandardStream : Stream
     public override async Task FlushAsync(CancellationToken cancellationToken)
     {
         ValidateDisposed();
-        if (mode != CompressionMode.Compress)
+        if (encoder == null)
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
@@ -160,7 +171,7 @@ public sealed class ZstandardStream : Stream
     void WriteCore(ReadOnlySpan<byte> source)
     {
         ValidateDisposed();
-        if (mode != CompressionMode.Compress)
+        if (encoder == null)
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
@@ -188,7 +199,7 @@ public sealed class ZstandardStream : Stream
     async ValueTask WriteCoreAsync(ReadOnlyMemory<byte> source, CancellationToken cancellationToken)
     {
         ValidateDisposed();
-        if (mode != CompressionMode.Compress)
+        if (encoder == null)
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
@@ -264,7 +275,7 @@ public sealed class ZstandardStream : Stream
     int ReadCore(Span<byte> destination)
     {
         if (destination.IsEmpty) return 0;
-        if (mode != CompressionMode.Decompress)
+        if (decoder == null)
         {
             throw new InvalidOperationException("Read operation must be Decompress mode.");
         }
@@ -373,7 +384,7 @@ public sealed class ZstandardStream : Stream
     async ValueTask<int> ReadCoreAsync(Memory<byte> destination, CancellationToken cancellationToken)
     {
         if (destination.IsEmpty) return 0;
-        if (mode != CompressionMode.Decompress)
+        if (decoder == null)
         {
             throw new InvalidOperationException("Read operation must be Decompress mode.");
         }
@@ -490,7 +501,7 @@ public sealed class ZstandardStream : Stream
 
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            if (buffer != null && encoder != null)
             {
                 // Dispose is called from Close so share implementation.
                 var status = encoder.Close(buffer, out var written);
@@ -512,8 +523,11 @@ public sealed class ZstandardStream : Stream
                 ArrayPool<byte>.Shared.Return(buffer);
             }
 
-            encoder.Dispose();
-            decoder.Dispose();
+            if (needDisposeNativeCompressor)
+            {
+                encoder?.Dispose();
+                decoder?.Dispose();
+            }
 
             isDisposed = true;
             base.Dispose(disposing);
@@ -526,7 +540,7 @@ public sealed class ZstandardStream : Stream
 
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            if (buffer != null && encoder != null)
             {
                 // Dispose is called from Close so share implementation.
                 var status = encoder.Close(buffer, out var written);
@@ -548,8 +562,11 @@ public sealed class ZstandardStream : Stream
                 ArrayPool<byte>.Shared.Return(buffer);
             }
 
-            encoder.Dispose();
-            decoder.Dispose();
+            if (needDisposeNativeCompressor)
+            {
+                encoder?.Dispose();
+                decoder?.Dispose();
+            }
 
             isDisposed = true;
             base.Dispose();

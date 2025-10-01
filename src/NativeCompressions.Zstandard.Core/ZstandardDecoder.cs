@@ -1,20 +1,29 @@
 ﻿using NativeCompressions.Internal;
-using System.Buffers;
 using NativeCompressions.Interop;
+using System.Buffers;
+using System.Runtime.InteropServices;
 using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
 
+// BrotliEncoder/Decoder is a combination of a struct and a native context wrapped in SafeHandle.
+// In this case, the outer layer is a struct, but there is a SafeHandle allocation.
+// For NativeCompressions' Encoder/Decoder, we made it a class and turned the outer layer itself into a SafeHandle.
+// Since LZ4/Zstandard's native contexts are reusable, we have given the Encoder/Decoder a reusable nature as well.
+// In that case, if we make it a struct and allocate a raw native context for zero allocation, the risk of leaks increases.
+// Therefore, we compared safety and allocation cost, and adopted SafeHandle to ensure safety.
+
 /// <summary>
 /// Provides streaming decompression functionality for Zstandard format.
 /// </summary>
-public unsafe struct ZstandardDecoder : IDisposable
+public unsafe class ZstandardDecoder : SafeHandle
 {
-    ZSTD_DCtx_s* context;
-    bool disposed;
+    // ZSTD_DCtx_s* handle;
+
+    public override bool IsInvalid => handle == IntPtr.Zero;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ZstandardDecoder"/> struct.
+    /// Initializes a new instance of the <see cref="ZstandardDecoder"/>.
     /// </summary>
     public ZstandardDecoder()
         : this(ZstandardDecompressionOptions.Default, null)
@@ -22,16 +31,17 @@ public unsafe struct ZstandardDecoder : IDisposable
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ZstandardDecoder"/> struct with specified options.
+    /// Initializes a new instance of the <see cref="ZstandardDecoder"/> with specified options.
     /// </summary>
     public ZstandardDecoder(in ZstandardDecompressionOptions decompressionOptions, ZstandardCompressionDictionary? dictionary = null)
+        : base(IntPtr.Zero, true)
     {
-        // we hold handle in raw, does not wrap SafeHandle so be careful to use it.
-        context = ZSTD_createDCtx();
+        var context = ZSTD_createDCtx();
         if (context == null) throw new ZstandardException("Failed to create decompression context");
 
         decompressionOptions.SetParameter(context);
         dictionary?.SetDictionary(context);
+        SetHandle((IntPtr)context); // assign to SafeHandle
     }
 
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten)
@@ -41,7 +51,8 @@ public unsafe struct ZstandardDecoder : IDisposable
 
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, out int hintOfNextSrcSize)
     {
-        ValidateDisposed();
+        Validate();
+        var context = (ZSTD_DCtx_s*)handle;
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)
@@ -107,7 +118,8 @@ public unsafe struct ZstandardDecoder : IDisposable
 
     public void Reset()
     {
-        ValidateDisposed();
+        Validate();
+        var context = (ZSTD_DCtx_s*)handle;
 
         var result = ZSTD_DCtx_reset(context, (int)ZSTD_ResetDirective.ZSTD_reset_session_only);
         Zstandard.ThrowIfError(result);
@@ -115,7 +127,8 @@ public unsafe struct ZstandardDecoder : IDisposable
 
     public void Reset(in ZstandardDecompressionOptions options, ZstandardCompressionDictionary? dictionary = null)
     {
-        ValidateDisposed();
+        Validate();
+        var context = (ZSTD_DCtx_s*)handle;
 
         var result = ZSTD_DCtx_reset(context, (int)ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
         Zstandard.ThrowIfError(result);
@@ -124,20 +137,16 @@ public unsafe struct ZstandardDecoder : IDisposable
         dictionary?.SetDictionary(context);
     }
 
-    void ValidateDisposed()
+    void Validate()
     {
-        if (disposed) Throws.ObjectDisposedException();
-        if (context == null) Throws.InvalidContextNullException();
+        if (IsInvalid) Throws.InvalidContextNullException();
     }
 
-    public void Dispose()
+    protected override bool ReleaseHandle()
     {
-        if (!disposed && context != null)
-        {
-            ZSTD_freeDCtx(context);
-            context = null;
-            disposed = true;
-        }
+        ZSTD_freeDCtx((ZSTD_DCtx_s*)handle);
+        handle = IntPtr.Zero;
+        return true;
     }
 
     enum ZSTD_dParameter

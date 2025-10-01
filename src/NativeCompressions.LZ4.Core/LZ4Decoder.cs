@@ -8,6 +8,13 @@ using static NativeCompressions.Interop.LZ4NativeMethods;
 
 namespace NativeCompressions;
 
+// BrotliEncoder/Decoder is a combination of a struct and a native context wrapped in SafeHandle.
+// In this case, the outer layer is a struct, but there is a SafeHandle allocation.
+// For NativeCompressions' Encoder/Decoder, we made it a class and turned the outer layer itself into a SafeHandle.
+// Since LZ4/Zstandard's native contexts are reusable, we have given the Encoder/Decoder a reusable nature as well.
+// In that case, if we make it a struct and allocate a raw native context for zero allocation, the risk of leaks increases.
+// Therefore, we compared safety and allocation cost, and adopted SafeHandle to ensure safety.
+
 /// <summary>
 /// Provides streaming decompression functionality for LZ4 Frame format.
 /// This decoder supports incremental decompression with automatic frame header parsing.
