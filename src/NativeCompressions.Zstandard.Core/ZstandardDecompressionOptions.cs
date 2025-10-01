@@ -5,27 +5,15 @@ using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
 
-/// <summary>
-/// Represents as ZSTD_dParameter
-/// </summary>
+// ZSTD_dParameter + dictionary ref
+
 [StructLayout(LayoutKind.Auto)]
 public readonly record struct ZstandardDecompressionOptions
 {
     public static readonly ZstandardDecompressionOptions Default = new ZstandardDecompressionOptions();
 
-    public bool IsDefault
-    {
-        get
-        {
-            if (windowLogMax == 0)
-            {
-                return true;
-            }
-            return false;
-        }
-    }
-
     readonly int windowLogMax;
+    readonly ZstandardDictionary? dictionary;
 
     /// <summary>
     /// Select a size limit (in power of 2) beyond which
@@ -41,11 +29,20 @@ public readonly record struct ZstandardDecompressionOptions
         init => windowLogMax = value;
     }
 
+    public ZstandardDictionary? Dictionary
+    {
+        get => dictionary;
+        init => dictionary = value;
+    }
+
     internal unsafe void SetParameter(ZSTD_DCtx_s* context)
     {
-        if (IsDefault) return;
-
         SetParameter(context, ZSTD_dParameter.ZSTD_d_windowLogMax, windowLogMax);
+        if (dictionary != null)
+        {
+            var result = ZSTD_DCtx_refDDict(context, dictionary.DecompressionHandle);
+            Zstandard.ThrowIfError(result);
+        }
     }
 
     // Set parameter if value is not zero(default).

@@ -26,7 +26,7 @@ public unsafe class ZstandardEncoder : SafeHandle
     /// Initializes a new instance of the <see cref="ZstandardEncoder"/> with default settings.
     /// </summary>
     public ZstandardEncoder()
-        : this(ZstandardCompressionOptions.Default, null)
+        : this(Zstandard.DefaultCompressionLevel)
     {
     }
 
@@ -34,22 +34,31 @@ public unsafe class ZstandardEncoder : SafeHandle
     /// Initializes a new instance of the <see cref="ZstandardEncoder"/> with compressionLevel.
     /// </summary>
     public ZstandardEncoder(int compressionLevel)
-        : this(new ZstandardCompressionOptions(compressionLevel), null)
+        : base(IntPtr.Zero, true)
     {
+        var context = ZSTD_createCCtx();
+        if (context == null) throw new ZstandardException("Failed to create compression context");
+
+        // setup without create ZstandardCompressionOptions
+        if (compressionLevel != Zstandard.DefaultCompressionLevel)
+        {
+            var result = ZSTD_CCtx_setParameter(context, (int)ZstandardCompressionOptions.ZSTD_cParameter.ZSTD_c_compressionLevel, compressionLevel);
+            Zstandard.ThrowIfError(result);
+        }
+
+        SetHandle((IntPtr)context); // assign to SafeHandle
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardEncoder"/> with specified options.
     /// </summary>
-    public ZstandardEncoder(in ZstandardCompressionOptions compressionOptions, ZstandardCompressionDictionary? dictionary = null)
+    public ZstandardEncoder(in ZstandardCompressionOptions compressionOptions)
         : base(IntPtr.Zero, true)
     {
         var context = ZSTD_createCCtx();
         if (context == null) throw new ZstandardException("Failed to create compression context");
 
         compressionOptions.SetParameter(context);
-        dictionary?.SetDictionary(context);
-
         SetHandle((IntPtr)context); // assign to SafeHandle
     }
 
@@ -165,7 +174,7 @@ public unsafe class ZstandardEncoder : SafeHandle
         Zstandard.ThrowIfError(result);
     }
 
-    public void Reset(in ZstandardCompressionOptions options, ZstandardCompressionDictionary? dictionary = null)
+    public void Reset(in ZstandardCompressionOptions options)
     {
         Validate();
         var context = (ZSTD_CCtx_s*)handle;
@@ -174,7 +183,6 @@ public unsafe class ZstandardEncoder : SafeHandle
         Zstandard.ThrowIfError(result);
 
         options.SetParameter(context);
-        dictionary?.SetDictionary(context);
     }
 
     void Validate()

@@ -4,7 +4,7 @@ using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
 
-public sealed class ZstandardCompressionDictionary : SafeHandle
+public sealed class ZstandardDictionary : SafeHandle
 {
     public override bool IsInvalid => handle == IntPtr.Zero;
 
@@ -12,7 +12,7 @@ public sealed class ZstandardCompressionDictionary : SafeHandle
     public unsafe ZSTD_CDict_s* CompressionHandle => ((ZSTD_CDict_s*)handle);
     public unsafe ZSTD_DDict_s* DecompressionHandle { get; private set; }
 
-    public ZstandardCompressionDictionary(ReadOnlySpan<byte> dictionaryData, int compressionLevel = Zstandard.DefaultCompressionLevel)
+    public ZstandardDictionary(ReadOnlySpan<byte> dictionaryData, int compressionLevel = Zstandard.DefaultCompressionLevel)
         : base(IntPtr.Zero, true)
     {
         unsafe
@@ -56,17 +56,5 @@ public sealed class ZstandardCompressionDictionary : SafeHandle
             return true;
         }
         return false;
-    }
-
-    internal unsafe void SetDictionary(ZSTD_CCtx_s* context)
-    {
-        var result = ZSTD_CCtx_refCDict(context, CompressionHandle);
-        Zstandard.ThrowIfError(result);
-    }
-
-    internal unsafe void SetDictionary(ZSTD_DCtx_s* context)
-    {
-        var result = ZSTD_DCtx_refDDict(context, DecompressionHandle);
-        Zstandard.ThrowIfError(result);
     }
 }

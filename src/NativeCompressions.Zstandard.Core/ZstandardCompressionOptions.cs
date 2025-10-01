@@ -5,14 +5,14 @@ using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
 
-/// <summary>
-/// Represents as ZSTD_cParameter.
-/// </summary>
+// ZSTD_cParameter + dictionary ref
+
 [StructLayout(LayoutKind.Auto)]
 public readonly record struct ZstandardCompressionOptions
 {
     public static readonly ZstandardCompressionOptions Default = new ZstandardCompressionOptions();
 
+    // TODO: make internal or private
     public bool IsDefault
     {
         get
@@ -48,6 +48,8 @@ public readonly record struct ZstandardCompressionOptions
     readonly int nbWorkers;
     readonly int jobSize;
     readonly int overlapLog;
+
+    readonly ZstandardDictionary? dictionary;
 
     public ZstandardCompressionOptions()
     {
@@ -338,6 +340,12 @@ public readonly record struct ZstandardCompressionOptions
         init => overlapLog = value;
     }
 
+    public ZstandardDictionary? Dictionary
+    {
+        get => dictionary;
+        init => dictionary = value;
+    }
+
     internal unsafe void SetParameter(ZSTD_CCtx_s* context)
     {
         if (IsDefault) return;
@@ -361,6 +369,13 @@ public readonly record struct ZstandardCompressionOptions
         SetParameter(context, ZSTD_cParameter.ZSTD_c_nbWorkers, nbWorkers);
         SetParameter(context, ZSTD_cParameter.ZSTD_c_jobSize, jobSize);
         SetParameter(context, ZSTD_cParameter.ZSTD_c_overlapLog, overlapLog);
+
+        // and dictionary
+        if (dictionary != null)
+        {
+            var result = ZSTD_CCtx_refCDict(context, dictionary.CompressionHandle);
+            Zstandard.ThrowIfError(result);
+        }
     }
 
     // Set parameter if value is not zero(default).
@@ -403,7 +418,7 @@ public readonly record struct ZstandardCompressionOptions
         }
     }
 
-    enum ZSTD_cParameter
+    internal enum ZSTD_cParameter
     {
         ZSTD_c_compressionLevel = 100,
         ZSTD_c_windowLog = 101,

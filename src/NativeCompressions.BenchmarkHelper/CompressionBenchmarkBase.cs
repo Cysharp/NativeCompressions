@@ -126,7 +126,7 @@ public abstract class ZstandardBenchmarkBase : CompressionBenchmarkBase<int>
         step: 1);
 
     public virtual ZstandardCompressionOptions ZstandardCompressionOptions => ZstandardCompressionOptions.Default;
-    public virtual ZstandardCompressionDictionary? ZstandardCompressionDictionary => null;
+    public virtual ZstandardDictionary? ZstandardCompressionDictionary => null;
 
     protected override int GetMaxCompressedLength(int inputSize, int compressionLevel)
     {

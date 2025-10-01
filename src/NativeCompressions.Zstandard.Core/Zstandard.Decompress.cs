@@ -2,20 +2,21 @@
 using System.Buffers;
 using NativeCompressions.Interop;
 using static NativeCompressions.Interop.ZstandardNativeMethods;
+using System.IO.Compression;
 
 namespace NativeCompressions;
 
 public static partial class Zstandard
 {
-    public static byte[] Decompress(ReadOnlySpan<byte> source, ZstandardCompressionDictionary? dictionary = null, bool trustedData = false)
+    public static byte[] Decompress(ReadOnlySpan<byte> source, bool trustedData = false)
     {
-        return Decompress(source, ZstandardDecompressionOptions.Default, dictionary, trustedData);
+        return Decompress(source, ZstandardDecompressionOptions.Default, trustedData);
     }
 
-    public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, in ZstandardDecompressionOptions decompressionOptions, ZstandardCompressionDictionary? dictionary = null, bool trustedData = false)
+    public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, in ZstandardDecompressionOptions decompressionOptions, bool trustedData = false)
     {
         // TODO: is this ok to trust frame header on multithread-data(multi-frame?)
-        if (trustedData && decompressionOptions.IsDefault && TryGetFrameContentSize(source, out var size))
+        if (trustedData && TryGetFrameContentSize(source, out var size))
         {
             if (size > (ulong)Array.MaxLength)
             {
@@ -24,7 +25,7 @@ public static partial class Zstandard
 
             var destination = GC.AllocateUninitializedArray<byte>((int)size);
 
-            var bytesWritten = Decompress(source, destination, decompressionOptions, dictionary);
+            var bytesWritten = Decompress(source, destination, decompressionOptions);
 
             if (bytesWritten != destination.Length)
             {
@@ -35,7 +36,7 @@ public static partial class Zstandard
         }
         else
         {
-            using var decoder = new ZstandardDecoder(decompressionOptions, dictionary);
+            using var decoder = new ZstandardDecoder(decompressionOptions);
 
             Span<byte> scratch = stackalloc byte[256];
             var arrayProvider = new SegmentedArrayProvider<byte>(scratch);
@@ -67,63 +68,41 @@ public static partial class Zstandard
         }
     }
 
-    public static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, ZstandardCompressionDictionary? dictionary = null)
+    public static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination)
     {
-        return Decompress(source, destination, ZstandardDecompressionOptions.Default, dictionary);
+        return Decompress(source, destination, ZstandardDecompressionOptions.Default);
     }
 
-    public static unsafe int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, in ZstandardDecompressionOptions decompressionOptions, ZstandardCompressionDictionary? dictionary = null)
+    public static unsafe int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, in ZstandardDecompressionOptions decompressionOptions)
     {
-        if (decompressionOptions.IsDefault)
+        // Currently DecompressionOptions.WindowLogMax in only used in streaming mode.
+        // So always use simple API when default options are used.
+
+        fixed (byte* src = source)
+        fixed (byte* dest = destination)
         {
-            fixed (byte* src = source)
-            fixed (byte* dest = destination)
+            nuint bytesWritten;
+            if (decompressionOptions.Dictionary == null)
             {
-                nuint bytesWritten;
-                if (dictionary == null)
+                bytesWritten = ZSTD_decompress(dest, (nuint)destination.Length, src, (nuint)source.Length);
+            }
+            else
+            {
+                var context = ZSTD_createDCtx();
+                if (context == null) throw new ZstandardException("Failed to create decompression context");
+
+                try
                 {
-                    bytesWritten = ZSTD_decompress(dest, (nuint)destination.Length, src, (nuint)source.Length);
+                    bytesWritten = ZSTD_decompress_usingDDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, decompressionOptions.Dictionary.DecompressionHandle);
                 }
-                else
+                finally
                 {
-                    var context = ZSTD_createDCtx();
-                    if (context == null) throw new ZstandardException("Failed to create decompression context");
-
-                    try
-                    {
-                        bytesWritten = ZSTD_decompress_usingDDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, dictionary.DecompressionHandle);
-                    }
-                    finally
-                    {
-                        ZSTD_freeDCtx(context);
-                    }
+                    ZSTD_freeDCtx(context);
                 }
-                ThrowIfError(bytesWritten);
-
-                return (int)bytesWritten;
             }
-        }
-        else
-        {
-            using var decoder = new ZstandardDecoder(decompressionOptions, dictionary);
+            ThrowIfError(bytesWritten);
 
-            var totalWritten = 0;
-            var status = OperationStatus.DestinationTooSmall;
-            while (status == OperationStatus.DestinationTooSmall && destination.Length != 0)
-            {
-                status = decoder.Decompress(source, destination, out var bytesConsumed, out var bytesWritten);
-
-                source = source.Slice(bytesConsumed);
-                destination = destination.Slice(bytesWritten);
-                totalWritten += bytesWritten;
-            }
-
-            if (status != OperationStatus.Done)
-            {
-                throw new ZstandardException($"Decompression failed: {status}");
-            }
-
-            return totalWritten;
+            return (int)bytesWritten;
         }
     }
 

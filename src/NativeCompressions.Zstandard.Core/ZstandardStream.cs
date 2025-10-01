@@ -23,7 +23,7 @@ public sealed class ZstandardStream : Stream
     int readBufferOffset; // for decompress
     int readBufferCount; // for decompress
 
-    public ZstandardStream(Stream stream, CompressionMode mode, ZstandardCompressionDictionary? compressionDictionary = null, bool leaveOpen = false)
+    public ZstandardStream(Stream stream, CompressionMode mode, bool leaveOpen = false)
     {
         this.stream = stream;
         this.leaveOpen = leaveOpen;
@@ -31,28 +31,28 @@ public sealed class ZstandardStream : Stream
 
         if (mode == CompressionMode.Decompress)
         {
-            this.decoder = new ZstandardDecoder(ZstandardDecompressionOptions.Default, compressionDictionary);
+            this.decoder = new ZstandardDecoder(ZstandardDecompressionOptions.Default);
         }
         else
         {
-            this.encoder = new ZstandardEncoder(ZstandardCompressionOptions.Default, compressionDictionary);
+            this.encoder = new ZstandardEncoder(ZstandardCompressionOptions.Default);
         }
     }
 
-    public ZstandardStream(Stream stream, in ZstandardCompressionOptions compressionOptions, ZstandardCompressionDictionary? compressionDictionary, bool leaveOpen = false)
+    public ZstandardStream(Stream stream, in ZstandardCompressionOptions compressionOptions, bool leaveOpen = false)
     {
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.needDisposeNativeCompressor = true;
-        this.encoder = new ZstandardEncoder(compressionOptions, compressionDictionary);
+        this.encoder = new ZstandardEncoder(compressionOptions);
     }
 
-    public ZstandardStream(Stream stream, in ZstandardDecompressionOptions decompressionOptions, ZstandardCompressionDictionary? compressionDictionary, bool leaveOpen = false)
+    public ZstandardStream(Stream stream, in ZstandardDecompressionOptions decompressionOptions, bool leaveOpen = false)
     {
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.needDisposeNativeCompressor = true;
-        this.decoder = new ZstandardDecoder(decompressionOptions, compressionDictionary);
+        this.decoder = new ZstandardDecoder(decompressionOptions);
     }
 
     public ZstandardStream(Stream stream, ZstandardEncoder encoder, bool leaveOpen = false)

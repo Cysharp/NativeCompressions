@@ -26,21 +26,20 @@ public unsafe class ZstandardDecoder : SafeHandle
     /// Initializes a new instance of the <see cref="ZstandardDecoder"/>.
     /// </summary>
     public ZstandardDecoder()
-        : this(ZstandardDecompressionOptions.Default, null)
+        : this(ZstandardDecompressionOptions.Default)
     {
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardDecoder"/> with specified options.
     /// </summary>
-    public ZstandardDecoder(in ZstandardDecompressionOptions decompressionOptions, ZstandardCompressionDictionary? dictionary = null)
+    public ZstandardDecoder(in ZstandardDecompressionOptions decompressionOptions)
         : base(IntPtr.Zero, true)
     {
         var context = ZSTD_createDCtx();
         if (context == null) throw new ZstandardException("Failed to create decompression context");
 
         decompressionOptions.SetParameter(context);
-        dictionary?.SetDictionary(context);
         SetHandle((IntPtr)context); // assign to SafeHandle
     }
 
@@ -125,7 +124,7 @@ public unsafe class ZstandardDecoder : SafeHandle
         Zstandard.ThrowIfError(result);
     }
 
-    public void Reset(in ZstandardDecompressionOptions options, ZstandardCompressionDictionary? dictionary = null)
+    public void Reset(in ZstandardDecompressionOptions options)
     {
         Validate();
         var context = (ZSTD_DCtx_s*)handle;
@@ -134,7 +133,6 @@ public unsafe class ZstandardDecoder : SafeHandle
         Zstandard.ThrowIfError(result);
 
         options.SetParameter(context);
-        dictionary?.SetDictionary(context);
     }
 
     void Validate()

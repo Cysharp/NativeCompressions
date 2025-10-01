@@ -29,13 +29,13 @@ public static partial class Zstandard
     /// <summary>
     /// Compresses data using Zstandard algorithm with specified options.
     /// </summary>
-    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, in ZstandardCompressionOptions compressionOptions, ZstandardCompressionDictionary? dictionary = null)
+    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, in ZstandardCompressionOptions compressionOptions)
     {
         var maxLength = GetMaxCompressedLength(source.Length);
         var destination = ArrayPool<byte>.Shared.Rent(maxLength);
         try
         {
-            var bytesWritten = Compress(source, destination, compressionOptions, dictionary);
+            var bytesWritten = Compress(source, destination, compressionOptions);
             return destination.AsSpan(0, bytesWritten).ToArray();
         }
         finally
@@ -56,7 +56,7 @@ public static partial class Zstandard
         }
     }
 
-    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in ZstandardCompressionOptions compressionOptions, ZstandardCompressionDictionary? dictionary = null)
+    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in ZstandardCompressionOptions compressionOptions)
     {
         fixed (byte* src = source)
         fixed (byte* dest = destination)
@@ -70,16 +70,8 @@ public static partial class Zstandard
 
             try
             {
-                if (dictionary != null && compressionOptions.IsDefault)
-                {
-                    bytesWritten = ZSTD_compress_usingCDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, dictionary.CompressionHandle);
-                }
-                else
-                {
-                    compressionOptions.SetParameter(context);
-                    dictionary?.SetDictionary(context);
-                    bytesWritten = ZSTD_compress2(context, dest, (nuint)destination.Length, src, (nuint)source.Length);
-                }
+                compressionOptions.SetParameter(context);
+                bytesWritten = ZSTD_compress2(context, dest, (nuint)destination.Length, src, (nuint)source.Length);
             }
             finally
             {
