@@ -13,6 +13,7 @@ public sealed class LZ4Stream : Stream
 
     LZ4Encoder? encoder;
     LZ4Decoder? decoder;
+    bool needDisposeNativeCompressor;
 
     Stream stream;
     bool leaveOpen;
@@ -26,7 +27,7 @@ public sealed class LZ4Stream : Stream
     {
         this.stream = stream;
         this.leaveOpen = leaveOpen;
-        this.readBufferCount = 0;
+        this.needDisposeNativeCompressor = true;
 
         if (mode == CompressionMode.Decompress)
         {
@@ -42,7 +43,7 @@ public sealed class LZ4Stream : Stream
     {
         this.stream = stream;
         this.leaveOpen = leaveOpen;
-        this.readBufferCount = 0;
+        this.needDisposeNativeCompressor = true;
         this.encoder = new LZ4Encoder(options);
     }
 
@@ -50,8 +51,22 @@ public sealed class LZ4Stream : Stream
     {
         this.stream = stream;
         this.leaveOpen = leaveOpen;
-        this.readBufferCount = 0;
+        this.needDisposeNativeCompressor = true;
         this.decoder = new LZ4Decoder(options);
+    }
+
+    public LZ4Stream(Stream stream, LZ4Encoder encoder, bool leaveOpen = false)
+    {
+        this.stream = stream;
+        this.leaveOpen = leaveOpen;
+        this.encoder = encoder;
+    }
+
+    public LZ4Stream(Stream stream, LZ4Decoder decoder, bool leaveOpen = false)
+    {
+        this.stream = stream;
+        this.leaveOpen = leaveOpen;
+        this.decoder = decoder;
     }
 
     public override bool CanRead => decoder != null && stream.CanRead;
@@ -495,8 +510,12 @@ public sealed class LZ4Stream : Stream
                 ArrayPool<byte>.Shared.Return(buffer);
             }
 
-            encoder?.Dispose();
-            decoder?.Dispose();
+
+            if (needDisposeNativeCompressor)
+            {
+                encoder?.Dispose();
+                decoder?.Dispose();
+            }
 
             isDisposed = true;
             base.Dispose(disposing);
@@ -528,8 +547,11 @@ public sealed class LZ4Stream : Stream
                 ArrayPool<byte>.Shared.Return(buffer);
             }
 
-            encoder?.Dispose();
-            decoder?.Dispose();
+            if (needDisposeNativeCompressor)
+            {
+                encoder?.Dispose();
+                decoder?.Dispose();
+            }
 
             isDisposed = true;
             base.Dispose();
