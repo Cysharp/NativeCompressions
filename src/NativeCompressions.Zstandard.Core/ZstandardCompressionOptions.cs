@@ -12,7 +12,6 @@ public readonly record struct ZstandardCompressionOptions
 {
     public static readonly ZstandardCompressionOptions Default = new ZstandardCompressionOptions();
 
-    // TODO: make internal or private
     public bool IsDefault
     {
         get

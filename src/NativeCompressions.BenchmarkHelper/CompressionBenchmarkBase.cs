@@ -10,17 +10,17 @@ namespace NativeCompressions.BenchmarkHelper;
 [CompressionThroughputColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [HideColumns(Column.Error)]
-public abstract class CompressionBenchmarkBase<TCompressionLevel>
+public abstract class CompressionBenchmarkBase<TLevel> // level is mainly CompressionLevel but can use for window-size, etc...
 {
     // v0.15.4 allows abstract method/property https://github.com/dotnet/BenchmarkDotNet/pull/2832
 
-    public abstract IEnumerable<TCompressionLevel> GetCompressionLevels();
+    public abstract IEnumerable<TLevel> GetLevels();
 
-    protected abstract int GetMaxCompressedLength(int inputSize, TCompressionLevel compressionLevel);
+    protected abstract int GetMaxCompressedLength(int inputSize, TLevel level);
     protected abstract byte[] GetTargetSource();
 
-    [ParamsSource(nameof(GetCompressionLevels))]
-    public TCompressionLevel Level { get; set; } = default!;
+    [ParamsSource(nameof(GetLevels))]
+    public TLevel Level { get; set; } = default!;
 
     byte[] source = default!;
     byte[] destination = default!;
@@ -53,7 +53,7 @@ public abstract class CompressionBenchmarkBase<TCompressionLevel>
         return DecompressCore(compressedData, decompressDestination);
     }
 
-    protected abstract int CompressCore(byte[] source, byte[] destination, TCompressionLevel compressionLevel);
+    protected abstract int CompressCore(byte[] source, byte[] destination, TLevel level);
     protected abstract int DecompressCore(byte[] source, byte[] destination);
 
     // for PayloadColumn, need to generate data for summary
@@ -77,7 +77,7 @@ public abstract class CompressionBenchmarkBase<TCompressionLevel>
                 return payloadData;
             }
 
-            foreach (var level in GetCompressionLevels())
+            foreach (var level in GetLevels())
             {
                 var source = GetTargetSource();
                 var destination = new byte[GetMaxCompressedLength(source.Length, level)];
@@ -95,16 +95,17 @@ public abstract class CompressionBenchmarkBase<TCompressionLevel>
 
 public abstract class Lz4BenchmarkBase : CompressionBenchmarkBase<int>
 {
-    public override IEnumerable<int> GetCompressionLevels() => Enumerable.Sequence(
+    public override IEnumerable<int> GetLevels() => Enumerable.Sequence(
         start: LZ4.MinCompressionLevel,
         endInclusive: LZ4.MaxCompressionLevel,
         step: 1);
 
-    public virtual LZ4CompressionOptions LZ4FrameOptions => LZ4CompressionOptions.Default;
+    public virtual LZ4CompressionOptions CompressionOptions => LZ4CompressionOptions.Default;
+    public virtual LZ4DecompressionOptions DecompressionOptions => LZ4DecompressionOptions.Default;
 
     protected override int GetMaxCompressedLength(int inputSize, int compressionLevel)
     {
-        return LZ4.GetMaxCompressedLength(inputSize, LZ4FrameOptions with { CompressionLevel = compressionLevel });
+        return LZ4.GetMaxCompressedLength(inputSize, CompressionOptions with { CompressionLevel = compressionLevel });
     }
 
     protected override int CompressCore(byte[] source, byte[] destination, int compressionLevel)
@@ -114,19 +115,19 @@ public abstract class Lz4BenchmarkBase : CompressionBenchmarkBase<int>
 
     protected override int DecompressCore(byte[] source, byte[] destination)
     {
-        return LZ4.Decompress(source, destination);
+        return LZ4.Decompress(source, destination, DecompressionOptions);
     }
 }
 
 public abstract class ZstandardBenchmarkBase : CompressionBenchmarkBase<int>
 {
-    public override IEnumerable<int> GetCompressionLevels() => Enumerable.Sequence(
+    public override IEnumerable<int> GetLevels() => Enumerable.Sequence(
         start: -4, // Zstandard's min compression level is -131072 so use -4 instead.
         endInclusive: Zstandard.MaxCompressionLevel,
         step: 1);
 
-    public virtual ZstandardCompressionOptions ZstandardCompressionOptions => ZstandardCompressionOptions.Default;
-    public virtual ZstandardDictionary? ZstandardCompressionDictionary => null;
+    public virtual ZstandardCompressionOptions CompressionOptions => ZstandardCompressionOptions.Default;
+    public virtual ZstandardDecompressionOptions DecompressionOptions => ZstandardDecompressionOptions.Default;
 
     protected override int GetMaxCompressedLength(int inputSize, int compressionLevel)
     {
@@ -135,18 +136,17 @@ public abstract class ZstandardBenchmarkBase : CompressionBenchmarkBase<int>
 
     protected override int CompressCore(byte[] source, byte[] destination, int compressionLevel)
     {
-        var options = ZstandardCompressionOptions;
-        if (ZstandardCompressionDictionary == null && options.IsDefault) // TODO: this optimize should handle in Zstandard.Compress
+        if (CompressionOptions.IsDefault)
         {
             return Zstandard.Compress(source, destination, compressionLevel);
         }
 
-        return Zstandard.Compress(source, destination, options with { CompressionLevel = compressionLevel }, ZstandardCompressionDictionary);
+        return Zstandard.Compress(source, destination, CompressionOptions with { CompressionLevel = compressionLevel });
     }
 
     protected override int DecompressCore(byte[] source, byte[] destination)
     {
-        return Zstandard.Decompress(source, destination, ZstandardCompressionDictionary);
+        return Zstandard.Decompress(source, destination, DecompressionOptions);
     }
 }
 
@@ -159,19 +159,21 @@ public abstract class BrotliBenchmarkBase : CompressionBenchmarkBase<int>
     //  public const int WindowBits_Min = 10;
     //  public const int WindowBits_Default = 22;
     //  public const int WindowBits_Max = 24;
-    public override IEnumerable<int> GetCompressionLevels() => Enumerable.Sequence(
+    public override IEnumerable<int> GetLevels() => Enumerable.Sequence(
         start: 0,
         endInclusive: 11,
         step: 1);
 
-    protected override int GetMaxCompressedLength(int inputSize, int compressionLevel)
+    public virtual int CompressionWindow => 22; // WindowBits_Default
+
+    protected override int GetMaxCompressedLength(int inputSize, int quality)
     {
         return Zstandard.GetMaxCompressedLength(inputSize);
     }
 
-    protected override int CompressCore(byte[] source, byte[] destination, int compressionLevel)
+    protected override int CompressCore(byte[] source, byte[] destination, int quality)
     {
-        BrotliEncoder.TryCompress(source, destination, out var bytesWritten, quality: compressionLevel, window: 22);
+        BrotliEncoder.TryCompress(source, destination, out var bytesWritten, quality: quality, window: CompressionWindow);
         return bytesWritten;
     }
 
@@ -184,7 +186,7 @@ public abstract class BrotliBenchmarkBase : CompressionBenchmarkBase<int>
 
 public abstract class GZipBenchmarkBase : CompressionBenchmarkBase<CompressionLevel>
 {
-    public override IEnumerable<CompressionLevel> GetCompressionLevels() => [
+    public override IEnumerable<CompressionLevel> GetLevels() => [
         CompressionLevel.Fastest,
         CompressionLevel.Optimal,
 #if NET6_0_OR_GREATER
