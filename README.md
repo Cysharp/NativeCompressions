@@ -68,7 +68,7 @@ var written = LZ4.Compress(source, destinationBuffer);
 var destination = destinationBuffer[0..written];
 ```
 
-These APIs can be customized by passing `LZ4FrameOptions` or `LZ4CompressionDictionary`. When decompressing to `byte[]`, setting the `bool trustedData` argument to `true` will trust the `ContentSize` in the LZ4 frame header if present, pre-allocating the buffer for improved performance. When `false`, it processes in blocks to an internal buffer then concatenates, which is more resistant to attacks sending malicious data. Default is `false`.
+These APIs can be customized by passing `LZ4CompressionOptions`, `LZ4DecompressionOptions`. When decompressing to `byte[]`, setting the `bool trustedData` argument to `true` will trust the `ContentSize` in the LZ4 frame header if present, pre-allocating the buffer for improved performance. When `false`, it processes in blocks to an internal buffer then concatenates, which is more resistant to attacks sending malicious data. Default is `false`.
 
 ### Low-level Streaming Compression
 
@@ -188,31 +188,26 @@ int read = await lz4Stream.ReadAsync(buffer);
 You can change `with` operator.
 
 ```csharp
-var options = LZ4FrameOptions.Default with
+var options = LZ4CompressionOptions.Default with
 {
     CompressionLevel = 3,
-    ContentSize = LZ4FrameOptions.Default with
-    {
-        ContentSize = source.Length
-    }
+    ContentSize = source.Length
 };
 ```
 
 ```csharp
 // full-options
-var options = new LZ4FrameOptions
+var options = new LZ4CompressionOptions
 {
     CompressionLevel = 9,           // 0-12
     AutoFlush = true,               // Flush after each compress call
     FavorDecompressionSpeed = 1,    // Optimize for decompression
-    FrameInfo = new LZ4FrameInfo
-    {
-        BlockSizeID = BlockSizeId.Max4MB,  // Max64KB, Max256KB, Max1MB, Max4MB
-        BlockMode = BlockMode.BlockIndependent, 
-        ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled,
-        BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled,
-        ContentSize = (ulong)sourceData.Length  // Pre-declare size
-    }
+    BlockSizeID = BlockSizeId.Max4MB,  // Max64KB, Max256KB, Max1MB, Max4MB
+    BlockMode = BlockMode.BlockIndependent, 
+    ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled,
+    BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled,
+    ContentSize = (ulong)sourceData.Length  // Pre-declare size
+    Dictionary = null // LZ4 Dictionary
 };
 ```
 
@@ -224,13 +219,13 @@ Improve compression ratio for similar data:
 var dictionary = new LZ4CompressionDictionary(sampleData, dictionaryId: 12345);
 
 // Use dictionary for compression
-byte[] compressed = LZ4.Compress(source, LZ4FrameOptions.Default, dictionary);
+byte[] compressed = LZ4.Compress(source, LZ4CompressionOptions.Default with { Dictionary = dictionary });
 
 // Decompression with same dictionary
-byte[] decompressed = LZ4.Decompress(compressed, dictionary);
+byte[] decompressed = LZ4.Decompress(compressed, LZ4DecompressionOptions.Default with { Dictionary = dictionary });
 
 // Dictionary can be reused across multiple operations
-using var encoder = new LZ4Encoder(options, dictionary);
+using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { Dictionary = dictionary });
 ```
 
 ### Block Compression
