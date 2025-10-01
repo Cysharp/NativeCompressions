@@ -1,53 +1,44 @@
-﻿using NativeCompressions.Internal;
-using System.Drawing;
-using System.Runtime.CompilerServices;
-using NativeCompressions.Interop;
+﻿using System.Runtime.CompilerServices;
 using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
 
 public static partial class Zstandard
 {
-    static string? version;
+    static unsafe Zstandard()
+    {
+        Version = new string((sbyte*)ZSTD_versionString());
+        VersionNumber = ZSTD_versionNumber();
+        MinCompressionLevel = ZSTD_minCLevel();
+        MaxCompressionLevel = ZSTD_maxCLevel();
+    }
 
     /// <summary>
     /// Gets the version string of the Zstandard library.
     /// </summary>
-    public static string Version
-    {
-        get
-        {
-            if (version == null)
-            {
-                unsafe
-                {
-                    // null-terminated
-                    version = new string((sbyte*)ZSTD_versionString());
-                }
-            }
-            return version;
-        }
-    }
+    public static readonly string Version;
 
     /// <summary>
     /// Gets the version number of the Zstandard library.
     /// </summary>
-    public static uint VersionNumber => ZSTD_versionNumber();
+    public static readonly uint VersionNumber;
 
     /// <summary>
     /// Gets the minimum compression level.
     /// </summary>
-    public static int MinCompressionLevel => ZSTD_minCLevel();
+    public static readonly int MinCompressionLevel;
 
     /// <summary>
     /// Gets the maximum compression level.
     /// </summary>
-    public static int MaxCompressionLevel => ZSTD_maxCLevel();
+    public static readonly int MaxCompressionLevel;
 
     /// <summary>
     /// Gets the default compression level.
     /// </summary>
-    public const int DefaultCompressionLevel = 3; // ZSTD_defaultCLevel();
+    public const int DefaultCompressionLevel = 3; // ZSTD_defaultCLevel(); need as const.
+
+    public const int MaxFrameHeaderSize = 18; // ZSTD_FRAMEHEADERSIZE_MAX 18
 
     /// <summary>
     /// Gets the maximum compressed size for a given input size.
@@ -56,8 +47,6 @@ public static partial class Zstandard
     {
         return (int)ZSTD_compressBound((nuint)inputSize);
     }
-
-    public const int MaxFrameHeaderSize = 18; // ZSTD_FRAMEHEADERSIZE_MAX 18
 
     public static unsafe bool TryGetFrameContentSize(ReadOnlySpan<byte> source, out ulong size)
     {
