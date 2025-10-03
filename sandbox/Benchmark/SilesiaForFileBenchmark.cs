@@ -42,3 +42,4 @@ public class SilesiaForFile_Lz4 : Lz4BenchmarkForFileBase
         return "lz4_temp/silesia3.lz4";
     }
 }
+

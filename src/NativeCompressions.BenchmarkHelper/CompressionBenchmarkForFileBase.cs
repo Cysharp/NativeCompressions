@@ -122,7 +122,7 @@ public abstract class Lz4BenchmarkForFileBase : CompressionBenchmarkForFileBase<
 
     protected override ValueTask CompressCoreAsync(string source, string destination, int compressionLevel)
     {
-        return LZ4.CompressAsync(source, destination, CompressionOptions, MaxDegreeOfParallelism);
+        return LZ4.CompressAsync(source, destination, CompressionOptions with { CompressionLevel = compressionLevel }, MaxDegreeOfParallelism);
     }
 
     protected override ValueTask DecompressCoreAsync(string source, string destination)
