@@ -8,7 +8,6 @@ using NativeCompressions;
 using System.IO.Compression;
 using System.Reflection;
 
-
 var config = ManualConfig.CreateMinimumViable()
     .AddDiagnoser(MemoryDiagnoser.Default)
     // .AddColumn(StatisticColumn.OperationsPerSecond)

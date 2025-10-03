@@ -98,7 +98,6 @@ public static partial class LZ4
     // allow multithread(known size, random-access): ReadOnlyMemory, ReadOnlySequence, SafeFileHandle
     // single thread only(unknown size can't determine block-size): Stream, PipeReader
 
-    // TODO: null maxDegreeOfParallelism change to don't parallel(as default)
     public static async ValueTask CompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
         var newOptions = options ?? LZ4CompressionOptions.Default;
@@ -109,7 +108,7 @@ public static partial class LZ4
             ContentSize = (ulong)source.Length,
         };
 
-        if (maxDegreeOfParallelism == 1 || source.Length < AllowParallelCompressThreshold)
+        if (maxDegreeOfParallelism == null || maxDegreeOfParallelism == 1 || source.Length < AllowParallelCompressThreshold)
         {
             // multi-block, single-thread
 
@@ -155,16 +154,16 @@ public static partial class LZ4
             newOptions = newOptions with
             {
                 BlockSizeID = (newOptions.BlockSizeID == BlockSizeId.Default)
-                        ? DetermineBlockSize(source.Length, isMultiThread: true)
-                        : newOptions.BlockSizeID,
+                    ? DetermineBlockSize(source.Length, isMultiThread: true)
+                    : newOptions.BlockSizeID,
                 BlockMode = BlockMode.BlockIndependent // for parallel
             };
 
             var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
 
-            var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
+            var threadCount = maxDegreeOfParallelism.Value;
             // modify thread count for avoid too many buffer.
-            int totalBlocks = (source.Length + actualChunkSize - 1) / actualChunkSize;
+            int totalBlocks = (source.Length + actualChunkSize - 1) / actualChunkSize; // TODO: is this calculation correct?
             threadCount = Math.Min(threadCount, totalBlocks);
 
             var capacity = threadCount * 2;
@@ -189,10 +188,8 @@ public static partial class LZ4
 
             // producer: slice buffer and compress, send compressed buffer.
             var bufferId = -1;
-            Task outputProducers;
 
-#if NET8_0_OR_GREATER
-            outputProducers = Parallel.ForAsync(0, threadCount, async (producerId, _) =>
+            var outputProducers = ParallelInvoker.InvokeAsync(threadCount, cancellationToken, async (producerId, token) =>
             {
                 using (LZ4ActivitySource.Start("InputCompressLoop", tagKey: "LoopId", tagValue: producerId))
                 {
@@ -222,53 +219,10 @@ public static partial class LZ4
                             CompressedBuffer = dest,
                             Count = written,
                             Id = id
-                        }, channelToken.Token);
+                        }, token);
                     }
                 }
             });
-#else
-            var producerTasks = new Task[threadCount];
-            for (int i = 0; i < producerTasks.Length; i++)
-            {
-                var producerId = i;
-                producerTasks[i] = Task.Run(async () =>
-                {
-                    using (LZ4ActivitySource.Start("InputCompressLoop", tagKey: "LoopId", tagValue: producerId))
-                    {
-                        ActivityContext? linkContext = null;
-                        using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
-                        while (true)
-                        {
-                            var id = Interlocked.Increment(ref bufferId);
-                            var offset = unchecked(id * actualChunkSize);
-                            if (offset < 0) break; // overflow
-
-                            var remaining = source.Length - offset;
-                            if (remaining <= 0) break;
-
-                            var src = source.Span.Slice(offset, Math.Min(remaining, actualChunkSize));
-                            var bufferLength = encoder.GetMaxCompressedLength(src.Length, includingHeader: false, includingFooter: false);
-                            var dest = ArrayPool<byte>.Shared.Rent(bufferLength);
-
-                            int written;
-                            using (LZ4ActivitySource.Start("Compress", ref linkContext))
-                            {
-                                written = encoder.Compress(src, dest);
-                            }
-
-                            await outputChannel.Writer.WriteAsync(new CompressionBuffer
-                            {
-                                CompressedBuffer = dest,
-                                Count = written,
-                                Id = id
-                            }, channelToken.Token);
-                        }
-                    }
-                });
-            }
-
-            outputProducers = Task.WhenAll(producerTasks);
-#endif
 
             var outputConsumer = StartWriteCompressedBuffer(destination, newOptions, outputChannel, channelToken);
 

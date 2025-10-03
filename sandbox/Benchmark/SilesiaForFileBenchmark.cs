@@ -43,3 +43,41 @@ public class SilesiaForFile_Lz4 : Lz4BenchmarkForFileBase
     }
 }
 
+public class SilesiaForFileParallelism_LZ4 : Lz4BenchmarkForFileParallelismBase
+{
+    public override IEnumerable<int> GetLevels() => Enumerable.Sequence(
+        start: 1,
+        endInclusive: Environment.ProcessorCount,
+        step: 1);
+
+    public override async ValueTask SetupCoreAsync()
+    {
+        var data = Resources.Silesia;
+        if (!Directory.Exists("lz4_temp"))
+        {
+            Directory.CreateDirectory("lz4_temp");
+        }
+        await File.WriteAllBytesAsync("lz4_temp/silesia.lz4", data);
+    }
+
+    public override ValueTask CleanupCoreAsync()
+    {
+        Directory.Delete("lz4_temp", true);
+        return default;
+    }
+
+    protected override string GetSourceFilePath()
+    {
+        return "lz4_temp/silesia.lz4";
+    }
+
+    protected override string GetCompressDestinationFilePath()
+    {
+        return "lz4_temp/silesia2.lz4";
+    }
+
+    protected override string GetDecompressDestinationFilePath()
+    {
+        return "lz4_temp/silesia3.lz4";
+    }
+}

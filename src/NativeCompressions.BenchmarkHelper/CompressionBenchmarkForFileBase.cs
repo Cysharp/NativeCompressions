@@ -130,3 +130,21 @@ public abstract class Lz4BenchmarkForFileBase : CompressionBenchmarkForFileBase<
         return LZ4.DecompressAsync(source, destination, DecompressionOptions);
     }
 }
+
+public abstract class Lz4BenchmarkForFileParallelismBase : CompressionBenchmarkForFileBase<int>
+{
+    public virtual LZ4CompressionOptions CompressionOptions => LZ4CompressionOptions.Default;
+    public virtual LZ4DecompressionOptions DecompressionOptions => LZ4DecompressionOptions.Default;
+
+    public virtual int CompressionLevel => LZ4.DefaultCompressionLevel;
+
+    protected override ValueTask CompressCoreAsync(string source, string destination, int maxDegreeOfParallelism)
+    {
+        return LZ4.CompressAsync(source, destination, CompressionOptions with { CompressionLevel = CompressionLevel }, maxDegreeOfParallelism);
+    }
+
+    protected override ValueTask DecompressCoreAsync(string source, string destination)
+    {
+        return LZ4.DecompressAsync(source, destination, DecompressionOptions);
+    }
+}
