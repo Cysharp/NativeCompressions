@@ -493,6 +493,7 @@ public static partial class LZ4
             throw new ArgumentException("Invalid file handle", nameof(source));
         }
 #if NETSTANDARD2_1 || NET5_0
+        // TODO: should dispose?
         var fs = new FileStream(source, FileAccess.Read, 1, true);
         if (offset != 0)
         {
@@ -698,7 +699,7 @@ public static partial class LZ4
             }
         }
 #endif
-        }
+    }
 
     public static async ValueTask CompressAsync(Stream source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -762,6 +763,20 @@ public static partial class LZ4
         var lastWritten = encoder.Close(lastBuffer);
         destination.Advance(lastWritten);
         await destination.FlushAsync(cancellationToken);
+    }
+
+    public static async ValueTask CompressAsync(string sourceFilePath, string destinationFilePath, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    {
+        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
+        using var destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
+        var destinationWriter = PipeWriter.Create(destinationStream);
+        await CompressAsync(sourceHandle, destinationWriter, options, maxDegreeOfParallelism, cancellationToken);
+    }
+
+    public static async ValueTask CompressAsync(string sourceFilePath, PipeWriter destination, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    {
+        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
+        await CompressAsync(sourceHandle, destination, options, maxDegreeOfParallelism, cancellationToken);
     }
 
     static Task StartWriteCompressedBuffer(PipeWriter destination, LZ4CompressionOptions options, Channel<CompressionBuffer> outputChannel, CancellationTokenSource channelToken)

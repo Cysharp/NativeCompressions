@@ -772,6 +772,20 @@ public static partial class LZ4
         }
     }
 
+    public static async ValueTask DecompressAsync(string sourceFilePath, string destinationFilePath, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    {
+        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
+        using var destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
+        var destinationWriter = PipeWriter.Create(destinationStream);
+        await DecompressAsync(sourceHandle, destinationWriter, options, maxDegreeOfParallelism, cancellationToken);
+    }
+
+    public static async ValueTask DecompressAsync(string sourceFilePath, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    {
+        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
+        await DecompressAsync(sourceHandle, destination, options, maxDegreeOfParallelism, cancellationToken);
+    }
+
     static Task StartWriteDecompressedBuffer(PipeWriter destination, Channel<DecompressionOutputBuffer> outputChannel, CancellationTokenSource channelToken)
     {
         var outputConsumer = Task.Run(async () =>
@@ -896,7 +910,7 @@ public static partial class LZ4
 
         inputConsumerOutputProducers = Task.WhenAll(inputConsumerOutputProducerTasks);
 #endif
-    
+
         return inputConsumerOutputProducers;
     }
 

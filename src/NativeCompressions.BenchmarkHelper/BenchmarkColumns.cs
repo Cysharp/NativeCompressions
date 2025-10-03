@@ -7,7 +7,7 @@ using System.Reflection;
 
 namespace NativeCompressions.BenchmarkHelper;
 
-internal record PayloadData(byte[] Source, byte[] Compressed);
+internal record PayloadData(long SourceLength, long CompressedLength);
 
 public class PayloadSizeColumnAttribute : ColumnConfigBaseAttribute
 {
@@ -62,11 +62,11 @@ public class PayloadSizeColumn : IColumn
         var payloadData = (PayloadData)methodInfo.Invoke(instance, [parameterLevel])!;
         if (benchmarkCase.Descriptor.HasCategory("Compress"))
         {
-            return new SizeValue(payloadData.Compressed.Length).ToString();
+            return new SizeValue(payloadData.CompressedLength).ToString();
         }
         else if (benchmarkCase.Descriptor.HasCategory("Decompress"))
         {
-            return new SizeValue(payloadData.Source.Length).ToString();
+            return new SizeValue(payloadData.SourceLength).ToString();
         }
 
         return "-";
@@ -118,7 +118,7 @@ public class CompressionRatioColumn : IColumn
 
             var payloadData = (PayloadData)methodInfo.Invoke(instance, [parameterLevel])!;
 
-            var ratio = (double)payloadData.Source.Length / payloadData.Compressed.Length;
+            var ratio = (double)payloadData.SourceLength / payloadData.CompressedLength;
 
             return ratio.ToString("0.00");
         }
@@ -172,7 +172,7 @@ public class CompressionThroughputColumn : IColumn
         var parameterLevel = benchmarkCase.Parameters[0].Value;
 
         var payloadData = (PayloadData)methodInfo.Invoke(instance, [parameterLevel])!;
-        var dataSize = payloadData.Source.Length;
+        var dataSize = payloadData.SourceLength;
 
         var seconds = mean.Value / 1_000_000_000.0; // nanosecs to seconds
 

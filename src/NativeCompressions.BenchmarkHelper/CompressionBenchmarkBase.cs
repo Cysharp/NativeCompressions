@@ -83,13 +83,17 @@ public abstract class CompressionBenchmarkBase<TLevel> // level is mainly Compre
                 var destination = new byte[GetMaxCompressedLength(source.Length, level)];
                 var written = CompressCore(source, destination, level);
 
-                payloadDictionary[(type, level!)] = new PayloadData(source, destination.AsSpan(0, (int)written).ToArray());
+                payloadDictionary[(type, level!)] = new PayloadData(source.Length, written);
             }
 
             return payloadDictionary.TryGetValue((type, parameterLevel), out payloadData)
                 ? payloadData
                 : throw new InvalidOperationException($"Payload data not found for {type} with parameter {parameterLevel}");
         }
+    }
+
+    internal void CleanupPayloadData()
+    {
     }
 }
 
