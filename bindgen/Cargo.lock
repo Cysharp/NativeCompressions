@@ -119,6 +119,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "libopenzl"
+version = "0.1.0"
+dependencies = [
+ "bindgen",
+ "csbindgen",
+]
+
+[[package]]
 name = "libzstd"
 version = "0.1.0"
 dependencies = [
