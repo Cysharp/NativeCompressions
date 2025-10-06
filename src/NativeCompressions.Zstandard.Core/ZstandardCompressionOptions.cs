@@ -5,7 +5,7 @@ using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
 
-// ZSTD_cParameter + dictionary ref
+// ZSTD_cParameter + dictionary ref + (TODO: ZSTD_CCtx_setPledgedSrcSize) + (TODO: ZSTD_CCtx_refPrefix)
 
 [StructLayout(LayoutKind.Auto)]
 public readonly record struct ZstandardCompressionOptions

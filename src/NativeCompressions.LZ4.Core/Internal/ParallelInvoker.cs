@@ -37,15 +37,15 @@ internal class ParallelInvoker : IThreadPoolWorkItem, IValueTaskSource
             var id = Interlocked.Increment(ref workerId);
             await body(id, cancellationTokenSource.Token);
 
-            if (Interlocked.Decrement(ref remaining) == 0)
+            if (Interlocked.Decrement(ref remaining) == 0) // all workers complete successfully.
             {
                 cancellationTokenSource.Dispose();
-                core.SetResult(null); // all worker completed.
+                core.SetResult(null);
             }
         }
         catch (Exception ex)
         {
-            if (Interlocked.Exchange(ref remaining, -1) > 0) // call error on first
+            if (Interlocked.Exchange(ref remaining, -1) > 0) // only first exception
             {
                 cancellationTokenSource.Cancel(); // if one worker failed, other workers should stop as soon as possible.
                 cancellationTokenSource.Dispose();
