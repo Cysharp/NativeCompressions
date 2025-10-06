@@ -45,7 +45,7 @@ internal class ParallelInvoker : IThreadPoolWorkItem, IValueTaskSource
         }
         catch (Exception ex)
         {
-            if (Interlocked.Exchange(ref remaining, -1) != -1) // call error on first
+            if (Interlocked.Exchange(ref remaining, -1) > 0) // call error on first
             {
                 cancellationTokenSource.Cancel(); // if one worker failed, other workers should stop as soon as possible.
                 cancellationTokenSource.Dispose();
