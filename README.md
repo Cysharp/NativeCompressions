@@ -309,24 +309,14 @@ public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destinat
     }
 }
 
-internal static bool IsError(ZL_Result_size_t_u result)
+static void ThrowIfError(ZL_Result_size_t_u result)
 {
-    return ZL_isErrorBool(result);
-}
-
-internal static void ThrowIfError(ZL_Result_size_t_u result)
-{
-    if (IsError(result))
+    if (ZL_isErrorBool(result))
     {
-        var error = GetErrorName(result._code);
+        var rawErrorName = (sbyte*)ZL_ErrorCode_toString(code);
+        var error = new string(rawErrorName);
         throw new InvalidOperationException(error);
     }
-}
-
-static unsafe string GetErrorName(ZL_ErrorCode code)
-{
-    var name = (sbyte*)ZL_ErrorCode_toString(code);
-    return new string(name);
 }
 ```
 
