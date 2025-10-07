@@ -5,6 +5,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .header("../../zstd/lib/zstd.h")
         .header("../../zstd/lib/zdict.h")
         .header("../../zstd/lib/zstd_errors.h")
+        .default_enum_style(bindgen::EnumVariation::Rust {
+            non_exhaustive: false,
+        })
         .generate()?
         .write_to_file("src/zstd.rs")?;
 

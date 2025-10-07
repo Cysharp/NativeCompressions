@@ -15,43 +15,46 @@ pub const ZSTD_CONTENTSIZE_UNKNOWN: i32 = -1;
 pub const ZSTD_CONTENTSIZE_ERROR: i32 = -2;
 pub type wchar_t = ::std::os::raw::c_ushort;
 pub type max_align_t = f64;
-pub const ZSTD_ErrorCode_ZSTD_error_no_error: ZSTD_ErrorCode = 0;
-pub const ZSTD_ErrorCode_ZSTD_error_GENERIC: ZSTD_ErrorCode = 1;
-pub const ZSTD_ErrorCode_ZSTD_error_prefix_unknown: ZSTD_ErrorCode = 10;
-pub const ZSTD_ErrorCode_ZSTD_error_version_unsupported: ZSTD_ErrorCode = 12;
-pub const ZSTD_ErrorCode_ZSTD_error_frameParameter_unsupported: ZSTD_ErrorCode = 14;
-pub const ZSTD_ErrorCode_ZSTD_error_frameParameter_windowTooLarge: ZSTD_ErrorCode = 16;
-pub const ZSTD_ErrorCode_ZSTD_error_corruption_detected: ZSTD_ErrorCode = 20;
-pub const ZSTD_ErrorCode_ZSTD_error_checksum_wrong: ZSTD_ErrorCode = 22;
-pub const ZSTD_ErrorCode_ZSTD_error_literals_headerWrong: ZSTD_ErrorCode = 24;
-pub const ZSTD_ErrorCode_ZSTD_error_dictionary_corrupted: ZSTD_ErrorCode = 30;
-pub const ZSTD_ErrorCode_ZSTD_error_dictionary_wrong: ZSTD_ErrorCode = 32;
-pub const ZSTD_ErrorCode_ZSTD_error_dictionaryCreation_failed: ZSTD_ErrorCode = 34;
-pub const ZSTD_ErrorCode_ZSTD_error_parameter_unsupported: ZSTD_ErrorCode = 40;
-pub const ZSTD_ErrorCode_ZSTD_error_parameter_combination_unsupported: ZSTD_ErrorCode = 41;
-pub const ZSTD_ErrorCode_ZSTD_error_parameter_outOfBound: ZSTD_ErrorCode = 42;
-pub const ZSTD_ErrorCode_ZSTD_error_tableLog_tooLarge: ZSTD_ErrorCode = 44;
-pub const ZSTD_ErrorCode_ZSTD_error_maxSymbolValue_tooLarge: ZSTD_ErrorCode = 46;
-pub const ZSTD_ErrorCode_ZSTD_error_maxSymbolValue_tooSmall: ZSTD_ErrorCode = 48;
-pub const ZSTD_ErrorCode_ZSTD_error_cannotProduce_uncompressedBlock: ZSTD_ErrorCode = 49;
-pub const ZSTD_ErrorCode_ZSTD_error_stabilityCondition_notRespected: ZSTD_ErrorCode = 50;
-pub const ZSTD_ErrorCode_ZSTD_error_stage_wrong: ZSTD_ErrorCode = 60;
-pub const ZSTD_ErrorCode_ZSTD_error_init_missing: ZSTD_ErrorCode = 62;
-pub const ZSTD_ErrorCode_ZSTD_error_memory_allocation: ZSTD_ErrorCode = 64;
-pub const ZSTD_ErrorCode_ZSTD_error_workSpace_tooSmall: ZSTD_ErrorCode = 66;
-pub const ZSTD_ErrorCode_ZSTD_error_dstSize_tooSmall: ZSTD_ErrorCode = 70;
-pub const ZSTD_ErrorCode_ZSTD_error_srcSize_wrong: ZSTD_ErrorCode = 72;
-pub const ZSTD_ErrorCode_ZSTD_error_dstBuffer_null: ZSTD_ErrorCode = 74;
-pub const ZSTD_ErrorCode_ZSTD_error_noForwardProgress_destFull: ZSTD_ErrorCode = 80;
-pub const ZSTD_ErrorCode_ZSTD_error_noForwardProgress_inputEmpty: ZSTD_ErrorCode = 82;
-pub const ZSTD_ErrorCode_ZSTD_error_frameIndex_tooLarge: ZSTD_ErrorCode = 100;
-pub const ZSTD_ErrorCode_ZSTD_error_seekableIO: ZSTD_ErrorCode = 102;
-pub const ZSTD_ErrorCode_ZSTD_error_dstBuffer_wrong: ZSTD_ErrorCode = 104;
-pub const ZSTD_ErrorCode_ZSTD_error_srcBuffer_wrong: ZSTD_ErrorCode = 105;
-pub const ZSTD_ErrorCode_ZSTD_error_sequenceProducer_failed: ZSTD_ErrorCode = 106;
-pub const ZSTD_ErrorCode_ZSTD_error_externalSequences_invalid: ZSTD_ErrorCode = 107;
-pub const ZSTD_ErrorCode_ZSTD_error_maxCode: ZSTD_ErrorCode = 120;
-pub type ZSTD_ErrorCode = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZSTD_ErrorCode {
+    ZSTD_error_no_error = 0,
+    ZSTD_error_GENERIC = 1,
+    ZSTD_error_prefix_unknown = 10,
+    ZSTD_error_version_unsupported = 12,
+    ZSTD_error_frameParameter_unsupported = 14,
+    ZSTD_error_frameParameter_windowTooLarge = 16,
+    ZSTD_error_corruption_detected = 20,
+    ZSTD_error_checksum_wrong = 22,
+    ZSTD_error_literals_headerWrong = 24,
+    ZSTD_error_dictionary_corrupted = 30,
+    ZSTD_error_dictionary_wrong = 32,
+    ZSTD_error_dictionaryCreation_failed = 34,
+    ZSTD_error_parameter_unsupported = 40,
+    ZSTD_error_parameter_combination_unsupported = 41,
+    ZSTD_error_parameter_outOfBound = 42,
+    ZSTD_error_tableLog_tooLarge = 44,
+    ZSTD_error_maxSymbolValue_tooLarge = 46,
+    ZSTD_error_maxSymbolValue_tooSmall = 48,
+    ZSTD_error_cannotProduce_uncompressedBlock = 49,
+    ZSTD_error_stabilityCondition_notRespected = 50,
+    ZSTD_error_stage_wrong = 60,
+    ZSTD_error_init_missing = 62,
+    ZSTD_error_memory_allocation = 64,
+    ZSTD_error_workSpace_tooSmall = 66,
+    ZSTD_error_dstSize_tooSmall = 70,
+    ZSTD_error_srcSize_wrong = 72,
+    ZSTD_error_dstBuffer_null = 74,
+    ZSTD_error_noForwardProgress_destFull = 80,
+    ZSTD_error_noForwardProgress_inputEmpty = 82,
+    ZSTD_error_frameIndex_tooLarge = 100,
+    ZSTD_error_seekableIO = 102,
+    ZSTD_error_dstBuffer_wrong = 104,
+    ZSTD_error_srcBuffer_wrong = 105,
+    ZSTD_error_sequenceProducer_failed = 106,
+    ZSTD_error_externalSequences_invalid = 107,
+    ZSTD_error_maxCode = 120,
+}
 unsafe extern "C" {
     pub fn ZSTD_getErrorString(code: ZSTD_ErrorCode) -> *const ::std::os::raw::c_char;
 }
@@ -169,57 +172,63 @@ unsafe extern "C" {
         srcSize: usize,
     ) -> usize;
 }
-pub const ZSTD_strategy_ZSTD_fast: ZSTD_strategy = 1;
-pub const ZSTD_strategy_ZSTD_dfast: ZSTD_strategy = 2;
-pub const ZSTD_strategy_ZSTD_greedy: ZSTD_strategy = 3;
-pub const ZSTD_strategy_ZSTD_lazy: ZSTD_strategy = 4;
-pub const ZSTD_strategy_ZSTD_lazy2: ZSTD_strategy = 5;
-pub const ZSTD_strategy_ZSTD_btlazy2: ZSTD_strategy = 6;
-pub const ZSTD_strategy_ZSTD_btopt: ZSTD_strategy = 7;
-pub const ZSTD_strategy_ZSTD_btultra: ZSTD_strategy = 8;
-pub const ZSTD_strategy_ZSTD_btultra2: ZSTD_strategy = 9;
+#[repr(i32)]
 #[doc = "  Advanced compression API (Requires v1.4.0+)"]
-pub type ZSTD_strategy = ::std::os::raw::c_int;
-pub const ZSTD_cParameter_ZSTD_c_compressionLevel: ZSTD_cParameter = 100;
-pub const ZSTD_cParameter_ZSTD_c_windowLog: ZSTD_cParameter = 101;
-pub const ZSTD_cParameter_ZSTD_c_hashLog: ZSTD_cParameter = 102;
-pub const ZSTD_cParameter_ZSTD_c_chainLog: ZSTD_cParameter = 103;
-pub const ZSTD_cParameter_ZSTD_c_searchLog: ZSTD_cParameter = 104;
-pub const ZSTD_cParameter_ZSTD_c_minMatch: ZSTD_cParameter = 105;
-pub const ZSTD_cParameter_ZSTD_c_targetLength: ZSTD_cParameter = 106;
-pub const ZSTD_cParameter_ZSTD_c_strategy: ZSTD_cParameter = 107;
-pub const ZSTD_cParameter_ZSTD_c_targetCBlockSize: ZSTD_cParameter = 130;
-pub const ZSTD_cParameter_ZSTD_c_enableLongDistanceMatching: ZSTD_cParameter = 160;
-pub const ZSTD_cParameter_ZSTD_c_ldmHashLog: ZSTD_cParameter = 161;
-pub const ZSTD_cParameter_ZSTD_c_ldmMinMatch: ZSTD_cParameter = 162;
-pub const ZSTD_cParameter_ZSTD_c_ldmBucketSizeLog: ZSTD_cParameter = 163;
-pub const ZSTD_cParameter_ZSTD_c_ldmHashRateLog: ZSTD_cParameter = 164;
-pub const ZSTD_cParameter_ZSTD_c_contentSizeFlag: ZSTD_cParameter = 200;
-pub const ZSTD_cParameter_ZSTD_c_checksumFlag: ZSTD_cParameter = 201;
-pub const ZSTD_cParameter_ZSTD_c_dictIDFlag: ZSTD_cParameter = 202;
-pub const ZSTD_cParameter_ZSTD_c_nbWorkers: ZSTD_cParameter = 400;
-pub const ZSTD_cParameter_ZSTD_c_jobSize: ZSTD_cParameter = 401;
-pub const ZSTD_cParameter_ZSTD_c_overlapLog: ZSTD_cParameter = 402;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam1: ZSTD_cParameter = 500;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam2: ZSTD_cParameter = 10;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam3: ZSTD_cParameter = 1000;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam4: ZSTD_cParameter = 1001;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam5: ZSTD_cParameter = 1002;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam7: ZSTD_cParameter = 1004;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam8: ZSTD_cParameter = 1005;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam9: ZSTD_cParameter = 1006;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam10: ZSTD_cParameter = 1007;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam11: ZSTD_cParameter = 1008;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam12: ZSTD_cParameter = 1009;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam13: ZSTD_cParameter = 1010;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam14: ZSTD_cParameter = 1011;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam15: ZSTD_cParameter = 1012;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam16: ZSTD_cParameter = 1013;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam17: ZSTD_cParameter = 1014;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam18: ZSTD_cParameter = 1015;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam19: ZSTD_cParameter = 1016;
-pub const ZSTD_cParameter_ZSTD_c_experimentalParam20: ZSTD_cParameter = 1017;
-pub type ZSTD_cParameter = ::std::os::raw::c_int;
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZSTD_strategy {
+    ZSTD_fast = 1,
+    ZSTD_dfast = 2,
+    ZSTD_greedy = 3,
+    ZSTD_lazy = 4,
+    ZSTD_lazy2 = 5,
+    ZSTD_btlazy2 = 6,
+    ZSTD_btopt = 7,
+    ZSTD_btultra = 8,
+    ZSTD_btultra2 = 9,
+}
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZSTD_cParameter {
+    ZSTD_c_compressionLevel = 100,
+    ZSTD_c_windowLog = 101,
+    ZSTD_c_hashLog = 102,
+    ZSTD_c_chainLog = 103,
+    ZSTD_c_searchLog = 104,
+    ZSTD_c_minMatch = 105,
+    ZSTD_c_targetLength = 106,
+    ZSTD_c_strategy = 107,
+    ZSTD_c_targetCBlockSize = 130,
+    ZSTD_c_enableLongDistanceMatching = 160,
+    ZSTD_c_ldmHashLog = 161,
+    ZSTD_c_ldmMinMatch = 162,
+    ZSTD_c_ldmBucketSizeLog = 163,
+    ZSTD_c_ldmHashRateLog = 164,
+    ZSTD_c_contentSizeFlag = 200,
+    ZSTD_c_checksumFlag = 201,
+    ZSTD_c_dictIDFlag = 202,
+    ZSTD_c_nbWorkers = 400,
+    ZSTD_c_jobSize = 401,
+    ZSTD_c_overlapLog = 402,
+    ZSTD_c_experimentalParam1 = 500,
+    ZSTD_c_experimentalParam2 = 10,
+    ZSTD_c_experimentalParam3 = 1000,
+    ZSTD_c_experimentalParam4 = 1001,
+    ZSTD_c_experimentalParam5 = 1002,
+    ZSTD_c_experimentalParam7 = 1004,
+    ZSTD_c_experimentalParam8 = 1005,
+    ZSTD_c_experimentalParam9 = 1006,
+    ZSTD_c_experimentalParam10 = 1007,
+    ZSTD_c_experimentalParam11 = 1008,
+    ZSTD_c_experimentalParam12 = 1009,
+    ZSTD_c_experimentalParam13 = 1010,
+    ZSTD_c_experimentalParam14 = 1011,
+    ZSTD_c_experimentalParam15 = 1012,
+    ZSTD_c_experimentalParam16 = 1013,
+    ZSTD_c_experimentalParam17 = 1014,
+    ZSTD_c_experimentalParam18 = 1015,
+    ZSTD_c_experimentalParam19 = 1016,
+    ZSTD_c_experimentalParam20 = 1017,
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ZSTD_bounds {
@@ -256,10 +265,13 @@ unsafe extern "C" {
         pledgedSrcSize: ::std::os::raw::c_ulonglong,
     ) -> usize;
 }
-pub const ZSTD_ResetDirective_ZSTD_reset_session_only: ZSTD_ResetDirective = 1;
-pub const ZSTD_ResetDirective_ZSTD_reset_parameters: ZSTD_ResetDirective = 2;
-pub const ZSTD_ResetDirective_ZSTD_reset_session_and_parameters: ZSTD_ResetDirective = 3;
-pub type ZSTD_ResetDirective = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZSTD_ResetDirective {
+    ZSTD_reset_session_only = 1,
+    ZSTD_reset_parameters = 2,
+    ZSTD_reset_session_and_parameters = 3,
+}
 unsafe extern "C" {
     #[doc = " ZSTD_CCtx_reset() :\n  There are 2 different things that can be reset, independently or jointly :\n  - The session : will stop compressing current frame, and make CCtx ready to start a new one.\n                  Useful after an error, or to interrupt any ongoing compression.\n                  Any internal data not yet flushed is cancelled.\n                  Compression parameters and dictionary remain unchanged.\n                  They will be used to compress next frame.\n                  Resetting session never fails.\n  - The parameters : changes all parameters back to \"default\".\n                  This also removes any reference to any dictionary or external sequence producer.\n                  Parameters can only be changed between 2 sessions (i.e. no compression is currently ongoing)\n                  otherwise the reset fails, and function returns an error value (which can be tested using ZSTD_isError())\n  - Both : similar to resetting the session, followed by resetting parameters."]
     pub fn ZSTD_CCtx_reset(cctx: *mut ZSTD_CCtx, reset: ZSTD_ResetDirective) -> usize;
@@ -274,15 +286,18 @@ unsafe extern "C" {
         srcSize: usize,
     ) -> usize;
 }
-pub const ZSTD_dParameter_ZSTD_d_windowLogMax: ZSTD_dParameter = 100;
-pub const ZSTD_dParameter_ZSTD_d_experimentalParam1: ZSTD_dParameter = 1000;
-pub const ZSTD_dParameter_ZSTD_d_experimentalParam2: ZSTD_dParameter = 1001;
-pub const ZSTD_dParameter_ZSTD_d_experimentalParam3: ZSTD_dParameter = 1002;
-pub const ZSTD_dParameter_ZSTD_d_experimentalParam4: ZSTD_dParameter = 1003;
-pub const ZSTD_dParameter_ZSTD_d_experimentalParam5: ZSTD_dParameter = 1004;
-pub const ZSTD_dParameter_ZSTD_d_experimentalParam6: ZSTD_dParameter = 1005;
+#[repr(i32)]
 #[doc = "  Advanced decompression API (Requires v1.4.0+)"]
-pub type ZSTD_dParameter = ::std::os::raw::c_int;
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZSTD_dParameter {
+    ZSTD_d_windowLogMax = 100,
+    ZSTD_d_experimentalParam1 = 1000,
+    ZSTD_d_experimentalParam2 = 1001,
+    ZSTD_d_experimentalParam3 = 1002,
+    ZSTD_d_experimentalParam4 = 1003,
+    ZSTD_d_experimentalParam5 = 1004,
+    ZSTD_d_experimentalParam6 = 1005,
+}
 unsafe extern "C" {
     #[doc = " ZSTD_dParam_getBounds() :\n  All parameters must belong to an interval with lower and upper bounds,\n  otherwise they will either trigger an error or be automatically clamped.\n @return : a structure, ZSTD_bounds, which contains\n         - an error status field, which must be tested using ZSTD_isError()\n         - both lower and upper bounds, inclusive"]
     pub fn ZSTD_dParam_getBounds(dParam: ZSTD_dParameter) -> ZSTD_bounds;
@@ -352,10 +367,13 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn ZSTD_freeCStream(zcs: *mut ZSTD_CStream) -> usize;
 }
-pub const ZSTD_EndDirective_ZSTD_e_continue: ZSTD_EndDirective = 0;
-pub const ZSTD_EndDirective_ZSTD_e_flush: ZSTD_EndDirective = 1;
-pub const ZSTD_EndDirective_ZSTD_e_end: ZSTD_EndDirective = 2;
-pub type ZSTD_EndDirective = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZSTD_EndDirective {
+    ZSTD_e_continue = 0,
+    ZSTD_e_flush = 1,
+    ZSTD_e_end = 2,
+}
 unsafe extern "C" {
     #[doc = " ZSTD_compressStream2() : Requires v1.4.0+\n  Behaves about the same as ZSTD_compressStream, with additional control on end directive.\n  - Compression parameters are pushed into CCtx before starting compression, using ZSTD_CCtx_set*()\n  - Compression parameters cannot be changed once compression is started (save a list of exceptions in multi-threading mode)\n  - output->pos must be <= dstCapacity, input->pos must be <= srcSize\n  - output->pos and input->pos will be updated. They are guaranteed to remain below their respective limit.\n  - endOp must be a valid directive\n  - When nbWorkers==0 (default), function is blocking : it completes its job before returning to caller.\n  - When nbWorkers>=1, function is non-blocking : it copies a portion of input, distributes jobs to internal worker threads, flush to output whatever is available,\n                                                  and then immediately returns, just indicating that there is some data remaining to be flushed.\n                                                  The function nonetheless guarantees forward progress : it will return only after it reads or write at least 1+ byte.\n  - Exception : if the first call requests a ZSTD_e_end directive and provides enough dstCapacity, the function delegates to ZSTD_compress2() which is always blocking.\n  - @return provides a minimum amount of data remaining to be flushed from internal buffers\n            or an error code, which can be tested using ZSTD_isError().\n            if @return != 0, flush is not fully completed, there is still some data left within internal buffers.\n            This is useful for ZSTD_e_flush, since in this case more flushes are necessary to empty all buffers.\n            For ZSTD_e_end, @return == 0 when internal buffers are fully flushed and frame is completed.\n  - after a ZSTD_e_end directive, if internal buffer is not fully flushed (@return != 0),\n            only ZSTD_e_end or ZSTD_e_flush operations are allowed.\n            Before starting a new compression job, or changing compression parameters,\n            it is required to fully flush internal buffers.\n  - note: if an operation ends with an error, it may leave @cctx in an undefined state.\n          Therefore, it's UB to invoke ZSTD_compressStream2() of ZSTD_compressStream() on such a state.\n          In order to be re-employed after an error, a state must be reset,\n          which can be done explicitly (ZSTD_CCtx_reset()),\n          or is sometimes implied by methods starting a new compression job (ZSTD_initCStream(), ZSTD_compressCCtx())"]
     pub fn ZSTD_compressStream2(

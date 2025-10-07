@@ -22,7 +22,9 @@
   <ItemGroup>
     <ProjectReference Include="NativeCompressions.LZ4.csproj" />
     <ProjectReference Include="NativeCompressions.Zstandard.csproj" />
-    <ProjectReference Include="NativeCompressions.OpenZL.csproj" />
+
+    <!-- Currently OpenZL support is experimental so don't include in global package. -->
+    <!--<ProjectReference Include="NativeCompressions.OpenZL.csproj" />-->
   </ItemGroup>
 
 </Project>

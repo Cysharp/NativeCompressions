@@ -118,19 +118,28 @@ public static partial class LZ4
         return true;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool IsError(nuint code)
     {
         return LZ4F_isError(code) != 0;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void ThrowIfError(nuint code)
     {
         if (LZ4F_isError(code) != 0)
+        {
+            Throw(code);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static void Throw(nuint code)
         {
             var error = GetErrorName(code);
             throw new LZ4Exception(error);
         }
     }
+
 
     static unsafe string GetErrorName(nuint code)
     {

@@ -120,7 +120,7 @@ public unsafe class ZstandardDecoder : SafeHandle
         Validate();
         var context = (ZSTD_DCtx_s*)handle;
 
-        var result = ZSTD_DCtx_reset(context, (int)ZSTD_ResetDirective.ZSTD_reset_session_only);
+        var result = ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_only);
         Zstandard.ThrowIfError(result);
     }
 
@@ -129,7 +129,7 @@ public unsafe class ZstandardDecoder : SafeHandle
         Validate();
         var context = (ZSTD_DCtx_s*)handle;
 
-        var result = ZSTD_DCtx_reset(context, (int)ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
+        var result = ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
         Zstandard.ThrowIfError(result);
 
         options.SetParameter(context);
@@ -145,21 +145,5 @@ public unsafe class ZstandardDecoder : SafeHandle
         ZSTD_freeDCtx((ZSTD_DCtx_s*)handle);
         handle = IntPtr.Zero;
         return true;
-    }
-
-    enum ZSTD_dParameter
-    {
-        ZSTD_d_windowLogMax = 100,
-        ZSTD_d_format = 101,
-        ZSTD_d_stableOutBuffer = 102,
-        ZSTD_d_forceIgnoreChecksum = 103,
-        ZSTD_d_refMultipleDDicts = 104
-    }
-
-    enum ZSTD_ResetDirective
-    {
-        ZSTD_reset_session_only = 1,
-        ZSTD_reset_parameters = 2,
-        ZSTD_reset_session_and_parameters = 3
     }
 }
