@@ -407,8 +407,12 @@ jobs:
           mkdir -p release/runtimes/{ios-arm64,ios-x64}/native
 
           # Windows
-          cp artifacts/openzl-win-x64/*.dll release/runtimes/win-x64/native/openzl.dll 2>/dev/null || true
-          cp artifacts/openzl-win-arm64/*.dll release/runtimes/win-arm64/native/openzl.dll 2>/dev/null || true
+          if [ -f artifacts/openzl-win-x64/libopenzl.dll ]; then
+            cp artifacts/openzl-win-x64/libopenzl.dll release/runtimes/win-x64/native/
+          fi
+          if [ -f artifacts/openzl-win-arm64/libopenzl.dll ]; then
+            cp artifacts/openzl-win-arm64/libopenzl.dll release/runtimes/win-arm64/native/
+          fi
 
           # Linux
           if [ -f artifacts/openzl-linux-x64/libopenzl.so ]; then
@@ -516,11 +520,11 @@ jobs:
           echo "::group::Copy new files"
 
             # Windows
-            if [ -f artifacts/openzl-win-x64/openzl.dll ]; then
-              cp -f artifacts/openzl-win-x64/openzl.dll "${DEST_BASE_PATH}/win-x64/native/openzl.dll"
+            if [ -f artifacts/openzl-win-x64/libopenzl.dll ]; then
+              cp -f artifacts/openzl-win-x64/libopenzl.dll "${DEST_BASE_PATH}/win-x64/native/libopenzl.dll"
             fi
-            if [ -f artifacts/openzl-win-arm64/openzl.dll ]; then
-              cp -f artifacts/openzl-win-arm64/openzl.dll "${DEST_BASE_PATH}/win-arm64/native/openzl.dll"
+            if [ -f artifacts/openzl-win-arm64/libopenzl.dll ]; then
+              cp -f artifacts/openzl-win-arm64/libopenzl.dll "${DEST_BASE_PATH}/win-arm64/native/libopenzl.dll"
             fi
 
             # Linux
@@ -583,7 +587,7 @@ jobs:
             - Windows x64/ARM64
             - Linux x64/ARM64
             - macOS x64/ARM64
-            - Android ARM/ARM64/x64
+            - Android ARM64/x64 (ARM not supported by OpenZL)
             - iOS ARM64/x64 (device/simulator)
 
           ## Build artifacts

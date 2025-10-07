@@ -12,7 +12,7 @@ name: Build-Native-ZSTD
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *' # Every day at 3:00 AM (UTC)
+    - cron: "0 3 * * *" # Every day at 3:00 AM (UTC)
 
 jobs:
   check_new_release:
@@ -369,6 +369,7 @@ jobs:
       - name: Build shared library for Android
         run: |
           export PATH="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+
           cd zstd/lib
           make lib-release CC="${{ matrix.cc }}" MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j "$(nproc)"
           ls -la libzstd.so*
@@ -384,7 +385,16 @@ jobs:
           path: artifacts/android-${{ matrix.arch }}/*
 
   package-all:
-    needs: [check_new_release, build-windows, build-windows-arm64, build-linux, build-macos, build-ios, build-android]
+    needs:
+      [
+        check_new_release,
+        build-windows,
+        build-windows-arm64,
+        build-linux,
+        build-macos,
+        build-ios,
+        build-android,
+      ]
     if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: write
@@ -404,8 +414,12 @@ jobs:
           mkdir -p release/runtimes/{ios-arm64,ios-x64}/native
 
           # Windows
-          cp artifacts/zstd-win-x64/*.dll release/runtimes/win-x64/native/libzstd.dll 2>/dev/null || true
-          cp artifacts/zstd-win-arm64/*.dll release/runtimes/win-arm64/native/libzstd.dll 2>/dev/null || true
+          if [ -f artifacts/zstd-win-x64/libzstd.dll ]; then
+            cp -f artifacts/zstd-win-x64/libzstd.dll release/runtimes/win-x64/native/libzstd.dll
+          fi
+          if [ -f artifacts/zstd-win-arm64/libzstd.dll ]; then
+            cp -f artifacts/zstd-win-arm64/libzstd.dll release/runtimes/win-arm64/native/libzstd.dll
+          fi
 
           # Linux
           if [ -f artifacts/zstd-linux-x64/libzstd.so ]; then
