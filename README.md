@@ -319,7 +319,7 @@ internal static void ThrowIfError(ZL_Result_size_t_u result)
     if (IsError(result))
     {
         var error = GetErrorName(result._code);
-        throw new OpenZLException(error);
+        throw new InvalidOperationException(error);
     }
 }
 
