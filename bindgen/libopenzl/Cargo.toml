@@ -1,0 +1,12 @@
+[package]
+name = "libopenzl"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "openzl"
+crate-type = ["cdylib"]
+
+[build-dependencies]
+bindgen = "0.72.1"
+csbindgen = "1.9.5"

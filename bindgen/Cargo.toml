@@ -2,4 +2,5 @@
 members = [
     "liblz4",
     "libzstd",
+    "libopenzl",
 ]
