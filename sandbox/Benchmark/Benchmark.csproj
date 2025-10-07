@@ -50,6 +50,7 @@
     <ProjectReference Include="..\..\src\NativeCompressions.BenchmarkHelper\NativeCompressions.BenchmarkHelper.csproj" />
     <ProjectReference Include="..\..\src\NativeCompressions.LZ4.csproj" />
     <ProjectReference Include="..\..\src\NativeCompressions.Zstandard.csproj" />
+    <ProjectReference Include="..\..\src\NativeCompressions.OpenZL.csproj" />
   </ItemGroup>
 
 

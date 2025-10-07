@@ -22,9 +22,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\NativeCompressions.LZ4.csproj" />
-    <ProjectReference Include="..\..\src\NativeCompressions.OpenZL.Core\NativeCompressions.OpenZL.Core.csproj" />
-    <ProjectReference Include="..\..\src\NativeCompressions.OpenZL.Runtime\NativeCompressions.OpenZL.Runtime.win-x64.csproj" />
     <ProjectReference Include="..\..\src\NativeCompressions.Zstandard.csproj" />
+    <ProjectReference Include="..\..\src\NativeCompressions.OpenZL.csproj" />
   </ItemGroup>
 
   <!--<PackageReference Include="K4os.Compression.LZ4" Version="1.3.5" />
