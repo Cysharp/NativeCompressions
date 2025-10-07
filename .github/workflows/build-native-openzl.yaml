@@ -459,7 +459,6 @@ jobs:
           name: openzl-native-package
           path: |
             openzl-native-libraries.tar.gz
-            openzl-native-libraries.zip
 
   create-pr:
     needs: [check_new_release, package-all]

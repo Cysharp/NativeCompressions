@@ -466,7 +466,6 @@ jobs:
           name: zstd-native-package
           path: |
             zstd-native-libraries.tar.gz
-            zstd-native-libraries.zip
 
   create-pr:
     needs: [check_new_release, package-all]
