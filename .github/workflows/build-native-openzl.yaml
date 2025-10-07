@@ -117,11 +117,10 @@ jobs:
           ls -la libopenzl.so
           file -L libopenzl.so
       - name: Prepare artifacts
-        shell: pwsh
+        shell: bash
         run: |
-          New-Item -ItemType Directory -Force -Path "artifacts/win-${{ matrix.arch }}"
-          $targetFile = Get-Item "openzl/libopenzl.so" | Select-Object -ExpandProperty Target
-          Copy-Item "openzl/$targetFile" -Destination "artifacts/win-${{ matrix.arch }}/libopenzl.dll"
+          mkdir -p artifacts/win-${{ matrix.arch }}
+          cp -L openzl/libopenzl.so artifacts/win-${{ matrix.arch }}/libopenzl.dll
       - name: Upload Windows artifacts
         uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
