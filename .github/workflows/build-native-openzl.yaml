@@ -160,12 +160,7 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/win-arm64
-          cp openzl/libopenzl.so artifacts/win-arm64/
-          cd artifacts/win-arm64
-          if [ -L libopenzl.so ]; then
-            cp -L libopenzl.so libopenzl.so.dll
-            mv libopenzl.so.dll libopenzl.dll
-          fi
+          cp -L openzl/libopenzl.so artifacts/win-arm64/libopenzl.dll
       - name: Upload artifacts
         uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
@@ -215,12 +210,7 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/linux-${{ matrix.arch }}
-          cp openzl/libopenzl.so* artifacts/linux-${{ matrix.arch }}/
-          cd artifacts/linux-${{ matrix.arch }}
-          if [ -L libopenzl.so ]; then
-            cp -L libopenzl.so libopenzl.so.tmp
-            mv libopenzl.so.tmp libopenzl.so
-          fi
+          cp -L openzl/libopenzl.so artifacts/linux-${{ matrix.arch }}/
       - name: Upload Linux artifacts
         uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
@@ -265,12 +255,7 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/osx-${{ matrix.arch }}
-          cp openzl/libopenzl.so artifacts/osx-${{ matrix.arch }}/
-          cd artifacts/osx-${{ matrix.arch }}
-          if [ -L libopenzl.so ]; then
-            cp -L libopenzl.so libopenzl.so.dylib
-            mv libopenzl.so.dylib libopenzl.dylib
-          fi
+          cp -L openzl/libopenzl.so artifacts/osx-${{ matrix.arch }}/libopenzl.dylib
       - name: Upload artifacts
         uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
@@ -319,12 +304,12 @@ jobs:
           make libopenzl.a BUILD_TYPE=OPT CC="clang" MOREFLAGS="${{ matrix.cflags }} -isysroot $SDK_PATH" -j "$(sysctl -n hw.ncpu)"
 
           ls -la
-          file libopenzl.a
+          file -L libopenzl.a
           lipo -info libopenzl.a
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/ios-${{ matrix.arch }}
-          cp openzl/libopenzl.a artifacts/ios-${{ matrix.arch }}/
+          cp -L openzl/libopenzl.a artifacts/ios-${{ matrix.arch }}/
       - name: Upload iOS artifacts
         uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
@@ -381,12 +366,12 @@ jobs:
 
           cd openzl
           make libopenzl.so BUILD_TYPE=OPT CC="${{ matrix.cc }}" MOREFRAGS="-flto" -j "$(nproc)"
-          ls -la libopenzl.so*
-          file libopenzl.so*
+          ls -la libopenzl.so
+          file -L libopenzl.so
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/android-${{ matrix.arch }}
-          cp openzl/libopenzl.so artifacts/android-${{ matrix.arch }}/
+          cp -L openzl/libopenzl.so artifacts/android-${{ matrix.arch }}/
       - name: Upload Android artifacts
         uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
