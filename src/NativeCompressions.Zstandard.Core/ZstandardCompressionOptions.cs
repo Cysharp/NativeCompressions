@@ -384,10 +384,7 @@ public readonly record struct ZstandardCompressionOptions
         if (value != 0)
         {
             var code = ZSTD_CCtx_setParameter(context, (int)parameter, value);
-            if (Zstandard.IsError(code)) // for inlining
-            {
-                Zstandard.ThrowAsError(code);
-            }
+            Zstandard.ThrowIfError(code);
         }
     }
 
@@ -397,10 +394,7 @@ public readonly record struct ZstandardCompressionOptions
         if (!value)
         {
             var code = ZSTD_CCtx_setParameter(context, (int)parameter, 0); // set to false
-            if (Zstandard.IsError(code)) // for inlining
-            {
-                Zstandard.ThrowAsError(code);
-            }
+            Zstandard.ThrowIfError(code);
         }
     }
 
@@ -410,10 +404,7 @@ public readonly record struct ZstandardCompressionOptions
         if (value)
         {
             var code = ZSTD_CCtx_setParameter(context, (int)parameter, 1); // set to true
-            if (Zstandard.IsError(code)) // for inlining
-            {
-                Zstandard.ThrowAsError(code);
-            }
+            Zstandard.ThrowIfError(code);
         }
     }
 

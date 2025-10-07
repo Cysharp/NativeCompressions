@@ -395,10 +395,13 @@ pub struct ZL_Edge_s {
     _unused: [u8; 0],
 }
 pub type ZL_Edge = ZL_Edge_s;
-pub const ZL_TernaryParam_ZL_TernaryParam_auto: ZL_TernaryParam = 0;
-pub const ZL_TernaryParam_ZL_TernaryParam_enable: ZL_TernaryParam = 1;
-pub const ZL_TernaryParam_ZL_TernaryParam_disable: ZL_TernaryParam = 2;
-pub type ZL_TernaryParam = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZL_TernaryParam {
+    ZL_TernaryParam_auto = 0,
+    ZL_TernaryParam_enable = 1,
+    ZL_TernaryParam_disable = 2,
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ZL_OpaquePtr {
@@ -563,61 +566,64 @@ pub type ZL_StaticErrorInfo = ZL_StaticErrorInfo_s;
 pub type ZL_Error = ZL_Error_s;
 #[doc = " Internally, there are two kinds of error info objects: dynamic and static,\n which are, like they sound, respectively dynamically allocated (and which\n must be freed) or statically allocated, but which therefore can't contain\n any runtime information.\n\n You should never assign or dereference these pointers directly:\n\n 1. We pack metadata into the unused bits of the pointers, which needs to be\n    masked out to retrieve the actual pointer.\n 2. You need interact with that metadata to figure out or set which pointer\n    is active.\n\n Instead:\n\n You should use @ref ZL_E_dy or @ref ZL_E_st to check for the presence of and\n to extract the (possibly NULL) pointers to the sub-types.\n\n You should use @ref ZL_EI_fromDy or @ref ZL_EI_fromSt to construct this\n object from one of those pointer."]
 pub type ZL_ErrorInfo = ZL_ErrorInfo_u;
-pub const ZL_ErrorCode_ZL_ErrorCode_no_error: ZL_ErrorCode = 0;
-pub const ZL_ErrorCode_ZL_ErrorCode_GENERIC: ZL_ErrorCode = 1;
-pub const ZL_ErrorCode_ZL_ErrorCode_srcSize_tooSmall: ZL_ErrorCode = 3;
-pub const ZL_ErrorCode_ZL_ErrorCode_srcSize_tooLarge: ZL_ErrorCode = 4;
-pub const ZL_ErrorCode_ZL_ErrorCode_dstCapacity_tooSmall: ZL_ErrorCode = 5;
-pub const ZL_ErrorCode_ZL_ErrorCode_userBuffer_alignmentIncorrect: ZL_ErrorCode = 6;
-pub const ZL_ErrorCode_ZL_ErrorCode_decompression_incorrectAPI: ZL_ErrorCode = 7;
-pub const ZL_ErrorCode_ZL_ErrorCode_userBuffers_invalidNum: ZL_ErrorCode = 8;
-pub const ZL_ErrorCode_ZL_ErrorCode_invalidName: ZL_ErrorCode = 9;
-pub const ZL_ErrorCode_ZL_ErrorCode_header_unknown: ZL_ErrorCode = 10;
-pub const ZL_ErrorCode_ZL_ErrorCode_frameParameter_unsupported: ZL_ErrorCode = 11;
-pub const ZL_ErrorCode_ZL_ErrorCode_corruption: ZL_ErrorCode = 12;
-pub const ZL_ErrorCode_ZL_ErrorCode_compressedChecksumWrong: ZL_ErrorCode = 13;
-pub const ZL_ErrorCode_ZL_ErrorCode_contentChecksumWrong: ZL_ErrorCode = 14;
-pub const ZL_ErrorCode_ZL_ErrorCode_outputs_tooNumerous: ZL_ErrorCode = 15;
-pub const ZL_ErrorCode_ZL_ErrorCode_compressionParameter_invalid: ZL_ErrorCode = 20;
-pub const ZL_ErrorCode_ZL_ErrorCode_parameter_invalid: ZL_ErrorCode = 21;
-pub const ZL_ErrorCode_ZL_ErrorCode_outputID_invalid: ZL_ErrorCode = 22;
-pub const ZL_ErrorCode_ZL_ErrorCode_invalidRequest_singleOutputFrameOnly: ZL_ErrorCode = 23;
-pub const ZL_ErrorCode_ZL_ErrorCode_outputNotCommitted: ZL_ErrorCode = 24;
-pub const ZL_ErrorCode_ZL_ErrorCode_outputNotReserved: ZL_ErrorCode = 25;
-pub const ZL_ErrorCode_ZL_ErrorCode_segmenter_inputNotConsumed: ZL_ErrorCode = 26;
-pub const ZL_ErrorCode_ZL_ErrorCode_graph_invalid: ZL_ErrorCode = 30;
-pub const ZL_ErrorCode_ZL_ErrorCode_graph_nonserializable: ZL_ErrorCode = 31;
-pub const ZL_ErrorCode_ZL_ErrorCode_invalidTransform: ZL_ErrorCode = 32;
-pub const ZL_ErrorCode_ZL_ErrorCode_graph_invalidNumInputs: ZL_ErrorCode = 33;
-pub const ZL_ErrorCode_ZL_ErrorCode_successor_invalid: ZL_ErrorCode = 40;
-pub const ZL_ErrorCode_ZL_ErrorCode_successor_alreadySet: ZL_ErrorCode = 41;
-pub const ZL_ErrorCode_ZL_ErrorCode_successor_invalidNumInputs: ZL_ErrorCode = 42;
-pub const ZL_ErrorCode_ZL_ErrorCode_inputType_unsupported: ZL_ErrorCode = 43;
-pub const ZL_ErrorCode_ZL_ErrorCode_graphParameter_invalid: ZL_ErrorCode = 44;
-pub const ZL_ErrorCode_ZL_ErrorCode_nodeParameter_invalid: ZL_ErrorCode = 50;
-pub const ZL_ErrorCode_ZL_ErrorCode_nodeParameter_invalidValue: ZL_ErrorCode = 51;
-pub const ZL_ErrorCode_ZL_ErrorCode_transform_executionFailure: ZL_ErrorCode = 52;
-pub const ZL_ErrorCode_ZL_ErrorCode_customNode_definitionInvalid: ZL_ErrorCode = 53;
-pub const ZL_ErrorCode_ZL_ErrorCode_node_unexpected_input_type: ZL_ErrorCode = 54;
-pub const ZL_ErrorCode_ZL_ErrorCode_node_invalid_input: ZL_ErrorCode = 55;
-pub const ZL_ErrorCode_ZL_ErrorCode_node_invalid: ZL_ErrorCode = 56;
-pub const ZL_ErrorCode_ZL_ErrorCode_nodeExecution_invalidOutputs: ZL_ErrorCode = 57;
-pub const ZL_ErrorCode_ZL_ErrorCode_nodeRegen_countIncorrect: ZL_ErrorCode = 58;
-pub const ZL_ErrorCode_ZL_ErrorCode_formatVersion_unsupported: ZL_ErrorCode = 60;
-pub const ZL_ErrorCode_ZL_ErrorCode_formatVersion_notSet: ZL_ErrorCode = 61;
-pub const ZL_ErrorCode_ZL_ErrorCode_node_versionMismatch: ZL_ErrorCode = 62;
-pub const ZL_ErrorCode_ZL_ErrorCode_allocation: ZL_ErrorCode = 70;
-pub const ZL_ErrorCode_ZL_ErrorCode_internalBuffer_tooSmall: ZL_ErrorCode = 71;
-pub const ZL_ErrorCode_ZL_ErrorCode_integerOverflow: ZL_ErrorCode = 72;
-pub const ZL_ErrorCode_ZL_ErrorCode_stream_wrongInit: ZL_ErrorCode = 73;
-pub const ZL_ErrorCode_ZL_ErrorCode_streamType_incorrect: ZL_ErrorCode = 74;
-pub const ZL_ErrorCode_ZL_ErrorCode_streamCapacity_tooSmall: ZL_ErrorCode = 75;
-pub const ZL_ErrorCode_ZL_ErrorCode_streamParameter_invalid: ZL_ErrorCode = 76;
-pub const ZL_ErrorCode_ZL_ErrorCode_logicError: ZL_ErrorCode = 80;
-pub const ZL_ErrorCode_ZL_ErrorCode_temporaryLibraryLimitation: ZL_ErrorCode = 81;
-pub const ZL_ErrorCode_ZL_ErrorCode_maxCode: ZL_ErrorCode = 99;
+#[repr(i32)]
 #[doc = " ZL_ErrorCode *"]
-pub type ZL_ErrorCode = ::std::os::raw::c_int;
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZL_ErrorCode {
+    ZL_ErrorCode_no_error = 0,
+    ZL_ErrorCode_GENERIC = 1,
+    ZL_ErrorCode_srcSize_tooSmall = 3,
+    ZL_ErrorCode_srcSize_tooLarge = 4,
+    ZL_ErrorCode_dstCapacity_tooSmall = 5,
+    ZL_ErrorCode_userBuffer_alignmentIncorrect = 6,
+    ZL_ErrorCode_decompression_incorrectAPI = 7,
+    ZL_ErrorCode_userBuffers_invalidNum = 8,
+    ZL_ErrorCode_invalidName = 9,
+    ZL_ErrorCode_header_unknown = 10,
+    ZL_ErrorCode_frameParameter_unsupported = 11,
+    ZL_ErrorCode_corruption = 12,
+    ZL_ErrorCode_compressedChecksumWrong = 13,
+    ZL_ErrorCode_contentChecksumWrong = 14,
+    ZL_ErrorCode_outputs_tooNumerous = 15,
+    ZL_ErrorCode_compressionParameter_invalid = 20,
+    ZL_ErrorCode_parameter_invalid = 21,
+    ZL_ErrorCode_outputID_invalid = 22,
+    ZL_ErrorCode_invalidRequest_singleOutputFrameOnly = 23,
+    ZL_ErrorCode_outputNotCommitted = 24,
+    ZL_ErrorCode_outputNotReserved = 25,
+    ZL_ErrorCode_segmenter_inputNotConsumed = 26,
+    ZL_ErrorCode_graph_invalid = 30,
+    ZL_ErrorCode_graph_nonserializable = 31,
+    ZL_ErrorCode_invalidTransform = 32,
+    ZL_ErrorCode_graph_invalidNumInputs = 33,
+    ZL_ErrorCode_successor_invalid = 40,
+    ZL_ErrorCode_successor_alreadySet = 41,
+    ZL_ErrorCode_successor_invalidNumInputs = 42,
+    ZL_ErrorCode_inputType_unsupported = 43,
+    ZL_ErrorCode_graphParameter_invalid = 44,
+    ZL_ErrorCode_nodeParameter_invalid = 50,
+    ZL_ErrorCode_nodeParameter_invalidValue = 51,
+    ZL_ErrorCode_transform_executionFailure = 52,
+    ZL_ErrorCode_customNode_definitionInvalid = 53,
+    ZL_ErrorCode_node_unexpected_input_type = 54,
+    ZL_ErrorCode_node_invalid_input = 55,
+    ZL_ErrorCode_node_invalid = 56,
+    ZL_ErrorCode_nodeExecution_invalidOutputs = 57,
+    ZL_ErrorCode_nodeRegen_countIncorrect = 58,
+    ZL_ErrorCode_formatVersion_unsupported = 60,
+    ZL_ErrorCode_formatVersion_notSet = 61,
+    ZL_ErrorCode_node_versionMismatch = 62,
+    ZL_ErrorCode_allocation = 70,
+    ZL_ErrorCode_internalBuffer_tooSmall = 71,
+    ZL_ErrorCode_integerOverflow = 72,
+    ZL_ErrorCode_stream_wrongInit = 73,
+    ZL_ErrorCode_streamType_incorrect = 74,
+    ZL_ErrorCode_streamCapacity_tooSmall = 75,
+    ZL_ErrorCode_streamParameter_invalid = 76,
+    ZL_ErrorCode_logicError = 80,
+    ZL_ErrorCode_temporaryLibraryLimitation = 81,
+    ZL_ErrorCode_maxCode = 99,
+}
 unsafe extern "C" {
     pub fn _errno() -> *mut ::std::os::raw::c_int;
 }
@@ -1704,15 +1710,21 @@ pub type uint_fast32_t = ::std::os::raw::c_uint;
 pub type uint_fast64_t = ::std::os::raw::c_ulonglong;
 pub type intmax_t = ::std::os::raw::c_longlong;
 pub type uintmax_t = ::std::os::raw::c_ulonglong;
-pub const ZL_Type_ZL_Type_serial: ZL_Type = 1;
-pub const ZL_Type_ZL_Type_struct: ZL_Type = 2;
-pub const ZL_Type_ZL_Type_numeric: ZL_Type = 4;
-pub const ZL_Type_ZL_Type_string: ZL_Type = 8;
+#[repr(i32)]
 #[doc = " Any Data object has necessary a Type.\n The least specific Type is `ZL_Type_serial`,\n which means it's just a blob of bytes.\n Codecs can only accept and produce specified data Types.\n In contrast, Selectors & Graphs may optionally accept multiple data Types,\n using bitmap masking (example: `ZL_Type_struct | ZL_Type_numeric`)."]
-pub type ZL_Type = ::std::os::raw::c_int;
-pub const ZL_DataArenaType_ZL_DataArenaType_heap: ZL_DataArenaType = 0;
-pub const ZL_DataArenaType_ZL_DataArenaType_stack: ZL_DataArenaType = 1;
-pub type ZL_DataArenaType = ::std::os::raw::c_int;
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZL_Type {
+    ZL_Type_serial = 1,
+    ZL_Type_struct = 2,
+    ZL_Type_numeric = 4,
+    ZL_Type_string = 8,
+}
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZL_DataArenaType {
+    ZL_DataArenaType_heap = 0,
+    ZL_DataArenaType_stack = 1,
+}
 unsafe extern "C" {
     pub fn ZL_Data_id(in_: *const ZL_Data) -> ZL_DataID;
 }
@@ -2072,24 +2084,27 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn ZL_CCtx_free(cctx: *mut ZL_CCtx);
 }
-#[doc = " Only meaningful at CCtx level (ignored at CGraph level)\n By default, parameters are reset between compression sessions\n setting this parameter to 1 keep the parameters across compression\n sessions."]
-pub const ZL_CParam_ZL_CParam_stickyParameters: ZL_CParam = 1;
-#[doc = " Scale amplitude to determine"]
-pub const ZL_CParam_ZL_CParam_compressionLevel: ZL_CParam = 2;
-#[doc = " Scale amplitude to determine"]
-pub const ZL_CParam_ZL_CParam_decompressionLevel: ZL_CParam = 3;
-#[doc = " Sets the format version number to use for encoding.\n See @ZL_getDefaultEncodingVersion for details.\n @default 0 means use format version ZL_getDefaultEncodingVersion()."]
-pub const ZL_CParam_ZL_CParam_formatVersion: ZL_CParam = 4;
-#[doc = " Select behavior when an internal compression stage fails.\n For example, when expecting an array of 32-bit integers,\n but the input size is not a clean multiple of 4.\n Strict mode stops at such stage and outputs an error.\n Permissive mode engages a generic backup compression mechanism,\n to successfully complete compression, at the cost of efficiency.\n At the time of this writing, backup is ZL_GRAPH_COMPRESS_GENERIC.\n Valid values for this parameter use the ZS2_cv3_* format.\n @default 0 currently means strict mode. This may change in the\n future."]
-pub const ZL_CParam_ZL_CParam_permissiveCompression: ZL_CParam = 5;
-#[doc = " Enable checksum of the compressed frame.\n This is useful to check for corruption that happens after\n compression.\n Valid values for this parameter use the ZS2_cv3_* format.\n @default 0 currently means checksum, might change in the future."]
-pub const ZL_CParam_ZL_CParam_compressedChecksum: ZL_CParam = 6;
-#[doc = " Enable checksum of the uncompressed content contained in the frame.\n This is useful to check for corruption that happens after\n compression,\n or corruption introduced during (de)compression. However, it cannot\n distinguish the two alone. In order to determine whether it is\n corruption or a bug in the ZStrong library, you have to enable both\n compressed and content checksums.\n Valid values for this parameter use the ZS2_cv3_* format.\n @default 0 currently means checksum, might change in the future."]
-pub const ZL_CParam_ZL_CParam_contentChecksum: ZL_CParam = 7;
-#[doc = " Any time an internal data Stream becomes smaller than this size,\n it gets STORED immediately, without further processing.\n This reduces processing time, improves decompression speed, and\n reduce\n risks of data expansion.\n Note(@Cyan): follows convention that setting 0 means \"default\", aka\n ZL_MINSTREAMSIZE_DEFAULT.\n Therefore, in order to completely disable the \"automatic store\"\n feature,\n one must pass a negative threshold value."]
-pub const ZL_CParam_ZL_CParam_minStreamSize: ZL_CParam = 11;
+#[repr(i32)]
 #[doc = " The list of global compression parameters"]
-pub type ZL_CParam = ::std::os::raw::c_int;
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZL_CParam {
+    #[doc = " Only meaningful at CCtx level (ignored at CGraph level)\n By default, parameters are reset between compression sessions\n setting this parameter to 1 keep the parameters across compression\n sessions."]
+    ZL_CParam_stickyParameters = 1,
+    #[doc = " Scale amplitude to determine"]
+    ZL_CParam_compressionLevel = 2,
+    #[doc = " Scale amplitude to determine"]
+    ZL_CParam_decompressionLevel = 3,
+    #[doc = " Sets the format version number to use for encoding.\n See @ZL_getDefaultEncodingVersion for details.\n @default 0 means use format version ZL_getDefaultEncodingVersion()."]
+    ZL_CParam_formatVersion = 4,
+    #[doc = " Select behavior when an internal compression stage fails.\n For example, when expecting an array of 32-bit integers,\n but the input size is not a clean multiple of 4.\n Strict mode stops at such stage and outputs an error.\n Permissive mode engages a generic backup compression mechanism,\n to successfully complete compression, at the cost of efficiency.\n At the time of this writing, backup is ZL_GRAPH_COMPRESS_GENERIC.\n Valid values for this parameter use the ZS2_cv3_* format.\n @default 0 currently means strict mode. This may change in the\n future."]
+    ZL_CParam_permissiveCompression = 5,
+    #[doc = " Enable checksum of the compressed frame.\n This is useful to check for corruption that happens after\n compression.\n Valid values for this parameter use the ZS2_cv3_* format.\n @default 0 currently means checksum, might change in the future."]
+    ZL_CParam_compressedChecksum = 6,
+    #[doc = " Enable checksum of the uncompressed content contained in the frame.\n This is useful to check for corruption that happens after\n compression,\n or corruption introduced during (de)compression. However, it cannot\n distinguish the two alone. In order to determine whether it is\n corruption or a bug in the ZStrong library, you have to enable both\n compressed and content checksums.\n Valid values for this parameter use the ZS2_cv3_* format.\n @default 0 currently means checksum, might change in the future."]
+    ZL_CParam_contentChecksum = 7,
+    #[doc = " Any time an internal data Stream becomes smaller than this size,\n it gets STORED immediately, without further processing.\n This reduces processing time, improves decompression speed, and\n reduce\n risks of data expansion.\n Note(@Cyan): follows convention that setting 0 means \"default\", aka\n ZL_MINSTREAMSIZE_DEFAULT.\n Therefore, in order to completely disable the \"automatic store\"\n feature,\n one must pass a negative threshold value."]
+    ZL_CParam_minStreamSize = 11,
+}
 unsafe extern "C" {
     #[doc = " @brief Sets a global compression parameter via the CCtx.\n\n @param gcparam The global compression parameter to set\n @param value The value to set the global compression parameter to\n @returns A ZL_Report containing the result of the operation\n\n @note Parameters set via CCtx have higher priority than parameters set via\n CGraph.\n @note By default, parameters set via CCtx are reset at the end of the\n compression session. To preserve them across sessions, set\n stickyParameters=1."]
     pub fn ZL_CCtx_setParameter(
@@ -2226,73 +2241,82 @@ unsafe extern "C" {
         defaultGraph: ZL_GraphID,
     ) -> ZL_Result_ZL_GraphID;
 }
-pub const ZL_StandardGraphID_ZL_StandardGraphID_illegal: ZL_StandardGraphID = 0;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_store: ZL_StandardGraphID = 2;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_fse: ZL_StandardGraphID = 3;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_huffman: ZL_StandardGraphID = 4;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_entropy: ZL_StandardGraphID = 5;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_constant: ZL_StandardGraphID = 6;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_zstd: ZL_StandardGraphID = 7;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_bitpack: ZL_StandardGraphID = 8;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_flatpack: ZL_StandardGraphID = 9;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_field_lz: ZL_StandardGraphID = 10;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_compress_generic: ZL_StandardGraphID = 11;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_select_generic_lz_backend: ZL_StandardGraphID = 12;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_select_numeric: ZL_StandardGraphID = 13;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_clustering: ZL_StandardGraphID = 14;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_try_parse_int: ZL_StandardGraphID = 15;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_simple_data_description_language:
-    ZL_StandardGraphID = 16;
-pub const ZL_StandardGraphID_ZL_StandardGraphID_public_end: ZL_StandardGraphID = 17;
-pub type ZL_StandardGraphID = ::std::os::raw::c_int;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_illegal: ZL_StandardNodeID = 0;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_delta_int: ZL_StandardNodeID = 2;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_transpose_split: ZL_StandardNodeID = 3;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_zigzag: ZL_StandardNodeID = 4;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_dispatchN_byTag: ZL_StandardNodeID = 5;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_float32_deconstruct: ZL_StandardNodeID = 6;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_bfloat16_deconstruct: ZL_StandardNodeID = 7;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_float16_deconstruct: ZL_StandardNodeID = 8;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_field_lz: ZL_StandardNodeID = 9;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_struct_to_serial: ZL_StandardNodeID = 10;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_num_to_struct_le: ZL_StandardNodeID = 11;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_num_to_serial_le: ZL_StandardNodeID = 12;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_serial_to_struct: ZL_StandardNodeID = 13;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_serial_to_struct2: ZL_StandardNodeID = 14;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_serial_to_struct4: ZL_StandardNodeID = 15;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_serial_to_struct8: ZL_StandardNodeID = 16;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_struct_to_num_le: ZL_StandardNodeID = 17;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_struct_to_num_be: ZL_StandardNodeID = 18;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_serial_to_num8: ZL_StandardNodeID = 19;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_serial_to_num_le16: ZL_StandardNodeID = 20;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_serial_to_num_le32: ZL_StandardNodeID = 21;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_serial_to_num_le64: ZL_StandardNodeID = 22;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_serial_to_num_be16: ZL_StandardNodeID = 23;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_serial_to_num_be32: ZL_StandardNodeID = 24;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_convert_serial_to_num_be64: ZL_StandardNodeID = 25;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_separate_string_components: ZL_StandardNodeID = 26;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_bitunpack: ZL_StandardNodeID = 27;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_range_pack: ZL_StandardNodeID = 28;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_merge_sorted: ZL_StandardNodeID = 29;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_prefix: ZL_StandardNodeID = 30;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_divide_by: ZL_StandardNodeID = 31;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_dispatch_string: ZL_StandardNodeID = 32;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_concat_serial: ZL_StandardNodeID = 33;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_concat_num: ZL_StandardNodeID = 34;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_concat_struct: ZL_StandardNodeID = 35;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_concat_string: ZL_StandardNodeID = 36;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_dedup_num: ZL_StandardNodeID = 37;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_parse_int: ZL_StandardNodeID = 38;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_interleave_string: ZL_StandardNodeID = 39;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_tokenize_struct: ZL_StandardNodeID = 40;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_tokenize_numeric: ZL_StandardNodeID = 41;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_tokenize_string: ZL_StandardNodeID = 42;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_quantize_offsets: ZL_StandardNodeID = 43;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_quantize_lengths: ZL_StandardNodeID = 44;
-pub const ZL_StandardNodeID_ZL_StandardNodeID_public_end: ZL_StandardNodeID = 45;
-pub type ZL_StandardNodeID = ::std::os::raw::c_int;
-pub const ZL_Bitunpack_numBits: _bindgen_ty_1 = 1;
-pub type _bindgen_ty_1 = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZL_StandardGraphID {
+    ZL_StandardGraphID_illegal = 0,
+    ZL_StandardGraphID_store = 2,
+    ZL_StandardGraphID_fse = 3,
+    ZL_StandardGraphID_huffman = 4,
+    ZL_StandardGraphID_entropy = 5,
+    ZL_StandardGraphID_constant = 6,
+    ZL_StandardGraphID_zstd = 7,
+    ZL_StandardGraphID_bitpack = 8,
+    ZL_StandardGraphID_flatpack = 9,
+    ZL_StandardGraphID_field_lz = 10,
+    ZL_StandardGraphID_compress_generic = 11,
+    ZL_StandardGraphID_select_generic_lz_backend = 12,
+    ZL_StandardGraphID_select_numeric = 13,
+    ZL_StandardGraphID_clustering = 14,
+    ZL_StandardGraphID_try_parse_int = 15,
+    ZL_StandardGraphID_simple_data_description_language = 16,
+    ZL_StandardGraphID_public_end = 17,
+}
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZL_StandardNodeID {
+    ZL_StandardNodeID_illegal = 0,
+    ZL_StandardNodeID_delta_int = 2,
+    ZL_StandardNodeID_transpose_split = 3,
+    ZL_StandardNodeID_zigzag = 4,
+    ZL_StandardNodeID_dispatchN_byTag = 5,
+    ZL_StandardNodeID_float32_deconstruct = 6,
+    ZL_StandardNodeID_bfloat16_deconstruct = 7,
+    ZL_StandardNodeID_float16_deconstruct = 8,
+    ZL_StandardNodeID_field_lz = 9,
+    ZL_StandardNodeID_convert_struct_to_serial = 10,
+    ZL_StandardNodeID_convert_num_to_struct_le = 11,
+    ZL_StandardNodeID_convert_num_to_serial_le = 12,
+    ZL_StandardNodeID_convert_serial_to_struct = 13,
+    ZL_StandardNodeID_convert_serial_to_struct2 = 14,
+    ZL_StandardNodeID_convert_serial_to_struct4 = 15,
+    ZL_StandardNodeID_convert_serial_to_struct8 = 16,
+    ZL_StandardNodeID_convert_struct_to_num_le = 17,
+    ZL_StandardNodeID_convert_struct_to_num_be = 18,
+    ZL_StandardNodeID_convert_serial_to_num8 = 19,
+    ZL_StandardNodeID_convert_serial_to_num_le16 = 20,
+    ZL_StandardNodeID_convert_serial_to_num_le32 = 21,
+    ZL_StandardNodeID_convert_serial_to_num_le64 = 22,
+    ZL_StandardNodeID_convert_serial_to_num_be16 = 23,
+    ZL_StandardNodeID_convert_serial_to_num_be32 = 24,
+    ZL_StandardNodeID_convert_serial_to_num_be64 = 25,
+    ZL_StandardNodeID_separate_string_components = 26,
+    ZL_StandardNodeID_bitunpack = 27,
+    ZL_StandardNodeID_range_pack = 28,
+    ZL_StandardNodeID_merge_sorted = 29,
+    ZL_StandardNodeID_prefix = 30,
+    ZL_StandardNodeID_divide_by = 31,
+    ZL_StandardNodeID_dispatch_string = 32,
+    ZL_StandardNodeID_concat_serial = 33,
+    ZL_StandardNodeID_concat_num = 34,
+    ZL_StandardNodeID_concat_struct = 35,
+    ZL_StandardNodeID_concat_string = 36,
+    ZL_StandardNodeID_dedup_num = 37,
+    ZL_StandardNodeID_parse_int = 38,
+    ZL_StandardNodeID_interleave_string = 39,
+    ZL_StandardNodeID_tokenize_struct = 40,
+    ZL_StandardNodeID_tokenize_numeric = 41,
+    ZL_StandardNodeID_tokenize_string = 42,
+    ZL_StandardNodeID_quantize_offsets = 43,
+    ZL_StandardNodeID_quantize_lengths = 44,
+    ZL_StandardNodeID_public_end = 45,
+}
+pub const ZL_Bitunpack_numBits: _bindgen_ty_1 = _bindgen_ty_1::ZL_Bitunpack_numBits;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum _bindgen_ty_1 {
+    ZL_Bitunpack_numBits = 1,
+}
 unsafe extern "C" {
     pub fn ZL_Compressor_registerBitunpackNode(
         cgraph: *mut ZL_Compressor,
@@ -2692,8 +2716,12 @@ unsafe extern "C" {
         nbString: usize,
     ) -> ZL_Result_ZL_EdgeList;
 }
-pub const ZL_trlip_tokenSize: _bindgen_ty_2 = 1;
-pub type _bindgen_ty_2 = ::std::os::raw::c_int;
+pub const ZL_trlip_tokenSize: _bindgen_ty_2 = _bindgen_ty_2::ZL_trlip_tokenSize;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum _bindgen_ty_2 {
+    ZL_trlip_tokenSize = 1,
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ZL_DispatchInstructions {
@@ -4120,14 +4148,17 @@ unsafe extern "C" {
     #[doc = " @brief Frees a decompression context.\n\n @param dctx Decompression context to free"]
     pub fn ZL_DCtx_free(dctx: *mut ZL_DCtx);
 }
-#[doc = " @brief Keep parameters across decompression sessions.\n\n By default, parameters are reset between decompression sessions.\n Setting this parameter to 1 keeps the parameters across sessions."]
-pub const ZL_DParam_ZL_DParam_stickyParameters: ZL_DParam = 1;
-#[doc = " @brief Enable checking the checksum of the compressed frame.\n\n The following two parameters control whether checksums are checked during\n decompression. These checks can be disabled to achieve faster speeds in\n exchange for the risk of data corruption going unnoticed.\n\n Disabling these checks is more effective when decompression speed is\n already fast. Expected improvements: ~20-30% for speeds > 2GB/s, 10-15%\n for speeds between 1GB/s and 2GB/s, and 1-5% for speeds < 1GB/s.\n\n Valid values use the ZS2_GPARAM_* format.\n @note Default 0 currently means check the checksum, might change in\n future"]
-pub const ZL_DParam_ZL_DParam_checkCompressedChecksum: ZL_DParam = 2;
-#[doc = " @brief Enable checking the checksum of the uncompressed content.\n\n Valid values use the ZS2_GPARAM_* format.\n @note Default 0 currently means check the checksum, might change in\n future"]
-pub const ZL_DParam_ZL_DParam_checkContentChecksum: ZL_DParam = 3;
+#[repr(i32)]
 #[doc = " @brief Global decompression parameters."]
-pub type ZL_DParam = ::std::os::raw::c_int;
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZL_DParam {
+    #[doc = " @brief Keep parameters across decompression sessions.\n\n By default, parameters are reset between decompression sessions.\n Setting this parameter to 1 keeps the parameters across sessions."]
+    ZL_DParam_stickyParameters = 1,
+    #[doc = " @brief Enable checking the checksum of the compressed frame.\n\n The following two parameters control whether checksums are checked during\n decompression. These checks can be disabled to achieve faster speeds in\n exchange for the risk of data corruption going unnoticed.\n\n Disabling these checks is more effective when decompression speed is\n already fast. Expected improvements: ~20-30% for speeds > 2GB/s, 10-15%\n for speeds between 1GB/s and 2GB/s, and 1-5% for speeds < 1GB/s.\n\n Valid values use the ZS2_GPARAM_* format.\n @note Default 0 currently means check the checksum, might change in\n future"]
+    ZL_DParam_checkCompressedChecksum = 2,
+    #[doc = " @brief Enable checking the checksum of the uncompressed content.\n\n Valid values use the ZS2_GPARAM_* format.\n @note Default 0 currently means check the checksum, might change in\n future"]
+    ZL_DParam_checkContentChecksum = 3,
+}
 unsafe extern "C" {
     #[doc = " @brief Sets global parameters via the decompression context.\n\n @param dctx Decompression context\n @param gdparam Parameter to set\n @param value Value to set for the parameter\n @return Error code or success\n\n @note By default, parameters are reset at end of decompression session.\n       To preserve them across sessions, set stickyParameters=1"]
     pub fn ZL_DCtx_setParameter(
@@ -4589,14 +4620,17 @@ unsafe extern "C" {
     #[doc = " @returns Returns a state, as generated by the Transform's State Manager."]
     pub fn ZL_Decoder_getState(dictx: *const ZL_Decoder) -> *mut ::std::os::raw::c_void;
 }
-pub const ZL_GraphType_ZL_GraphType_standard: ZL_GraphType = 0;
-pub const ZL_GraphType_ZL_GraphType_static: ZL_GraphType = 1;
-pub const ZL_GraphType_ZL_GraphType_selector: ZL_GraphType = 2;
-pub const ZL_GraphType_ZL_GraphType_function: ZL_GraphType = 3;
-pub const ZL_GraphType_ZL_GraphType_multiInput: ZL_GraphType = 4;
-pub const ZL_GraphType_ZL_GraphType_parameterized: ZL_GraphType = 5;
-pub const ZL_GraphType_ZL_GraphType_segmenter: ZL_GraphType = 6;
-pub type ZL_GraphType = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZL_GraphType {
+    ZL_GraphType_standard = 0,
+    ZL_GraphType_static = 1,
+    ZL_GraphType_selector = 2,
+    ZL_GraphType_function = 3,
+    ZL_GraphType_multiInput = 4,
+    ZL_GraphType_parameterized = 5,
+    ZL_GraphType_segmenter = 6,
+}
 pub type ZL_Compressor_ForEachGraphCallback = ::std::option::Option<
     unsafe extern "C" fn(
         opaque: *mut ::std::os::raw::c_void,

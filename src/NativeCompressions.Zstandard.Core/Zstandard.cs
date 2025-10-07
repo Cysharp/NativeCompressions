@@ -94,19 +94,19 @@ public static partial class Zstandard
     /// <summary>
     /// Throws an exception if the result is an error.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void ThrowIfError(nuint code)
     {
         if (IsError(code))
         {
+            Throw(code);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static void Throw(nuint code)
+        {
             var error = GetErrorName(code);
             throw ZstandardException.FromErrorName(error);
         }
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)] // need to check before call IsError
-    internal static void ThrowAsError(nuint code)
-    {
-        var error = GetErrorName(code);
-        throw ZstandardException.FromErrorName(error);
     }
 }

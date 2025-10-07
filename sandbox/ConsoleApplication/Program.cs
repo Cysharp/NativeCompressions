@@ -38,6 +38,14 @@ var written = OpenZL.Compress(original, dest);
 
 Console.WriteLine(written);
 
+var data = dest.AsSpan(0, written).ToArray();
+
+var written2 = OpenZL.Decompress(data, dest);
+Console.WriteLine(written2);
+
+Console.WriteLine(dest.AsSpan(0, written2).SequenceEqual(original));
+
+
 //Console.ReadLine();
 
 //var dest = new ArrayBufferPipeWriter();
