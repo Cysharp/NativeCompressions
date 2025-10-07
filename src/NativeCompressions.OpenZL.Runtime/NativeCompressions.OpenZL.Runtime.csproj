@@ -24,7 +24,8 @@
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.osx-x64.csproj" />
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.win-arm64.csproj" />
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.win-x64.csproj" />
-    <ProjectReference Include="NativeCompressions.OpenZL.Runtime.android-arm.csproj" />
+    <!-- Currently OpenZL android-arm can't build so remove it. -->
+    <!--<ProjectReference Include="NativeCompressions.OpenZL.Runtime.android-arm.csproj" />-->
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.android-arm64.csproj" />
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.android-x64.csproj" />
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.ios-arm64.csproj" />

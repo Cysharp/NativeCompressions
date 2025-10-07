@@ -44,7 +44,8 @@
     <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.osx-x64.csproj" />
     <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.win-arm64.csproj" />
     <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.win-x64.csproj" />
-    <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.android-arm.csproj" />
+    <!-- Currently OpenZL android-arm can't build so remove it. -->
+    <!-- <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.android-arm.csproj" /> -->
     <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.android-arm64.csproj" />
     <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.android-x64.csproj" />
     <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.csproj" />

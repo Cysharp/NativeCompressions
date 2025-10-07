@@ -3,7 +3,7 @@ NativeCompressions
 <!-- [![CI](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml/badge.svg)](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml)
 [![NuGet](https://img.shields.io/nuget/v/NativeCompressions)](https://www.nuget.org/packages/NativeCompressions) -->
 
-NativeCompressions provides native library bindings, streaming processing, and multi-threading support for [LZ4](https://github.com/lz4/lz4) with its excellent decompression speed, and [Zstandard](https://github.com/facebook/zstd) with its superior balance of compression ratio and performance.
+NativeCompressions provides native library bindings, streaming processing, and multi-threading support for [LZ4](https://github.com/lz4/lz4) with its excellent decompression speed, and [Zstandard](https://github.com/facebook/zstd) with its superior balance of compression ratio and performance, and new [OpenZL](https://github.com/facebook/openzl) novel data compression framework.
 
 ![](https://github.com/user-attachments/assets/abd4f2fe-9737-422d-aeb9-d2b222b13b69)
 
@@ -13,7 +13,7 @@ Compression is crucial for any application, but .NET has had limited options. Na
 
 We chose native bindings over Pure C# implementation because compression library performance depends not only on algorithms but also on implementation. LZ4 and Zstandard are actively developed with performance improvements in every release. It's impossible to keep synchronizing advanced memory operations and CPU architecture optimizations with .NET ports. To continuously provide the best and latest performance, native bindings are necessary. Note that .NET's standard `System.IO.Compression.BrotliEncoder/Decoder` links [brotli](https://github.com/dotnet/runtime/tree/main/src/native/external/brotli) to [libSystem.IO.Compression.Native](https://github.com/dotnet/runtime/tree/main/src/native/libs/System.IO.Compression.Native), also DeflateStream/GZipStream uses native zlib (from .NET 9, it's [zlib-ng](https://github.com/zlib-ng/zlib-ng)), meaning we follow the same adoption criteria as .NET official.
 
-LZ4 and Zstandard are created by the same author [Cyan4973](https://github.com/Cyan4973), showing high performance against competitors in their respective domains (LZ4 vs Snappy / Zstandard vs Brotli), and are widely used as industry standards.
+LZ4 and Zstandard are created by the same author [Cyan4973](https://github.com/Cyan4973), showing high performance against competitors in their respective domains (LZ4 vs Snappy / Zstandard vs Brotli), and are widely used as industry standards. Also, a new compression library called OpenZL was released in 2025 from Facebook, where he works. NativeCompressions supports this excellent library as well.
 
 > [!NOTE]
 > This library is in preview. We do not recommend using it in production environments. The API may change. We are collecting feedback during this preview period.
@@ -45,6 +45,8 @@ byte[] decompressed = Zstandard.Decompress(compressed);
 ```
 
 Install for Unity, see [Unity](#unity) section.
+
+For how to use each one, please refer to the [LZ4](#lz4) section, the [Zstandard](#zstandard) section, and the [OpenZL](#openzl) section.
 
 LZ4
 ---
@@ -257,6 +259,77 @@ It is generally similar to the LZ4 API. The `Zstandard` class has static methods
 
 Detailed documentation will also be prepared later.
 
+OpenZL
+---
+[OpenZL](https://github.com/facebook/openzl) is a new compression library announced in October 2025. For the time being, NativeCompressions will provide bindings as experimental support. Therefore, when installing, you need to explicitly add the NuGet Package.
+
+```bash
+dotnet add package NativeCompressions.OpenZL
+```
+
+High-level APIs for C# exist as `OpenZL.Compress` and `OpenZL.Decompress`, but since they essentially just process with Zstandard, they are not very meaningful. All of the C API is exposed in `NativeCompressions.Interop.OpenZLNativeMethods`, so you can try out OpenZL using that. APIs for C# will be created progressively.
+
+Below is an example of using `OpenZLNativeMethods`.
+
+```csharp
+using NativeCompressions.Interop;
+using static NativeCompressions.Interop.OpenZLNativeMethods; // recommend to use using static
+
+public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination)
+{
+    fixed (byte* src = source)
+    fixed (byte* dest = destination)
+    {
+        var cctx = ZL_CCtx_create();
+        try
+        {
+            var cgraph = ZL_Compressor_create();
+            try
+            {
+                const int ZSTRONG_EXAMPLE_FORMAT_VERSION = 16;
+
+                ThrowIfError(ZL_Compressor_setParameter(cgraph, ZL_CParam.ZL_CParam_formatVersion, ZSTRONG_EXAMPLE_FORMAT_VERSION));
+                ThrowIfError(ZL_Compressor_selectStartingGraphID(cgraph, new ZL_GraphID { gid = (uint)ZL_StandardGraphID.ZL_StandardGraphID_zstd }));
+                ThrowIfError(ZL_CCtx_refCompressor(cctx, cgraph));
+
+                var written = ZL_CCtx_compress(cctx, dest, (nuint)destination.Length, src, (nuint)source.Length);
+                ThrowIfError(written);
+
+                return (int)written._value._value;
+            }
+            finally
+            {
+                ZL_Compressor_free(cgraph);
+            }
+        }
+        finally
+        {
+            ZL_CCtx_free(cctx);
+        }
+    }
+}
+
+internal static bool IsError(ZL_Result_size_t_u result)
+{
+    return ZL_isErrorBool(result);
+}
+
+internal static void ThrowIfError(ZL_Result_size_t_u result)
+{
+    if (IsError(result))
+    {
+        var error = GetErrorName(result._code);
+        throw new OpenZLException(error);
+    }
+}
+
+static unsafe string GetErrorName(ZL_ErrorCode code)
+{
+    var name = (sbyte*)ZL_ErrorCode_toString(code);
+    return new string(name);
+}
+```
+
 Telemetry
 ---
 TODO
@@ -275,8 +348,9 @@ License
 ---
 This library is licensed under the MIT License.
 
-This library includes precompiled binaries of LZ4 and Zstandard. See LICENSE file for full license texts.
+This library includes precompiled binaries of LZ4, Zstandard and OpenZL. See LICENSE file for full license texts.
 
 ### Third-party Notices
 * LZ4 - [Licensed under BSD 2-Clause license](https://github.com/lz4/lz4/blob/dev/LICENSE)
 * Zstandard - [Licensed under BSD License](https://github.com/facebook/zstd/blob/dev/LICENSE)
+* OpenZL - [Licensed under BSD License](https://github.com/facebook/openzl/blob/dev/LICENSE)
