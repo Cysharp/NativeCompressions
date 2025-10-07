@@ -12,7 +12,7 @@ name: Build-Native-LZ4
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *' # Every day at 3:00 AM (UTC)
+    - cron: "0 3 * * *" # Every day at 3:00 AM (UTC)
 
 jobs:
   check_new_release:
@@ -112,15 +112,14 @@ jobs:
         shell: msys2 {0}
         run: |
           cd lz4/lib
-          make BUILD_STATIC=no BUILD_SHARED=yes \
-              SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+          make BUILD_STATIC=no BUILD_SHARED=yes SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
           ls -la *.dll
           file *.dll
       - name: Prepare artifacts
-        shell: pwsh
+        shell: bash
         run: |
-          New-Item -ItemType Directory -Force -Path "artifacts/win-${{ matrix.arch }}"
-          Copy-Item "lz4/lib/*.dll" -Destination "artifacts/win-${{ matrix.arch }}/lz4.dll"
+          mkdir -p artifacts/win-${{ matrix.arch }}
+          cp lz4/lib/lz4.dll artifacts/win-${{ matrix.arch }}/
       - name: Upload Windows artifacts
         uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
@@ -203,20 +202,13 @@ jobs:
       - name: Build shared library
         run: |
           cd lz4/lib
-          make BUILD_STATIC=no BUILD_SHARED=yes \
-            CC="${{ matrix.cc }}" \
-            SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+          make BUILD_STATIC=no BUILD_SHARED=yes CC="${{ matrix.cc }}" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
           ls -la ./*.so*
           file liblz4.so*
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/linux-${{ matrix.arch }}
-          cp lz4/lib/liblz4.so* artifacts/linux-${{ matrix.arch }}/
-          cd artifacts/linux-${{ matrix.arch }}
-          if [ -L liblz4.so ]; then
-            cp -L liblz4.so liblz4.so.tmp
-            mv liblz4.so.tmp liblz4.so
-          fi
+          cp -L lz4/lib/liblz4.so artifacts/linux-${{ matrix.arch }}/
       - name: Upload Linux artifacts
         uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
@@ -253,22 +245,14 @@ jobs:
       - name: Build dynamic library
         run: |
           cd lz4/lib
-          make BUILD_STATIC=no BUILD_SHARED=yes \
-              CFLAGS="${{ matrix.flags }} -O3" \
-              SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
-
-          lipo -info ./*.dylib
+          make BUILD_STATIC=no BUILD_SHARED=yes CFLAGS="${{ matrix.flags }} -O3" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(sysctl -n hw.ncpu)"
+          ls -la
+          lipo -info liblz4.dylib
+          file -L liblz4.dylib
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/osx-${{ matrix.arch }}
-          cp lz4/lib/*.dylib artifacts/osx-${{ matrix.arch }}/
-          cd artifacts/osx-${{ matrix.arch }}
-          for file in *.dylib; do
-            if [ -L "$file" ]; then
-              cp -L "$file" "$file.tmp"
-              mv "$file.tmp" "$file"
-            fi
-          done
+          cp -L lz4/lib/liblz4.dylib artifacts/osx-${{ matrix.arch }}/
       - name: Upload artifacts
         uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
@@ -314,10 +298,7 @@ jobs:
 
           # Build static library (iOS App Store requires static linking)
           cd lz4/lib
-          make BUILD_STATIC=yes BUILD_SHARED=no \
-            CC="clang" \
-            CFLAGS="${{ matrix.cflags }} -O3 -isysroot $SDK_PATH -DXXH_NAMESPACE=LZ4_" \
-            SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+          make BUILD_STATIC=yes BUILD_SHARED=no CC="clang" CFLAGS="${{ matrix.cflags }} -O3 -isysroot $SDK_PATH -DXXH_NAMESPACE=LZ4_" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(sysctl -n hw.ncpu)"
 
           ls -la liblz4.a
           file liblz4.a
@@ -379,9 +360,7 @@ jobs:
           export PATH="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
 
           cd lz4/lib
-          make BUILD_STATIC=no BUILD_SHARED=yes \
-            CC="${{ matrix.cc }}" CFLAGS="-O3 -fPIC -DXXH_NAMESPACE=LZ4_" \
-            SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c"
+          make BUILD_STATIC=no BUILD_SHARED=yes CC="${{ matrix.cc }}" CFLAGS="-O3 -fPIC -DXXH_NAMESPACE=LZ4_" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
           ls -la liblz4.so*
           file liblz4.so*
       - name: Prepare artifacts
@@ -395,7 +374,16 @@ jobs:
           path: artifacts/android-${{ matrix.arch }}/*
 
   package-all:
-    needs: [check_new_release, build-windows, build-windows-arm64, build-linux, build-macos, build-ios, build-android]
+    needs:
+      [
+        check_new_release,
+        build-windows,
+        build-windows-arm64,
+        build-linux,
+        build-macos,
+        build-ios,
+        build-android,
+      ]
     if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: write

@@ -12,7 +12,7 @@ name: Build-Native-ZSTD
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *' # Every day at 3:00 AM (UTC)
+    - cron: "0 3 * * *" # Every day at 3:00 AM (UTC)
 
 jobs:
   check_new_release:
@@ -369,6 +369,7 @@ jobs:
       - name: Build shared library for Android
         run: |
           export PATH="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+
           cd zstd/lib
           make lib-release CC="${{ matrix.cc }}" MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j "$(nproc)"
           ls -la libzstd.so*

@@ -583,7 +583,7 @@ jobs:
             - Windows x64/ARM64
             - Linux x64/ARM64
             - macOS x64/ARM64
-            - Android ARM/ARM64/x64
+            - Android ARM64/x64 (ARM not supported by OpenZL)
             - iOS ARM64/x64 (device/simulator)
 
           ## Build artifacts
