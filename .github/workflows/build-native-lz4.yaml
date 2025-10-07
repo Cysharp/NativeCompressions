@@ -119,7 +119,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts/win-${{ matrix.arch }}
-          cp lz4/lib/lz4.dll artifacts/win-${{ matrix.arch }}/
+          cp lz4/lib/liblz4.dll artifacts/win-${{ matrix.arch }}/lz4.dll
       - name: Upload Windows artifacts
         uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
