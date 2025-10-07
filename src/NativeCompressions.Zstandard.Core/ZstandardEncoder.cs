@@ -22,6 +22,9 @@ public unsafe class ZstandardEncoder : SafeHandle
 
     public override bool IsInvalid => handle == IntPtr.Zero;
 
+
+    new void Close() { base.Close(); }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardEncoder"/> with default settings.
     /// </summary>

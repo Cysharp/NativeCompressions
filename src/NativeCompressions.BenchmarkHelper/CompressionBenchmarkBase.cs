@@ -125,10 +125,12 @@ public abstract class Lz4BenchmarkBase : CompressionBenchmarkBase<int>
 
 public abstract class ZstandardBenchmarkBase : CompressionBenchmarkBase<int>
 {
-    public override IEnumerable<int> GetLevels() => Enumerable.Sequence(
-        start: -4, // Zstandard's min compression level is -131072 so use -4 instead.
-        endInclusive: Zstandard.MaxCompressionLevel,
-        step: 1);
+    public override IEnumerable<int> GetLevels() => [
+        ..new int[] { -4, -3, -2, -1 }, // Zstandard's min compression level is -131072 so use -4 instead.
+        ..Enumerable.Sequence(
+            start: 1, // // 0 means default compression level so ignore use 0
+            endInclusive: Zstandard.MaxCompressionLevel, // 22
+            step: 1)];
 
     public virtual ZstandardCompressionOptions CompressionOptions => ZstandardCompressionOptions.Default;
     public virtual ZstandardDecompressionOptions DecompressionOptions => ZstandardDecompressionOptions.Default;

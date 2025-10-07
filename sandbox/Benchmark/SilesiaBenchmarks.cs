@@ -65,3 +65,31 @@ public class SilesiaMultiThread_Lz4 : CompressionBenchmarkBase<int>
         return writer.WrittenCount;
     }
 }
+
+public class SilesiaMultiThread_ZStandard : CompressionBenchmarkBase<int>
+{
+    public override IEnumerable<int> GetLevels() => [1, 2, 3, 4, 5, 6, 7, 8];
+
+    protected override byte[] GetTargetSource()
+    {
+        return Resources.Silesia;
+    }
+
+    protected override int GetMaxCompressedLength(int inputSize, int _)
+    {
+        return NativeCompressions.Zstandard.GetMaxCompressedLength(inputSize);
+    }
+
+    protected override int CompressCore(byte[] source, byte[] destination, int maxDegreeOfParallelism)
+    {
+        var writer = new ArrayPipeWriter(destination);
+        NativeCompressions.Zstandard.CompressAsync(source, writer, maxDegreeOfParallelism: maxDegreeOfParallelism).GetAwaiter().GetResult();
+        return writer.WrittenCount;
+    }
+
+    protected override int DecompressCore(byte[] source, byte[] destination)
+    {
+        // TODO: Async not yet.
+        return NativeCompressions.Zstandard.Decompress(source, destination);
+    }
+}

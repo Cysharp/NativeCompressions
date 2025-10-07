@@ -33,17 +33,12 @@ var original = LZ4.Decompress(linkedCompressed);
 //var blockIndependenCompressed = LZ4.Compress(original);
 
 
-var dest = new byte[original.Length];
-var written = OpenZL.Compress(original, dest);
+var opt = ZstandardCompressionOptions.Default with { NbWorkers = 4 };
 
-Console.WriteLine(written);
+var p = new ArrayBufferPipeWriter();
+await Zstandard.CompressAsync(original, p);
 
-var data = dest.AsSpan(0, written).ToArray();
 
-var written2 = OpenZL.Decompress(data, dest);
-Console.WriteLine(written2);
-
-Console.WriteLine(dest.AsSpan(0, written2).SequenceEqual(original));
 
 
 //Console.ReadLine();

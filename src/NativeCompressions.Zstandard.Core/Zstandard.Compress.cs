@@ -1,13 +1,10 @@
 ﻿using System.Buffers;
-using System.IO.Pipelines;
 using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
 
 public static partial class Zstandard
 {
-    const int AllowParallelCompressThreshold = 1024 * 1024; // 1MB
-
     /// <summary>
     /// Compresses data using Zstandard algorithm.
     /// </summary>
@@ -36,6 +33,21 @@ public static partial class Zstandard
         try
         {
             var bytesWritten = Compress(source, destination, compressionOptions);
+            return destination.AsSpan(0, bytesWritten).ToArray();
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(destination, clearArray: false);
+        }
+    }
+
+    public static unsafe byte[] Compress(ReadOnlySpan<byte> source, ZstandardEncoder encoder)
+    {
+        var maxLength = GetMaxCompressedLength(source.Length);
+        var destination = ArrayPool<byte>.Shared.Rent(maxLength);
+        try
+        {
+            var bytesWritten = Compress(source, destination, encoder);
             return destination.AsSpan(0, bytesWritten).ToArray();
         }
         finally
@@ -83,5 +95,13 @@ public static partial class Zstandard
         }
     }
 
-    // TODO: other overload
+    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, ZstandardEncoder encoder)
+    {
+        var status = encoder.Compress(source, destination, out var bytesConsumed, out var bytesWritten, isFinalBlock: true);
+        if (status != OperationStatus.Done)
+        {
+            throw new ZstandardException($"Compression failed with status: {status}, bytesConsumed: {bytesConsumed}, bytesWritten: {bytesWritten}");
+        }
+        return bytesWritten;
+    }
 }
