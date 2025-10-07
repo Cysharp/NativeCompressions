@@ -80,27 +80,7 @@ public readonly record struct LZ4CompressionOptions
         }
     }
 
-    internal unsafe LZ4F_preferences_t ToPreferences()
-    {
-        var prefs = new LZ4F_preferences_t
-        {
-            autoFlush = autoFlush,
-            compressionLevel = compressionLevel,
-            favorDecSpeed = favorDecompressionSpeed,
-            frameInfo = new LZ4F_frameInfo_t
-            {
-                blockSizeID = (int)blockSizeID,
-                blockMode = (int)blockMode,
-                contentChecksumFlag = (int)contentChecksumFlag,
-                frameType = (int)frameType,
-                contentSize = contentSize,
-                dictID = dictionaryID,
-                blockChecksumFlag = (int)blockChecksumFlag,
-            }
-        };
-
-        return prefs;
-    }
+    internal unsafe LZ4F_preferences_t ToPreferences() => ToPreferencesWithContentSize(contentSize);
 
     internal unsafe LZ4F_preferences_t ToPreferencesWithContentSize(ulong contentSize)
     {
@@ -111,13 +91,13 @@ public readonly record struct LZ4CompressionOptions
             favorDecSpeed = favorDecompressionSpeed,
             frameInfo = new LZ4F_frameInfo_t
             {
-                blockSizeID = (int)blockSizeID,
-                blockMode = (int)blockMode,
-                contentChecksumFlag = (int)contentChecksumFlag,
-                frameType = (int)frameType,
+                blockSizeID = (LZ4F_blockSizeID_t)blockSizeID,
+                blockMode = (LZ4F_blockMode_t)blockMode,
+                contentChecksumFlag = (LZ4F_contentChecksum_t)contentChecksumFlag,
+                frameType = (LZ4F_frameType_t)frameType,
                 contentSize = contentSize, // override content size
                 dictID = dictionaryID,
-                blockChecksumFlag = (int)blockChecksumFlag,
+                blockChecksumFlag = (LZ4F_blockChecksum_t)blockChecksumFlag,
             }
         };
 

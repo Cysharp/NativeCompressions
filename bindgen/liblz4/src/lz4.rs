@@ -3955,10 +3955,13 @@ pub type S32 = i32;
 pub type U64 = u64;
 pub type uptrval = usize;
 pub type reg_t = U64;
-pub const limitedOutput_directive_notLimited: limitedOutput_directive = 0;
-pub const limitedOutput_directive_limitedOutput: limitedOutput_directive = 1;
-pub const limitedOutput_directive_fillOutput: limitedOutput_directive = 2;
-pub type limitedOutput_directive = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum limitedOutput_directive {
+    notLimited = 0,
+    limitedOutput = 1,
+    fillOutput = 2,
+}
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 pub struct LZ4_unalign16 {
@@ -4001,20 +4004,29 @@ unsafe extern "C" {
 }
 pub const LZ4_64Klimit: ::std::os::raw::c_int = 65547;
 pub const LZ4_skipTrigger: U32 = 6;
-pub const tableType_t_clearedTable: tableType_t = 0;
-pub const tableType_t_byPtr: tableType_t = 1;
-pub const tableType_t_byU32: tableType_t = 2;
-pub const tableType_t_byU16: tableType_t = 3;
-pub type tableType_t = ::std::os::raw::c_int;
-pub const dict_directive_noDict: dict_directive = 0;
-pub const dict_directive_withPrefix64k: dict_directive = 1;
-pub const dict_directive_usingExtDict: dict_directive = 2;
-pub const dict_directive_usingDictCtx: dict_directive = 3;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum tableType_t {
+    clearedTable = 0,
+    byPtr = 1,
+    byU32 = 2,
+    byU16 = 3,
+}
+#[repr(i32)]
 #[doc = " This enum distinguishes several different modes of accessing previous\n content in the stream.\n\n - noDict        : There is no preceding content.\n - withPrefix64k : Table entries up to ctx->dictSize before the current blob\n                   blob being compressed are valid and refer to the preceding\n                   content (of length ctx->dictSize), which is available\n                   contiguously preceding in memory the content currently\n                   being compressed.\n - usingExtDict  : Like withPrefix64k, but the preceding content is somewhere\n                   else in memory, starting at ctx->dictionary with length\n                   ctx->dictSize.\n - usingDictCtx  : Everything concerning the preceding content is\n                   in a separate context, pointed to by ctx->dictCtx.\n                   ctx->dictionary, ctx->dictSize, and table entries\n                   in the current context that refer to positions\n                   preceding the beginning of the current compression are\n                   ignored. Instead, ctx->dictCtx->dictionary and ctx->dictCtx\n                   ->dictSize describe the location and size of the preceding\n                   content, and matches are found by looking in the ctx\n                   ->dictCtx->hashTable."]
-pub type dict_directive = ::std::os::raw::c_int;
-pub const dictIssue_directive_noDictIssue: dictIssue_directive = 0;
-pub const dictIssue_directive_dictSmall: dictIssue_directive = 1;
-pub type dictIssue_directive = ::std::os::raw::c_int;
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum dict_directive {
+    noDict = 0,
+    withPrefix64k = 1,
+    usingExtDict = 2,
+    usingDictCtx = 3,
+}
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum dictIssue_directive {
+    noDictIssue = 0,
+    dictSmall = 1,
+}
 unsafe extern "C" {
     pub fn LZ4_compress_forceExtDict(
         LZ4_dict: *mut LZ4_stream_t,
@@ -4044,9 +4056,12 @@ unsafe extern "C" {
         dictSize: usize,
     ) -> ::std::os::raw::c_int;
 }
-pub const LoadDict_mode_e__ld_fast: LoadDict_mode_e = 0;
-pub const LoadDict_mode_e__ld_slow: LoadDict_mode_e = 1;
-pub type LoadDict_mode_e = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum LoadDict_mode_e {
+    _ld_fast = 0,
+    _ld_slow = 1,
+}
 unsafe extern "C" {
     pub fn LZ4_loadDict_internal(
         LZ4_dict: *mut LZ4_stream_t,
@@ -4055,9 +4070,12 @@ unsafe extern "C" {
         _ld: LoadDict_mode_e,
     ) -> ::std::os::raw::c_int;
 }
-pub const earlyEnd_directive_decode_full_block: earlyEnd_directive = 0;
-pub const earlyEnd_directive_partial_decode: earlyEnd_directive = 1;
-pub type earlyEnd_directive = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum earlyEnd_directive {
+    decode_full_block = 0,
+    partial_decode = 1,
+}
 pub type Rvl_t = usize;
 unsafe extern "C" {
     pub static rvl_error: Rvl_t;
@@ -4374,13 +4392,19 @@ unsafe extern "C" {
         compressionLevel: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-pub const dictCtx_directive_noDictCtx: dictCtx_directive = 0;
-pub const dictCtx_directive_usingDictCtxHc: dictCtx_directive = 1;
-pub type dictCtx_directive = ::std::os::raw::c_int;
-pub const lz4hc_strat_e_lz4mid: lz4hc_strat_e = 0;
-pub const lz4hc_strat_e_lz4hc: lz4hc_strat_e = 1;
-pub const lz4hc_strat_e_lz4opt: lz4hc_strat_e = 2;
-pub type lz4hc_strat_e = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum dictCtx_directive {
+    noDictCtx = 0,
+    usingDictCtxHc = 1,
+}
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum lz4hc_strat_e {
+    lz4mid = 0,
+    lz4hc = 1,
+    lz4opt = 2,
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cParams_t {
@@ -4448,13 +4472,19 @@ pub type LZ4MID_searchIntoDict_f = ::std::option::Option<
         gDictEndIndex: U32,
     ) -> LZ4HC_match_t,
 >;
-pub const repeat_state_e_rep_untested: repeat_state_e = 0;
-pub const repeat_state_e_rep_not: repeat_state_e = 1;
-pub const repeat_state_e_rep_confirmed: repeat_state_e = 2;
-pub type repeat_state_e = ::std::os::raw::c_int;
-pub const HCfavor_e_favorCompressionRatio: HCfavor_e = 0;
-pub const HCfavor_e_favorDecompressionSpeed: HCfavor_e = 1;
-pub type HCfavor_e = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum repeat_state_e {
+    rep_untested = 0,
+    rep_not = 1,
+    rep_confirmed = 2,
+}
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum HCfavor_e {
+    favorCompressionRatio = 0,
+    favorDecompressionSpeed = 1,
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct LZ4HC_optimal_t {
@@ -4483,24 +4513,39 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn LZ4F_getErrorName(code: LZ4F_errorCode_t) -> *const ::std::os::raw::c_char;
 }
-pub const LZ4F_blockSizeID_t_LZ4F_default: LZ4F_blockSizeID_t = 0;
-pub const LZ4F_blockSizeID_t_LZ4F_max64KB: LZ4F_blockSizeID_t = 4;
-pub const LZ4F_blockSizeID_t_LZ4F_max256KB: LZ4F_blockSizeID_t = 5;
-pub const LZ4F_blockSizeID_t_LZ4F_max1MB: LZ4F_blockSizeID_t = 6;
-pub const LZ4F_blockSizeID_t_LZ4F_max4MB: LZ4F_blockSizeID_t = 7;
-pub type LZ4F_blockSizeID_t = ::std::os::raw::c_int;
-pub const LZ4F_blockMode_t_LZ4F_blockLinked: LZ4F_blockMode_t = 0;
-pub const LZ4F_blockMode_t_LZ4F_blockIndependent: LZ4F_blockMode_t = 1;
-pub type LZ4F_blockMode_t = ::std::os::raw::c_int;
-pub const LZ4F_contentChecksum_t_LZ4F_noContentChecksum: LZ4F_contentChecksum_t = 0;
-pub const LZ4F_contentChecksum_t_LZ4F_contentChecksumEnabled: LZ4F_contentChecksum_t = 1;
-pub type LZ4F_contentChecksum_t = ::std::os::raw::c_int;
-pub const LZ4F_blockChecksum_t_LZ4F_noBlockChecksum: LZ4F_blockChecksum_t = 0;
-pub const LZ4F_blockChecksum_t_LZ4F_blockChecksumEnabled: LZ4F_blockChecksum_t = 1;
-pub type LZ4F_blockChecksum_t = ::std::os::raw::c_int;
-pub const LZ4F_frameType_t_LZ4F_frame: LZ4F_frameType_t = 0;
-pub const LZ4F_frameType_t_LZ4F_skippableFrame: LZ4F_frameType_t = 1;
-pub type LZ4F_frameType_t = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum LZ4F_blockSizeID_t {
+    LZ4F_default = 0,
+    LZ4F_max64KB = 4,
+    LZ4F_max256KB = 5,
+    LZ4F_max1MB = 6,
+    LZ4F_max4MB = 7,
+}
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum LZ4F_blockMode_t {
+    LZ4F_blockLinked = 0,
+    LZ4F_blockIndependent = 1,
+}
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum LZ4F_contentChecksum_t {
+    LZ4F_noContentChecksum = 0,
+    LZ4F_contentChecksumEnabled = 1,
+}
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum LZ4F_blockChecksum_t {
+    LZ4F_noBlockChecksum = 0,
+    LZ4F_blockChecksumEnabled = 1,
+}
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum LZ4F_frameType_t {
+    LZ4F_frame = 0,
+    LZ4F_skippableFrame = 1,
+}
 #[doc = " LZ4F_frameInfo_t :\n  makes it possible to set or read frame parameters.\n  Structure must be first init to 0, using memset() or LZ4F_INIT_FRAMEINFO,\n  setting all parameters to default.\n  It's then possible to update selectively some parameters"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -4772,33 +4817,36 @@ unsafe extern "C" {
         prefsPtr: *const LZ4F_preferences_t,
     ) -> usize;
 }
-pub const LZ4F_errorCodes_LZ4F_OK_NoError: LZ4F_errorCodes = 0;
-pub const LZ4F_errorCodes_LZ4F_ERROR_GENERIC: LZ4F_errorCodes = 1;
-pub const LZ4F_errorCodes_LZ4F_ERROR_maxBlockSize_invalid: LZ4F_errorCodes = 2;
-pub const LZ4F_errorCodes_LZ4F_ERROR_blockMode_invalid: LZ4F_errorCodes = 3;
-pub const LZ4F_errorCodes_LZ4F_ERROR_parameter_invalid: LZ4F_errorCodes = 4;
-pub const LZ4F_errorCodes_LZ4F_ERROR_compressionLevel_invalid: LZ4F_errorCodes = 5;
-pub const LZ4F_errorCodes_LZ4F_ERROR_headerVersion_wrong: LZ4F_errorCodes = 6;
-pub const LZ4F_errorCodes_LZ4F_ERROR_blockChecksum_invalid: LZ4F_errorCodes = 7;
-pub const LZ4F_errorCodes_LZ4F_ERROR_reservedFlag_set: LZ4F_errorCodes = 8;
-pub const LZ4F_errorCodes_LZ4F_ERROR_allocation_failed: LZ4F_errorCodes = 9;
-pub const LZ4F_errorCodes_LZ4F_ERROR_srcSize_tooLarge: LZ4F_errorCodes = 10;
-pub const LZ4F_errorCodes_LZ4F_ERROR_dstMaxSize_tooSmall: LZ4F_errorCodes = 11;
-pub const LZ4F_errorCodes_LZ4F_ERROR_frameHeader_incomplete: LZ4F_errorCodes = 12;
-pub const LZ4F_errorCodes_LZ4F_ERROR_frameType_unknown: LZ4F_errorCodes = 13;
-pub const LZ4F_errorCodes_LZ4F_ERROR_frameSize_wrong: LZ4F_errorCodes = 14;
-pub const LZ4F_errorCodes_LZ4F_ERROR_srcPtr_wrong: LZ4F_errorCodes = 15;
-pub const LZ4F_errorCodes_LZ4F_ERROR_decompressionFailed: LZ4F_errorCodes = 16;
-pub const LZ4F_errorCodes_LZ4F_ERROR_headerChecksum_invalid: LZ4F_errorCodes = 17;
-pub const LZ4F_errorCodes_LZ4F_ERROR_contentChecksum_invalid: LZ4F_errorCodes = 18;
-pub const LZ4F_errorCodes_LZ4F_ERROR_frameDecoding_alreadyStarted: LZ4F_errorCodes = 19;
-pub const LZ4F_errorCodes_LZ4F_ERROR_compressionState_uninitialized: LZ4F_errorCodes = 20;
-pub const LZ4F_errorCodes_LZ4F_ERROR_parameter_null: LZ4F_errorCodes = 21;
-pub const LZ4F_errorCodes_LZ4F_ERROR_io_write: LZ4F_errorCodes = 22;
-pub const LZ4F_errorCodes_LZ4F_ERROR_io_read: LZ4F_errorCodes = 23;
-pub const LZ4F_errorCodes_LZ4F_ERROR_maxCode: LZ4F_errorCodes = 24;
-pub const LZ4F_errorCodes__LZ4F_dummy_error_enum_for_c89_never_used: LZ4F_errorCodes = 25;
-pub type LZ4F_errorCodes = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum LZ4F_errorCodes {
+    LZ4F_OK_NoError = 0,
+    LZ4F_ERROR_GENERIC = 1,
+    LZ4F_ERROR_maxBlockSize_invalid = 2,
+    LZ4F_ERROR_blockMode_invalid = 3,
+    LZ4F_ERROR_parameter_invalid = 4,
+    LZ4F_ERROR_compressionLevel_invalid = 5,
+    LZ4F_ERROR_headerVersion_wrong = 6,
+    LZ4F_ERROR_blockChecksum_invalid = 7,
+    LZ4F_ERROR_reservedFlag_set = 8,
+    LZ4F_ERROR_allocation_failed = 9,
+    LZ4F_ERROR_srcSize_tooLarge = 10,
+    LZ4F_ERROR_dstMaxSize_tooSmall = 11,
+    LZ4F_ERROR_frameHeader_incomplete = 12,
+    LZ4F_ERROR_frameType_unknown = 13,
+    LZ4F_ERROR_frameSize_wrong = 14,
+    LZ4F_ERROR_srcPtr_wrong = 15,
+    LZ4F_ERROR_decompressionFailed = 16,
+    LZ4F_ERROR_headerChecksum_invalid = 17,
+    LZ4F_ERROR_contentChecksum_invalid = 18,
+    LZ4F_ERROR_frameDecoding_alreadyStarted = 19,
+    LZ4F_ERROR_compressionState_uninitialized = 20,
+    LZ4F_ERROR_parameter_null = 21,
+    LZ4F_ERROR_io_write = 22,
+    LZ4F_ERROR_io_read = 23,
+    LZ4F_ERROR_maxCode = 24,
+    _LZ4F_dummy_error_enum_for_c89_never_used = 25,
+}
 unsafe extern "C" {
     pub fn LZ4F_getErrorCode(functionResult: usize) -> LZ4F_errorCodes;
 }
@@ -4880,9 +4928,12 @@ unsafe extern "C" {
         dictSize: usize,
     ) -> *mut LZ4F_CDict;
 }
-pub const XXH_errorcode_XXH_OK: XXH_errorcode = 0;
-pub const XXH_errorcode_XXH_ERROR: XXH_errorcode = 1;
-pub type XXH_errorcode = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum XXH_errorcode {
+    XXH_OK = 0,
+    XXH_ERROR = 1,
+}
 unsafe extern "C" {
     pub fn XXH_versionNumber() -> ::std::os::raw::c_uint;
 }
@@ -5056,13 +5107,19 @@ pub const minFHSize: usize = 7;
 pub const maxFHSize: usize = 19;
 pub const BHSize: usize = 4;
 pub const BFSize: usize = 4;
-pub const LZ4F_BlockCompressMode_e_LZ4B_COMPRESSED: LZ4F_BlockCompressMode_e = 0;
-pub const LZ4F_BlockCompressMode_e_LZ4B_UNCOMPRESSED: LZ4F_BlockCompressMode_e = 1;
-pub type LZ4F_BlockCompressMode_e = ::std::os::raw::c_int;
-pub const LZ4F_CtxType_e_ctxNone: LZ4F_CtxType_e = 0;
-pub const LZ4F_CtxType_e_ctxFast: LZ4F_CtxType_e = 1;
-pub const LZ4F_CtxType_e_ctxHC: LZ4F_CtxType_e = 2;
-pub type LZ4F_CtxType_e = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum LZ4F_BlockCompressMode_e {
+    LZ4B_COMPRESSED = 0,
+    LZ4B_UNCOMPRESSED = 1,
+}
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum LZ4F_CtxType_e {
+    ctxNone = 0,
+    ctxFast = 1,
+    ctxHC = 2,
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct LZ4F_cctx_s {
@@ -5169,29 +5226,35 @@ pub type compressFunc_t = ::std::option::Option<
         cdict: *const LZ4F_CDict,
     ) -> ::std::os::raw::c_int,
 >;
-pub const LZ4F_lastBlockStatus_notDone: LZ4F_lastBlockStatus = 0;
-pub const LZ4F_lastBlockStatus_fromTmpBuffer: LZ4F_lastBlockStatus = 1;
-pub const LZ4F_lastBlockStatus_fromSrcBuffer: LZ4F_lastBlockStatus = 2;
-pub type LZ4F_lastBlockStatus = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum LZ4F_lastBlockStatus {
+    notDone = 0,
+    fromTmpBuffer = 1,
+    fromSrcBuffer = 2,
+}
 unsafe extern "C" {
     pub static k_cOptionsNull: LZ4F_compressOptions_t;
 }
-pub const dStage_t_dstage_getFrameHeader: dStage_t = 0;
-pub const dStage_t_dstage_storeFrameHeader: dStage_t = 1;
-pub const dStage_t_dstage_init: dStage_t = 2;
-pub const dStage_t_dstage_getBlockHeader: dStage_t = 3;
-pub const dStage_t_dstage_storeBlockHeader: dStage_t = 4;
-pub const dStage_t_dstage_copyDirect: dStage_t = 5;
-pub const dStage_t_dstage_getBlockChecksum: dStage_t = 6;
-pub const dStage_t_dstage_getCBlock: dStage_t = 7;
-pub const dStage_t_dstage_storeCBlock: dStage_t = 8;
-pub const dStage_t_dstage_flushOut: dStage_t = 9;
-pub const dStage_t_dstage_getSuffix: dStage_t = 10;
-pub const dStage_t_dstage_storeSuffix: dStage_t = 11;
-pub const dStage_t_dstage_getSFrameSize: dStage_t = 12;
-pub const dStage_t_dstage_storeSFrameSize: dStage_t = 13;
-pub const dStage_t_dstage_skipSkippable: dStage_t = 14;
-pub type dStage_t = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum dStage_t {
+    dstage_getFrameHeader = 0,
+    dstage_storeFrameHeader = 1,
+    dstage_init = 2,
+    dstage_getBlockHeader = 3,
+    dstage_storeBlockHeader = 4,
+    dstage_copyDirect = 5,
+    dstage_getBlockChecksum = 6,
+    dstage_getCBlock = 7,
+    dstage_storeCBlock = 8,
+    dstage_flushOut = 9,
+    dstage_getSuffix = 10,
+    dstage_storeSuffix = 11,
+    dstage_getSFrameSize = 12,
+    dstage_storeSFrameSize = 13,
+    dstage_skipSkippable = 14,
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct LZ4F_dctx_s {
@@ -5259,12 +5322,18 @@ const _: () = {
 unsafe extern "C" {
     pub fn _wassert(_Message: *const wchar_t, _File: *const wchar_t, _Line: ::std::os::raw::c_uint);
 }
-pub const XXH_endianness_XXH_bigEndian: XXH_endianness = 0;
-pub const XXH_endianness_XXH_littleEndian: XXH_endianness = 1;
-pub type XXH_endianness = ::std::os::raw::c_int;
-pub const XXH_alignment_XXH_aligned: XXH_alignment = 0;
-pub const XXH_alignment_XXH_unaligned: XXH_alignment = 1;
-pub type XXH_alignment = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum XXH_endianness {
+    XXH_bigEndian = 0,
+    XXH_littleEndian = 1,
+}
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum XXH_alignment {
+    XXH_aligned = 0,
+    XXH_unaligned = 1,
+}
 pub const PRIME32_1: U32 = 2654435761;
 pub const PRIME32_2: U32 = 2246822519;
 pub const PRIME32_3: U32 = 3266489917;

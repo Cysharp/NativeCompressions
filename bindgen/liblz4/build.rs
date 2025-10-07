@@ -6,6 +6,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .header("../../lz4/lib/lz4hc.c")
         .header("../../lz4/lib/lz4frame.c")
         .header("../../lz4/lib/xxhash.c")
+        .default_enum_style(bindgen::EnumVariation::Rust {
+            non_exhaustive: false,
+        })
         .generate()?
         .write_to_file("src/lz4.rs")?;
 
@@ -16,6 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .csharp_namespace("NativeCompressions.Interop")
         .csharp_dll_name("lz4")
         .csharp_class_accessibility("public")
+        // .csharp_generate_const_filter(|x| x.starts_with("LZ4_"))
         .generate_csharp_file("../../src/NativeCompressions.LZ4.Core/Interop/LZ4NativeMethods.cs")?;
 
     Ok(())

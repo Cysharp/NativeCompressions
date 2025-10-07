@@ -140,7 +140,7 @@ public unsafe class LZ4Encoder : SafeHandle
     {
         int size = 4; // End mark (always present)
 
-        if (preferences.frameInfo.contentChecksumFlag == (int)ContentChecksum.ContentChecksumEnabled)
+        if (preferences.frameInfo.contentChecksumFlag == LZ4F_contentChecksum_t.LZ4F_contentChecksumEnabled)
         {
             size += 4; // Content checksum
         }

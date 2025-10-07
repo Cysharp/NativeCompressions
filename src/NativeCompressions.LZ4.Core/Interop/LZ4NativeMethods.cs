@@ -540,7 +540,7 @@ namespace NativeCompressions.Interop
         public static extern int LZ4_decompress_safe_partial_forceExtDict(byte* source, byte* dest, int compressedSize, int targetOutputSize, int dstCapacity, void* dictStart, nuint dictSize);
 
         [DllImport(__DllName, EntryPoint = "LZ4_loadDict_internal", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern int LZ4_loadDict_internal(LZ4_stream_u* LZ4_dict, byte* dictionary, int dictSize, int _ld);
+        public static extern int LZ4_loadDict_internal(LZ4_stream_u* LZ4_dict, byte* dictionary, int dictSize, LoadDict_mode_e _ld);
 
         /// <summary>
         ///  LZ4_compress_HC() :
@@ -1105,7 +1105,7 @@ namespace NativeCompressions.Interop
         public static extern nuint LZ4F_compressBegin_usingCDict(LZ4F_cctx_s* cctx, void* dstBuffer, nuint dstCapacity, LZ4F_CDict_s* cdict, LZ4F_preferences_t* prefsPtr);
 
         [DllImport(__DllName, EntryPoint = "LZ4F_getErrorCode", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern int LZ4F_getErrorCode(nuint functionResult);
+        public static extern LZ4F_errorCodes LZ4F_getErrorCode(nuint functionResult);
 
         /// <summary>
         ///  LZ4F_getBlockSize() :
@@ -1114,7 +1114,7 @@ namespace NativeCompressions.Interop
         ///           or an error code (can be tested using LZ4F_isError()) if @blockSizeID is invalid.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "LZ4F_getBlockSize", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern nuint LZ4F_getBlockSize(int blockSizeID);
+        public static extern nuint LZ4F_getBlockSize(LZ4F_blockSizeID_t blockSizeID);
 
         /// <summary>
         ///  LZ4F_uncompressedUpdate() :
@@ -1239,13 +1239,13 @@ namespace NativeCompressions.Interop
     [StructLayout(LayoutKind.Sequential)]
     public unsafe partial struct LZ4F_frameInfo_t
     {
-        public int blockSizeID;
-        public int blockMode;
-        public int contentChecksumFlag;
-        public int frameType;
+        public LZ4F_blockSizeID_t blockSizeID;
+        public LZ4F_blockMode_t blockMode;
+        public LZ4F_contentChecksum_t contentChecksumFlag;
+        public LZ4F_frameType_t frameType;
         public ulong contentSize;
         public uint dictID;
-        public int blockChecksumFlag;
+        public LZ4F_blockChecksum_t blockChecksumFlag;
     }
 
     /// <summary>
@@ -1322,7 +1322,7 @@ namespace NativeCompressions.Interop
         public void* lz4CtxPtr;
         public ushort lz4CtxAlloc;
         public ushort lz4CtxType;
-        public int blockCompressMode;
+        public LZ4F_BlockCompressMode_e blockCompressMode;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -1340,7 +1340,7 @@ namespace NativeCompressions.Interop
         public LZ4F_CustomMem cmem;
         public LZ4F_frameInfo_t frameInfo;
         public uint version;
-        public int dStage;
+        public dStage_t dStage;
         public ulong frameRemainingSize;
         public nuint maxBlockSize;
         public nuint maxBufferSize;
@@ -1359,6 +1359,100 @@ namespace NativeCompressions.Interop
         public fixed byte header[19];
     }
 
+
+    public enum LoadDict_mode_e : int
+    {
+        _ld_fast = 0,
+        _ld_slow = 1,
+    }
+
+    public enum LZ4F_blockSizeID_t : int
+    {
+        LZ4F_default = 0,
+        LZ4F_max64KB = 4,
+        LZ4F_max256KB = 5,
+        LZ4F_max1MB = 6,
+        LZ4F_max4MB = 7,
+    }
+
+    public enum LZ4F_blockMode_t : int
+    {
+        LZ4F_blockLinked = 0,
+        LZ4F_blockIndependent = 1,
+    }
+
+    public enum LZ4F_contentChecksum_t : int
+    {
+        LZ4F_noContentChecksum = 0,
+        LZ4F_contentChecksumEnabled = 1,
+    }
+
+    public enum LZ4F_blockChecksum_t : int
+    {
+        LZ4F_noBlockChecksum = 0,
+        LZ4F_blockChecksumEnabled = 1,
+    }
+
+    public enum LZ4F_frameType_t : int
+    {
+        LZ4F_frame = 0,
+        LZ4F_skippableFrame = 1,
+    }
+
+    public enum LZ4F_errorCodes : int
+    {
+        LZ4F_OK_NoError = 0,
+        LZ4F_ERROR_GENERIC = 1,
+        LZ4F_ERROR_maxBlockSize_invalid = 2,
+        LZ4F_ERROR_blockMode_invalid = 3,
+        LZ4F_ERROR_parameter_invalid = 4,
+        LZ4F_ERROR_compressionLevel_invalid = 5,
+        LZ4F_ERROR_headerVersion_wrong = 6,
+        LZ4F_ERROR_blockChecksum_invalid = 7,
+        LZ4F_ERROR_reservedFlag_set = 8,
+        LZ4F_ERROR_allocation_failed = 9,
+        LZ4F_ERROR_srcSize_tooLarge = 10,
+        LZ4F_ERROR_dstMaxSize_tooSmall = 11,
+        LZ4F_ERROR_frameHeader_incomplete = 12,
+        LZ4F_ERROR_frameType_unknown = 13,
+        LZ4F_ERROR_frameSize_wrong = 14,
+        LZ4F_ERROR_srcPtr_wrong = 15,
+        LZ4F_ERROR_decompressionFailed = 16,
+        LZ4F_ERROR_headerChecksum_invalid = 17,
+        LZ4F_ERROR_contentChecksum_invalid = 18,
+        LZ4F_ERROR_frameDecoding_alreadyStarted = 19,
+        LZ4F_ERROR_compressionState_uninitialized = 20,
+        LZ4F_ERROR_parameter_null = 21,
+        LZ4F_ERROR_io_write = 22,
+        LZ4F_ERROR_io_read = 23,
+        LZ4F_ERROR_maxCode = 24,
+        _LZ4F_dummy_error_enum_for_c89_never_used = 25,
+    }
+
+    public enum LZ4F_BlockCompressMode_e : int
+    {
+        LZ4B_COMPRESSED = 0,
+        LZ4B_UNCOMPRESSED = 1,
+    }
+
+    public enum dStage_t : int
+    {
+        dstage_getFrameHeader = 0,
+        dstage_storeFrameHeader = 1,
+        dstage_init = 2,
+        dstage_getBlockHeader = 3,
+        dstage_storeBlockHeader = 4,
+        dstage_copyDirect = 5,
+        dstage_getBlockChecksum = 6,
+        dstage_getCBlock = 7,
+        dstage_storeCBlock = 8,
+        dstage_flushOut = 9,
+        dstage_getSuffix = 10,
+        dstage_storeSuffix = 11,
+        dstage_getSFrameSize = 12,
+        dstage_storeSFrameSize = 13,
+        dstage_skipSkippable = 14,
+    }
 
 
 }
