@@ -1,7 +1,6 @@
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // https://github.com/facebook/openzl/blob/dev/include/openzl/openzl.h
    bindgen::Builder::default()
         .header("../../openzl/include/openzl/openzl.h")
         .clang_arg("-I../../openzl/include")

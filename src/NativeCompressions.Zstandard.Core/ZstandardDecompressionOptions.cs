@@ -40,8 +40,8 @@ public readonly record struct ZstandardDecompressionOptions
         SetParameter(context, ZSTD_dParameter.ZSTD_d_windowLogMax, windowLogMax);
         if (dictionary != null)
         {
-            var result = ZSTD_DCtx_refDDict(context, dictionary.DecompressionHandle);
-            Zstandard.ThrowIfError(result);
+            var code = ZSTD_DCtx_refDDict(context, dictionary.DecompressionHandle);
+            Zstandard.ThrowIfError(code);
         }
     }
 
@@ -51,17 +51,8 @@ public readonly record struct ZstandardDecompressionOptions
     {
         if (value != 0)
         {
-            var code = ZSTD_DCtx_setParameter(context, (int)parameter, value);
-            if (Zstandard.IsError(code)) // for inlining
-            {
-                Zstandard.ThrowAsError(code);
-            }
+            var code = ZSTD_DCtx_setParameter(context, parameter, value);
+            Zstandard.ThrowIfError(code);
         }
-    }
-
-    enum ZSTD_dParameter
-    {
-        ZSTD_d_windowLogMax = 100,
-        // others are experimental so ignore.
     }
 }

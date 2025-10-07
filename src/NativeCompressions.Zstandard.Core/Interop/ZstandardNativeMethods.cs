@@ -19,7 +19,7 @@ namespace NativeCompressions.Interop
 
 
         [DllImport(__DllName, EntryPoint = "ZSTD_getErrorString", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern byte* ZSTD_getErrorString(int code);
+        public static extern byte* ZSTD_getErrorString(ZSTD_ErrorCode code);
 
         /// <summary>
         ///  ZSTD_versionNumber() :
@@ -99,7 +99,7 @@ namespace NativeCompressions.Interop
         public static extern uint ZSTD_isError(nuint result);
 
         [DllImport(__DllName, EntryPoint = "ZSTD_getErrorCode", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern int ZSTD_getErrorCode(nuint functionResult);
+        public static extern ZSTD_ErrorCode ZSTD_getErrorCode(nuint functionResult);
 
         [DllImport(__DllName, EntryPoint = "ZSTD_getErrorName", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern byte* ZSTD_getErrorName(nuint result);
@@ -155,7 +155,7 @@ namespace NativeCompressions.Interop
         ///          - lower and upper bounds, both inclusive
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZSTD_cParam_getBounds", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ZSTD_bounds ZSTD_cParam_getBounds(int cParam);
+        public static extern ZSTD_bounds ZSTD_cParam_getBounds(ZSTD_cParameter cParam);
 
         /// <summary>
         ///  ZSTD_CCtx_setParameter() :
@@ -170,7 +170,7 @@ namespace NativeCompressions.Interop
         ///  @return : an error code (which can be tested using ZSTD_isError()).
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZSTD_CCtx_setParameter", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern nuint ZSTD_CCtx_setParameter(ZSTD_CCtx_s* cctx, int param, int value);
+        public static extern nuint ZSTD_CCtx_setParameter(ZSTD_CCtx_s* cctx, ZSTD_cParameter param, int value);
 
         /// <summary>
         ///  ZSTD_CCtx_setPledgedSrcSize() :
@@ -207,7 +207,7 @@ namespace NativeCompressions.Interop
         ///   - Both : similar to resetting the session, followed by resetting parameters.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZSTD_CCtx_reset", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern nuint ZSTD_CCtx_reset(ZSTD_CCtx_s* cctx, int reset);
+        public static extern nuint ZSTD_CCtx_reset(ZSTD_CCtx_s* cctx, ZSTD_ResetDirective reset);
 
         /// <summary>
         ///  ZSTD_compress2() :
@@ -234,7 +234,7 @@ namespace NativeCompressions.Interop
         ///          - both lower and upper bounds, inclusive
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZSTD_dParam_getBounds", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ZSTD_bounds ZSTD_dParam_getBounds(int dParam);
+        public static extern ZSTD_bounds ZSTD_dParam_getBounds(ZSTD_dParameter dParam);
 
         /// <summary>
         ///  ZSTD_DCtx_setParameter() :
@@ -245,7 +245,7 @@ namespace NativeCompressions.Interop
         ///  @return : 0, or an error code (which can be tested using ZSTD_isError()).
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZSTD_DCtx_setParameter", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern nuint ZSTD_DCtx_setParameter(ZSTD_DCtx_s* dctx, int param, int value);
+        public static extern nuint ZSTD_DCtx_setParameter(ZSTD_DCtx_s* dctx, ZSTD_dParameter param, int value);
 
         /// <summary>
         ///  ZSTD_DCtx_reset() :
@@ -255,7 +255,7 @@ namespace NativeCompressions.Interop
         ///  @return : 0, or an error code, which can be tested with ZSTD_isError()
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZSTD_DCtx_reset", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern nuint ZSTD_DCtx_reset(ZSTD_DCtx_s* dctx, int reset);
+        public static extern nuint ZSTD_DCtx_reset(ZSTD_DCtx_s* dctx, ZSTD_ResetDirective reset);
 
         [DllImport(__DllName, EntryPoint = "ZSTD_createCStream", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern ZSTD_CCtx_s* ZSTD_createCStream();
@@ -292,7 +292,7 @@ namespace NativeCompressions.Interop
         ///           or is sometimes implied by methods starting a new compression job (ZSTD_initCStream(), ZSTD_compressCCtx())
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZSTD_compressStream2", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern nuint ZSTD_compressStream2(ZSTD_CCtx_s* cctx, ZSTD_outBuffer_s* output, ZSTD_inBuffer_s* input, int endOp);
+        public static extern nuint ZSTD_compressStream2(ZSTD_CCtx_s* cctx, ZSTD_outBuffer_s* output, ZSTD_inBuffer_s* input, ZSTD_EndDirective endOp);
 
         [DllImport(__DllName, EntryPoint = "ZSTD_CStreamInSize", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern nuint ZSTD_CStreamInSize();
@@ -732,6 +732,117 @@ namespace NativeCompressions.Interop
         public fixed byte _unused[1];
     }
 
+
+    public enum ZSTD_ErrorCode : int
+    {
+        ZSTD_error_no_error = 0,
+        ZSTD_error_GENERIC = 1,
+        ZSTD_error_prefix_unknown = 10,
+        ZSTD_error_version_unsupported = 12,
+        ZSTD_error_frameParameter_unsupported = 14,
+        ZSTD_error_frameParameter_windowTooLarge = 16,
+        ZSTD_error_corruption_detected = 20,
+        ZSTD_error_checksum_wrong = 22,
+        ZSTD_error_literals_headerWrong = 24,
+        ZSTD_error_dictionary_corrupted = 30,
+        ZSTD_error_dictionary_wrong = 32,
+        ZSTD_error_dictionaryCreation_failed = 34,
+        ZSTD_error_parameter_unsupported = 40,
+        ZSTD_error_parameter_combination_unsupported = 41,
+        ZSTD_error_parameter_outOfBound = 42,
+        ZSTD_error_tableLog_tooLarge = 44,
+        ZSTD_error_maxSymbolValue_tooLarge = 46,
+        ZSTD_error_maxSymbolValue_tooSmall = 48,
+        ZSTD_error_cannotProduce_uncompressedBlock = 49,
+        ZSTD_error_stabilityCondition_notRespected = 50,
+        ZSTD_error_stage_wrong = 60,
+        ZSTD_error_init_missing = 62,
+        ZSTD_error_memory_allocation = 64,
+        ZSTD_error_workSpace_tooSmall = 66,
+        ZSTD_error_dstSize_tooSmall = 70,
+        ZSTD_error_srcSize_wrong = 72,
+        ZSTD_error_dstBuffer_null = 74,
+        ZSTD_error_noForwardProgress_destFull = 80,
+        ZSTD_error_noForwardProgress_inputEmpty = 82,
+        ZSTD_error_frameIndex_tooLarge = 100,
+        ZSTD_error_seekableIO = 102,
+        ZSTD_error_dstBuffer_wrong = 104,
+        ZSTD_error_srcBuffer_wrong = 105,
+        ZSTD_error_sequenceProducer_failed = 106,
+        ZSTD_error_externalSequences_invalid = 107,
+        ZSTD_error_maxCode = 120,
+    }
+
+    public enum ZSTD_cParameter : int
+    {
+        ZSTD_c_compressionLevel = 100,
+        ZSTD_c_windowLog = 101,
+        ZSTD_c_hashLog = 102,
+        ZSTD_c_chainLog = 103,
+        ZSTD_c_searchLog = 104,
+        ZSTD_c_minMatch = 105,
+        ZSTD_c_targetLength = 106,
+        ZSTD_c_strategy = 107,
+        ZSTD_c_targetCBlockSize = 130,
+        ZSTD_c_enableLongDistanceMatching = 160,
+        ZSTD_c_ldmHashLog = 161,
+        ZSTD_c_ldmMinMatch = 162,
+        ZSTD_c_ldmBucketSizeLog = 163,
+        ZSTD_c_ldmHashRateLog = 164,
+        ZSTD_c_contentSizeFlag = 200,
+        ZSTD_c_checksumFlag = 201,
+        ZSTD_c_dictIDFlag = 202,
+        ZSTD_c_nbWorkers = 400,
+        ZSTD_c_jobSize = 401,
+        ZSTD_c_overlapLog = 402,
+        ZSTD_c_experimentalParam1 = 500,
+        ZSTD_c_experimentalParam2 = 10,
+        ZSTD_c_experimentalParam3 = 1000,
+        ZSTD_c_experimentalParam4 = 1001,
+        ZSTD_c_experimentalParam5 = 1002,
+        ZSTD_c_experimentalParam7 = 1004,
+        ZSTD_c_experimentalParam8 = 1005,
+        ZSTD_c_experimentalParam9 = 1006,
+        ZSTD_c_experimentalParam10 = 1007,
+        ZSTD_c_experimentalParam11 = 1008,
+        ZSTD_c_experimentalParam12 = 1009,
+        ZSTD_c_experimentalParam13 = 1010,
+        ZSTD_c_experimentalParam14 = 1011,
+        ZSTD_c_experimentalParam15 = 1012,
+        ZSTD_c_experimentalParam16 = 1013,
+        ZSTD_c_experimentalParam17 = 1014,
+        ZSTD_c_experimentalParam18 = 1015,
+        ZSTD_c_experimentalParam19 = 1016,
+        ZSTD_c_experimentalParam20 = 1017,
+    }
+
+    public enum ZSTD_ResetDirective : int
+    {
+        ZSTD_reset_session_only = 1,
+        ZSTD_reset_parameters = 2,
+        ZSTD_reset_session_and_parameters = 3,
+    }
+
+    /// <summary>
+    ///   Advanced decompression API (Requires v1.4.0+)
+    /// </summary>
+    public enum ZSTD_dParameter : int
+    {
+        ZSTD_d_windowLogMax = 100,
+        ZSTD_d_experimentalParam1 = 1000,
+        ZSTD_d_experimentalParam2 = 1001,
+        ZSTD_d_experimentalParam3 = 1002,
+        ZSTD_d_experimentalParam4 = 1003,
+        ZSTD_d_experimentalParam5 = 1004,
+        ZSTD_d_experimentalParam6 = 1005,
+    }
+
+    public enum ZSTD_EndDirective : int
+    {
+        ZSTD_e_continue = 0,
+        ZSTD_e_flush = 1,
+        ZSTD_e_end = 2,
+    }
 
 
 }

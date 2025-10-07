@@ -42,7 +42,7 @@ public unsafe class ZstandardEncoder : SafeHandle
         // setup without create ZstandardCompressionOptions
         if (compressionLevel != Zstandard.DefaultCompressionLevel)
         {
-            var result = ZSTD_CCtx_setParameter(context, (int)ZstandardCompressionOptions.ZSTD_cParameter.ZSTD_c_compressionLevel, compressionLevel);
+            var result = ZSTD_CCtx_setParameter(context, ZSTD_cParameter.ZSTD_c_compressionLevel, compressionLevel);
             Zstandard.ThrowIfError(result);
         }
 
@@ -121,7 +121,7 @@ public unsafe class ZstandardEncoder : SafeHandle
             };
 
             // @return provides a minimum amount of data remaining to be flushed from internal buffers or an error code
-            var remaining = ZSTD_compressStream2(context, &output, &input, (int)endOperation);
+            var remaining = ZSTD_compressStream2(context, &output, &input, endOperation);
             if (Zstandard.IsError(remaining))
             {
                 bytesWritten = 0;
@@ -170,7 +170,7 @@ public unsafe class ZstandardEncoder : SafeHandle
         Validate();
         var context = (ZSTD_CCtx_s*)handle;
 
-        var result = ZSTD_CCtx_reset(context, (int)ZSTD_ResetDirective.ZSTD_reset_session_only);
+        var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_only);
         Zstandard.ThrowIfError(result);
     }
 
@@ -179,7 +179,7 @@ public unsafe class ZstandardEncoder : SafeHandle
         Validate();
         var context = (ZSTD_CCtx_s*)handle;
 
-        var result = ZSTD_CCtx_reset(context, (int)ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
+        var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
         Zstandard.ThrowIfError(result);
 
         options.SetParameter(context);
@@ -195,19 +195,5 @@ public unsafe class ZstandardEncoder : SafeHandle
         ZSTD_freeCCtx((ZSTD_CCtx_s*)handle);
         handle = IntPtr.Zero;
         return true;
-    }
-
-    enum ZSTD_EndDirective
-    {
-        ZSTD_e_continue = 0,
-        ZSTD_e_flush = 1,
-        ZSTD_e_end = 2
-    }
-
-    enum ZSTD_ResetDirective
-    {
-        ZSTD_reset_session_only = 1,
-        ZSTD_reset_parameters = 2,
-        ZSTD_reset_session_and_parameters = 3
     }
 }
