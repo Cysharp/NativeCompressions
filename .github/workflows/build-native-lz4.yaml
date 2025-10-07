@@ -455,7 +455,6 @@ jobs:
           name: lz4-native-package
           path: |
             lz4-native-libraries.tar.gz
-            lz4-native-libraries.zip
 
   create-pr:
     needs: [check_new_release, package-all]
