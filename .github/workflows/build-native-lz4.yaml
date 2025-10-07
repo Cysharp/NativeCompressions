@@ -403,8 +403,12 @@ jobs:
           mkdir -p release/runtimes/{ios-arm64,ios-x64}/native
 
           # Windows
-          cp artifacts/lz4-win-x64/*.dll release/runtimes/win-x64/native/lz4.dll 2>/dev/null || true
-          cp artifacts/lz4-win-arm64/*.dll release/runtimes/win-arm64/native/lz4.dll 2>/dev/null || true
+          if [ -f artifacts/lz4-win-x64/lz4.dll ]; then
+            cp -f artifacts/lz4-win-x64/lz4.dll release/runtimes/win-x64/native/lz4.dll
+          fi
+          if [ -f artifacts/lz4-win-arm64/lz4.dll ]; then
+            cp -f artifacts/lz4-win-arm64/lz4.dll release/runtimes/win-arm64/native/lz4.dll
+          fi
 
           # Linux
           if [ -f artifacts/lz4-linux-x64/liblz4.so ]; then
