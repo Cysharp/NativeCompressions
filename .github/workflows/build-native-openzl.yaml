@@ -108,7 +108,7 @@ jobs:
           install: >-
             ${{ matrix.arch == 'x64' && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-make' || 'mingw-w64-clang-aarch64-gcc mingw-w64-clang-aarch64-make' }}
             make
-      # TODO: Currently, build artifact extensions is .so even on Windows. May change to .dll in the future cause ci errors. Please change extensions in the future if changed.
+      # TODO: Currently, the build artifact extension is .so even on Windows. OpenZL may update the Makefile in the future to create .dll files for Windows, which could cause CI errors. Please update the file extensions accordingly if this change occurs.
       - name: Build DLL
         shell: msys2 {0}
         run: |
@@ -146,7 +146,7 @@ jobs:
             git checkout ${{ needs.check_new_release.outputs.latest_tag }}
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
-      # TODO: Currently, build artifact extensions is .so even on Windows. May change to .dll in the future cause ci errors. Please change extensions in the future if changed.
+      # TODO: Currently, the build artifact extension is .so even on Windows. OpenZL may update the Makefile in the future to create .dll files for Windows, which could cause CI errors. Please update the file extensions accordingly if this change occurs.
       - name: Build using Docker
         run: |
           docker run --rm -v "$PWD:/work" \
@@ -243,7 +243,7 @@ jobs:
             git checkout ${{ needs.check_new_release.outputs.latest_tag }}
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
-      # TODO: Currently, build artifact extensions is .so even on macOS. May change to .dylib in the future cause ci errors. Please change extensions in the future if changed.
+      # TODO: Currently, the build artifact extension is .so even on macOS. OpenZL may update the Makefile in the future to create .dylib files for macOS, which could cause CI errors. Please update the file extensions accordingly if this change occurs.
       - name: Build dynamic library
         run: |
           cd openzl
@@ -324,8 +324,8 @@ jobs:
     timeout-minutes: 10
     strategy:
       matrix:
-        # cannot build with armeabi-v7a, as of sizeof(HeapMeta) == 16': sizeof(HeapMeta) must be 16 to guarantee alignment `expression evaluates to '8 == 16'`.
-        # which means OpenZL dropped support for 32bit (includes armeabi-v7a)
+        # TODO: Building with armeabi-v7a is currently not possible due to the following build error: `sizeof(HeapMeta) == 16: sizeof(HeapMeta) must be 16 to guarantee alignment, but the expression evaluates to '8 == 16'.`
+        # .This error indicates that OpenZL hasn't support for 32-bit architectures currently (including armeabi-v7a).
         abi: [arm64-v8a, x86_64]
         include:
           # - abi: armeabi-v7a
