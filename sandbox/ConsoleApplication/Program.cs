@@ -16,18 +16,27 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-Console.WriteLine(Zstandard.Version);
-Console.WriteLine(Zstandard.MinCompressionLevel);
-Console.WriteLine(Zstandard.MaxCompressionLevel);
+//Console.WriteLine(Zstandard.Version);
+//Console.WriteLine(Zstandard.MinCompressionLevel);
+//Console.WriteLine(Zstandard.MaxCompressionLevel);
 
+
+
+
+Console.WriteLine(OpenZL.DefaultEncodingVersion);
 
 
 //Console.WriteLine(LZ4.Version);
 
-//var linkedCompressed = File.ReadAllBytes("silesia.tar.lz4");
-//var original = LZ4.Decompress(linkedCompressed);
+var linkedCompressed = File.ReadAllBytes("silesia.tar.lz4");
+var original = LZ4.Decompress(linkedCompressed);
 //var blockIndependenCompressed = LZ4.Compress(original);
 
+
+var dest = new byte[original.Length];
+var written = OpenZL.Compress(original, dest);
+
+Console.WriteLine(written);
 
 //Console.ReadLine();
 

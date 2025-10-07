@@ -17,11 +17,12 @@ internal static class NativeMethodsLoader
     {
         NativeLibrary.SetDllImportResolver(typeof(NativeCompressions.LZ4).Assembly, DllImportResolver);
         NativeLibrary.SetDllImportResolver(typeof(NativeCompressions.Zstandard).Assembly, DllImportResolver);
+        NativeLibrary.SetDllImportResolver(typeof(NativeCompressions.OpenZL).Assembly, DllImportResolver);
     }
 
     static IntPtr DllImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
-        if (libraryName is "lz4" or "libzstd")
+        if (libraryName is "lz4" or "libzstd" or "libopenzl")
         {
             var name = libraryName;
             var ext = "";

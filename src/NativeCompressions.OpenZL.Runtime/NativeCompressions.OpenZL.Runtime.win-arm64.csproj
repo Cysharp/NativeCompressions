@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <None Remove="runtimes\**" />
-    <None Include="runtimes\win-arm64\native\openzl.dll" PackagePath="runtimes\win-arm64\native\" Pack="true">
+    <None Include="runtimes\win-arm64\native\libopenzl.dll" PackagePath="runtimes\win-arm64\native\" Pack="true">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>

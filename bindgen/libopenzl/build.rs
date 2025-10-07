@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .method_filter(|x| x.starts_with("ZL_"))
         .csharp_class_name("OpenZLNativeMethods")
         .csharp_namespace("NativeCompressions.Interop")
-        .csharp_dll_name("openzl")
+        .csharp_dll_name("libopenzl")
         .csharp_class_accessibility("public")
         .generate_csharp_file("../../src/NativeCompressions.OpenZL.Core/Interop/OpenZLNativeMethods.cs")?;
 

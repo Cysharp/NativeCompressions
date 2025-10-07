@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -22,6 +22,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\NativeCompressions.LZ4.csproj" />
+    <ProjectReference Include="..\..\src\NativeCompressions.OpenZL.Core\NativeCompressions.OpenZL.Core.csproj" />
+    <ProjectReference Include="..\..\src\NativeCompressions.OpenZL.Runtime\NativeCompressions.OpenZL.Runtime.win-x64.csproj" />
     <ProjectReference Include="..\..\src\NativeCompressions.Zstandard.csproj" />
   </ItemGroup>
 
