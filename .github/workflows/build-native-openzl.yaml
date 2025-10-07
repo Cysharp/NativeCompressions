@@ -108,6 +108,7 @@ jobs:
           install: >-
             ${{ matrix.arch == 'x64' && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-make' || 'mingw-w64-clang-aarch64-gcc mingw-w64-clang-aarch64-make' }}
             make
+      # TODO: Currently, build artifact extensions is .so even on Windows. May change to .dll in the future cause ci errors. Please change extensions in the future if changed.
       - name: Build DLL
         shell: msys2 {0}
         run: |
@@ -146,6 +147,7 @@ jobs:
             git checkout ${{ needs.check_new_release.outputs.latest_tag }}
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      # TODO: Currently, build artifact extensions is .so even on Windows. May change to .dll in the future cause ci errors. Please change extensions in the future if changed.
       - name: Build using Docker
         run: |
           docker run --rm -v "$PWD:/work" \
@@ -252,6 +254,7 @@ jobs:
             git checkout ${{ needs.check_new_release.outputs.latest_tag }}
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      # TODO: Currently, build artifact extensions is .so even on macOS. May change to .dylib in the future cause ci errors. Please change extensions in the future if changed.
       - name: Build dynamic library
         run: |
           cd openzl
