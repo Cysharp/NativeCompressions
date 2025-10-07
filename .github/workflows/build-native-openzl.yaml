@@ -158,8 +158,8 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/win-arm64
-          cp openzl/libopenzl.so* artifacts/linux-${{ matrix.arch }}/
-          cd artifacts/linux-${{ matrix.arch }}
+          cp openzl/libopenzl.so* artifacts/windows-arm64/
+          cd artifacts/windows-arm64
           if [ -L libopenzl.so ]; then
             cp -L libopenzl.so libopenzl.so.dll
             mv libopenzl.so.dll libopenzl.dll
