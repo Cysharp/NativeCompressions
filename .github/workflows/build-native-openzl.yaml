@@ -340,12 +340,14 @@ jobs:
     timeout-minutes: 10
     strategy:
       matrix:
-        abi: [armeabi-v7a, arm64-v8a, x86_64]
+        # cannot build with armeabi-v7a, as of sizeof(HeapMeta) == 16': sizeof(HeapMeta) must be 16 to guarantee alignment `expression evaluates to '8 == 16'`.
+        # which means OpenZL dropped support for 32bit (includes armeabi-v7a)
+        abi: [arm64-v8a, x86_64]
         include:
-          - abi: armeabi-v7a
-            arch: arm # Unity require this for mobile app
-            target: armv7a-linux-androideabi21
-            cc: armv7a-linux-androideabi21-clang
+          # - abi: armeabi-v7a
+          #   arch: arm # Unity require this for mobile app
+          #   target: armv7a-linux-androideabi21
+          #   cc: armv7a-linux-androideabi21-clang
           - abi: arm64-v8a
             arch: arm64 # Most mobile app
             target: aarch64-linux-android21
