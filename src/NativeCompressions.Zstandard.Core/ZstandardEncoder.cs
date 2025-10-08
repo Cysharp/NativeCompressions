@@ -1,29 +1,20 @@
 ﻿using NativeCompressions.Internal;
 using NativeCompressions.Interop;
 using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
 
-// BrotliEncoder/Decoder is a combination of a struct and a native context wrapped in SafeHandle.
-// In this case, the outer layer is a struct, but there is a SafeHandle allocation.
-// For NativeCompressions' Encoder/Decoder, we made it a class and turned the outer layer itself into a SafeHandle.
-// Since LZ4/Zstandard's native contexts are reusable, we have given the Encoder/Decoder a reusable nature as well.
-// In that case, if we make it a struct and allocate a raw native context for zero allocation, the risk of leaks increases.
-// Therefore, we compared safety and allocation cost, and adopted SafeHandle to ensure safety.
-
 /// <summary>
 /// Provides streaming compression functionality for Zstandard format.
 /// </summary>
-public unsafe class ZstandardEncoder : SafeHandle
+public unsafe struct ZstandardEncoder : IDisposable
 {
-    // ZSTD_CCtx_s* base.handle
-
-    public override bool IsInvalid => handle == IntPtr.Zero;
-
-
-    new void Close() { base.Close(); }
+    // native context in SafeHandle(for safety) and all struct fields in heap(for struct small size)
+    ZstandardEncoderState? state;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardEncoder"/> with default settings.
@@ -37,32 +28,39 @@ public unsafe class ZstandardEncoder : SafeHandle
     /// Initializes a new instance of the <see cref="ZstandardEncoder"/> with compressionLevel.
     /// </summary>
     public ZstandardEncoder(int compressionLevel)
-        : base(IntPtr.Zero, true)
     {
-        var context = ZSTD_createCCtx();
-        if (context == null) throw new ZstandardException("Failed to create compression context");
+        this.state = ZstandardEncoderState.Create();
 
-        // setup without create ZstandardCompressionOptions
         if (compressionLevel != Zstandard.DefaultCompressionLevel)
         {
-            var result = ZSTD_CCtx_setParameter(context, ZSTD_cParameter.ZSTD_c_compressionLevel, compressionLevel);
-            Zstandard.ThrowIfError(result);
+            try
+            {
+                var result = ZSTD_CCtx_setParameter(state.DangerousGetHandle(), ZSTD_cParameter.ZSTD_c_compressionLevel, compressionLevel);
+                Zstandard.ThrowIfError(result);
+            }
+            catch
+            {
+                this.state.Dispose();
+                throw;
+            }
         }
-
-        SetHandle((IntPtr)context); // assign to SafeHandle
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardEncoder"/> with specified options.
     /// </summary>
     public ZstandardEncoder(in ZstandardCompressionOptions compressionOptions)
-        : base(IntPtr.Zero, true)
     {
-        var context = ZSTD_createCCtx();
-        if (context == null) throw new ZstandardException("Failed to create compression context");
-
-        compressionOptions.SetParameter(context);
-        SetHandle((IntPtr)context); // assign to SafeHandle
+        this.state = ZstandardEncoderState.Create();
+        try
+        {
+            compressionOptions.SetParameter(state.DangerousGetHandle());
+        }
+        catch
+        {
+            this.state.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -85,26 +83,24 @@ public unsafe class ZstandardEncoder : SafeHandle
     /// </remarks>
     public OperationStatus Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
     {
-        Validate();
         var endOp = isFinalBlock ? ZSTD_EndDirective.ZSTD_e_end : ZSTD_EndDirective.ZSTD_e_continue;
         return CompressCore(source, destination, out bytesConsumed, out bytesWritten, endOp);
     }
 
     public OperationStatus Flush(Span<byte> destination, out int bytesWritten)
     {
-        Validate();
         return CompressCore([], destination, out _, out bytesWritten, ZSTD_EndDirective.ZSTD_e_flush);
     }
 
     public OperationStatus Close(Span<byte> destination, out int bytesWritten)
     {
-        Validate();
         return CompressCore([], destination, out _, out bytesWritten, ZSTD_EndDirective.ZSTD_e_end);
     }
 
     OperationStatus CompressCore(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, ZSTD_EndDirective endOperation)
     {
-        var context = (ZSTD_CCtx_s*)handle;
+        Validate();
+        var context = state.DangerousGetHandle();
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)
@@ -171,7 +167,7 @@ public unsafe class ZstandardEncoder : SafeHandle
     public void Reset()
     {
         Validate();
-        var context = (ZSTD_CCtx_s*)handle;
+        var context = state.DangerousGetHandle();
 
         var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_only);
         Zstandard.ThrowIfError(result);
@@ -180,7 +176,7 @@ public unsafe class ZstandardEncoder : SafeHandle
     public void Reset(in ZstandardCompressionOptions options)
     {
         Validate();
-        var context = (ZSTD_CCtx_s*)handle;
+        var context = state.DangerousGetHandle();
 
         var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
         Zstandard.ThrowIfError(result);
@@ -188,15 +184,47 @@ public unsafe class ZstandardEncoder : SafeHandle
         options.SetParameter(context);
     }
 
-    void Validate()
+    public void Dispose()
     {
-        if (IsInvalid) Throws.InvalidContextNullException();
+        if (state == null) return;
+        state.Dispose();
     }
 
-    protected override bool ReleaseHandle()
+    [MemberNotNull(nameof(state))]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void Validate()
     {
-        ZSTD_freeCCtx((ZSTD_CCtx_s*)handle);
-        handle = IntPtr.Zero;
-        return true;
+        if (state == null) Throws.InvalidContextNullException();
+        if (state.IsClosed) Throws.ObjectDisposedException();
+    }
+
+    unsafe class ZstandardEncoderState : SafeHandle
+    {
+        public override bool IsInvalid => handle == IntPtr.Zero;
+
+        public new ZSTD_CCtx_s* DangerousGetHandle() => (ZSTD_CCtx_s*)handle;
+
+        ZstandardEncoderState()
+           : base(IntPtr.Zero, true)
+        {
+        }
+
+        public static ZstandardEncoderState Create()
+        {
+            var context = ZSTD_createCCtx();
+            if (context == null) throw new ZstandardException("Failed to create compression context");
+
+            var state = new ZstandardEncoderState();
+            state.handle = (IntPtr)context; // assign to SafeHandle
+
+            return state;
+        }
+
+        protected override bool ReleaseHandle()
+        {
+            ZSTD_freeCCtx((ZSTD_CCtx_s*)handle);
+            handle = IntPtr.Zero;
+            return true;
+        }
     }
 }

@@ -1,26 +1,20 @@
 ﻿using NativeCompressions.Internal;
 using NativeCompressions.Interop;
 using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
 
-// BrotliEncoder/Decoder is a combination of a struct and a native context wrapped in SafeHandle.
-// In this case, the outer layer is a struct, but there is a SafeHandle allocation.
-// For NativeCompressions' Encoder/Decoder, we made it a class and turned the outer layer itself into a SafeHandle.
-// Since LZ4/Zstandard's native contexts are reusable, we have given the Encoder/Decoder a reusable nature as well.
-// In that case, if we make it a struct and allocate a raw native context for zero allocation, the risk of leaks increases.
-// Therefore, we compared safety and allocation cost, and adopted SafeHandle to ensure safety.
-
 /// <summary>
 /// Provides streaming decompression functionality for Zstandard format.
 /// </summary>
-public unsafe class ZstandardDecoder : SafeHandle
+public unsafe struct ZstandardDecoder : IDisposable
 {
-    // ZSTD_DCtx_s* handle;
-
-    public override bool IsInvalid => handle == IntPtr.Zero;
+    // native context in SafeHandle(for safety) and all struct fields in heap(for struct small size)
+    ZstandardDecoderState? state;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardDecoder"/>.
@@ -34,13 +28,17 @@ public unsafe class ZstandardDecoder : SafeHandle
     /// Initializes a new instance of the <see cref="ZstandardDecoder"/> with specified options.
     /// </summary>
     public ZstandardDecoder(in ZstandardDecompressionOptions decompressionOptions)
-        : base(IntPtr.Zero, true)
     {
-        var context = ZSTD_createDCtx();
-        if (context == null) throw new ZstandardException("Failed to create decompression context");
-
-        decompressionOptions.SetParameter(context);
-        SetHandle((IntPtr)context); // assign to SafeHandle
+        this.state = ZstandardDecoderState.Create();
+        try
+        {
+            decompressionOptions.SetParameter(state.DangerousGetHandle());
+        }
+        catch
+        {
+            this.state.Dispose();
+            throw;
+        }
     }
 
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten)
@@ -51,7 +49,7 @@ public unsafe class ZstandardDecoder : SafeHandle
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, out int hintOfNextSrcSize)
     {
         Validate();
-        var context = (ZSTD_DCtx_s*)handle;
+        var context = state.DangerousGetHandle();
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)
@@ -118,7 +116,7 @@ public unsafe class ZstandardDecoder : SafeHandle
     public void Reset()
     {
         Validate();
-        var context = (ZSTD_DCtx_s*)handle;
+        var context = state.DangerousGetHandle();
 
         var result = ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_only);
         Zstandard.ThrowIfError(result);
@@ -127,7 +125,7 @@ public unsafe class ZstandardDecoder : SafeHandle
     public void Reset(in ZstandardDecompressionOptions options)
     {
         Validate();
-        var context = (ZSTD_DCtx_s*)handle;
+        var context = state.DangerousGetHandle();
 
         var result = ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
         Zstandard.ThrowIfError(result);
@@ -135,15 +133,47 @@ public unsafe class ZstandardDecoder : SafeHandle
         options.SetParameter(context);
     }
 
-    void Validate()
+    public void Dispose()
     {
-        if (IsInvalid) Throws.InvalidContextNullException();
+        if (state == null) return;
+        state.Dispose();
     }
 
-    protected override bool ReleaseHandle()
+    [MemberNotNull(nameof(state))]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void Validate()
     {
-        ZSTD_freeDCtx((ZSTD_DCtx_s*)handle);
-        handle = IntPtr.Zero;
-        return true;
+        if (state == null) Throws.InvalidContextNullException();
+        if (state.IsClosed) Throws.ObjectDisposedException();
+    }
+
+    unsafe class ZstandardDecoderState : SafeHandle
+    {
+        public override bool IsInvalid => handle == IntPtr.Zero;
+
+        public new ZSTD_DCtx_s* DangerousGetHandle() => (ZSTD_DCtx_s*)handle;
+
+        ZstandardDecoderState()
+           : base(IntPtr.Zero, true)
+        {
+        }
+
+        public static ZstandardDecoderState Create()
+        {
+            var context = ZSTD_createDCtx();
+            if (context == null) throw new ZstandardException("Failed to create decompression context");
+
+            var state = new ZstandardDecoderState();
+            state.handle = (IntPtr)context; // assign to SafeHandle
+
+            return state;
+        }
+
+        protected override bool ReleaseHandle()
+        {
+            ZSTD_freeDCtx((ZSTD_DCtx_s*)handle);
+            handle = IntPtr.Zero;
+            return true;
+        }
     }
 }

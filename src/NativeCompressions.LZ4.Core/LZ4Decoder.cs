@@ -1,19 +1,12 @@
 ﻿using NativeCompressions.Internal;
 using NativeCompressions.Interop;
-using System;
 using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using static NativeCompressions.Interop.LZ4NativeMethods;
 
 namespace NativeCompressions;
-
-// BrotliEncoder/Decoder is a combination of a struct and a native context wrapped in SafeHandle.
-// In this case, the outer layer is a struct, but there is a SafeHandle allocation.
-// For NativeCompressions' Encoder/Decoder, we made it a class and turned the outer layer itself into a SafeHandle.
-// Since LZ4/Zstandard's native contexts are reusable, we have given the Encoder/Decoder a reusable nature as well.
-// In that case, if we make it a struct and allocate a raw native context for zero allocation, the risk of leaks increases.
-// Therefore, we compared safety and allocation cost, and adopted SafeHandle to ensure safety.
 
 /// <summary>
 /// Provides streaming decompression functionality for LZ4 Frame format.
@@ -23,13 +16,10 @@ namespace NativeCompressions;
 /// The decoder automatically handles frame headers, block headers, and validates checksums if present.
 /// It can decompress data incrementally, making it suitable for streaming scenarios.
 /// </remarks>
-public unsafe class LZ4Decoder : SafeHandle
+public unsafe struct LZ4Decoder : IDisposable
 {
-    // LZ4F_dctx_s* base.handle;
-    LZ4F_decompressOptions_t options;
-    LZ4Dictionary? dictionary;
-
-    public override bool IsInvalid => handle == IntPtr.Zero;
+    // native context in SafeHandle(for safety) and all struct fields in heap(for struct small size)
+    LZ4DecoderState? state;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LZ4Decoder"/>.
@@ -46,15 +36,10 @@ public unsafe class LZ4Decoder : SafeHandle
     /// </summary>
     /// <exception cref="LZ4Exception">Thrown when the decompression context cannot be created.</exception>
     public LZ4Decoder(in LZ4DecompressionOptions options)
-        : base(IntPtr.Zero, true)
     {
-        LZ4F_dctx_s* ptr = default;
-        var code = LZ4F_createDecompressionContext(&ptr, LZ4.FrameVersion);
-        LZ4.ThrowIfError(code);
-
-        SetHandle((IntPtr)ptr); // assign to SafeHandle
-        this.options = options.ToDecompressOptions();
-        this.dictionary = options.Dictionary;
+        this.state = LZ4DecoderState.Create();
+        this.state.options = options.ToDecompressOptions();
+        this.state.dictionary = options.Dictionary;
     }
 
     /// <summary>
@@ -83,7 +68,7 @@ public unsafe class LZ4Decoder : SafeHandle
     public int GetHeaderSize(ReadOnlySpan<byte> source)
     {
         Validate();
-        var context = (LZ4F_dctx_s*)handle;
+        var context = state.DangerousGetHandle();
 
         fixed (byte* src = source)
         {
@@ -129,7 +114,7 @@ public unsafe class LZ4Decoder : SafeHandle
     public LZ4FrameInfo GetFrameInfo(ReadOnlySpan<byte> source, out int bytesConsumed)
     {
         Validate();
-        var context = (LZ4F_dctx_s*)handle;
+        var context = state.DangerousGetHandle();
 
         fixed (byte* src = source)
         {
@@ -244,23 +229,23 @@ public unsafe class LZ4Decoder : SafeHandle
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, out int hintOfNextSrcSize)
     {
         Validate();
-        var context = (LZ4F_dctx_s*)handle;
+        var context = state.DangerousGetHandle();
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)
-        fixed (LZ4F_decompressOptions_t* optionsPtr = &options)
+        fixed (LZ4F_decompressOptions_t* optionsPtr = &state.options)
         {
             var consumed = (nuint)source.Length;
             var written = (nuint)destination.Length;
 
             nuint hintOrErrorCode;
-            if (dictionary == null)
+            if (state.dictionary == null)
             {
                 hintOrErrorCode = LZ4F_decompress(context, dest, &written, src, &consumed, dOptPtr: optionsPtr);
             }
             else
             {
-                var dict = dictionary.RawDictionary;
+                var dict = state.dictionary.RawDictionary;
                 fixed (void* dictPtr = dict)
                 {
                     hintOrErrorCode = LZ4F_decompress_usingDict(context, dest, &written, src, &consumed, dictPtr, (nuint)dict.Length, decompressOptionsPtr: optionsPtr);
@@ -325,19 +310,56 @@ public unsafe class LZ4Decoder : SafeHandle
     public void Reset()
     {
         Validate();
-        LZ4F_resetDecompressionContext((LZ4F_dctx_s*)handle);
+        LZ4F_resetDecompressionContext(state.DangerousGetHandle());
     }
 
+    public void Dispose()
+    {
+        if (state == null) return;
+        state.Dispose();
+    }
+
+    [MemberNotNull(nameof(state))]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     void Validate()
     {
-        if (IsInvalid) Throws.InvalidContextNullException();
+        if (state == null) Throws.InvalidContextNullException();
+        if (state.IsClosed) Throws.ObjectDisposedException();
     }
 
-    protected override bool ReleaseHandle()
+    unsafe class LZ4DecoderState : SafeHandle
     {
-        // LZ4F_freeDecompressionContext always returns success, no need to check
-        LZ4F_freeDecompressionContext((LZ4F_dctx_s*)handle);
-        handle = IntPtr.Zero;
-        return true;
+        // for LZ4Decoder fields(store in heap)
+        internal LZ4F_decompressOptions_t options;
+        internal LZ4Dictionary? dictionary;
+
+        public override bool IsInvalid => handle == IntPtr.Zero;
+
+        public new LZ4F_dctx_s* DangerousGetHandle() => (LZ4F_dctx_s*)handle;
+
+        LZ4DecoderState()
+           : base(IntPtr.Zero, true)
+        {
+        }
+
+        public static LZ4DecoderState Create()
+        {
+            LZ4F_dctx_s* ptr = default;
+            var code = LZ4F_createDecompressionContext(&ptr, LZ4.FrameVersion);
+            LZ4.ThrowIfError(code);
+
+            var state = new LZ4DecoderState();
+            state.handle = (IntPtr)ptr; // assign to SafeHandle
+
+            return state;
+        }
+
+        protected override bool ReleaseHandle()
+        {
+            // LZ4F_freeDecompressionContext always returns success, no need to check
+            LZ4F_freeDecompressionContext((LZ4F_dctx_s*)handle);
+            handle = IntPtr.Zero;
+            return true;
+        }
     }
 }

@@ -1,7 +1,7 @@
 ﻿using NativeCompressions.Internal;
 using NativeCompressions.Interop;
-using System;
-using System.Reflection.Emit;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using static NativeCompressions.Interop.LZ4NativeMethods;
 
@@ -15,13 +15,6 @@ namespace NativeCompressions;
 // But LZ4F_compressUpdate() `When successful, the function always entirely consumes @srcBuffer.` so `out int bytesConsumed` is meaningless.
 // When LZ4F_compressUpdate() has been failed, context state is broken so we need to throw error(can't impl Try... API).
 
-// BrotliEncoder/Decoder is a combination of a struct and a native context wrapped in SafeHandle.
-// In this case, the outer layer is a struct, but there is a SafeHandle allocation.
-// For NativeCompressions' Encoder/Decoder, we made it a class and turned the outer layer itself into a SafeHandle.
-// Since LZ4/Zstandard's native contexts are reusable, we have given the Encoder/Decoder a reusable nature as well.
-// In that case, if we make it a struct and allocate a raw native context for zero allocation, the risk of leaks increases.
-// Therefore, we compared safety and allocation cost, and adopted SafeHandle to ensure safety.
-
 /// <summary>
 /// Provides streaming compression functionality for LZ4 Frame format.
 /// This encoder supports incremental compression with automatic frame header generation.
@@ -30,17 +23,24 @@ namespace NativeCompressions;
 /// The encoder can be reused after calling <see cref="Close"/> to compress multiple frames sequentially.
 /// Always dispose the encoder when finished to free unmanaged resources.
 /// </remarks>
-public unsafe class LZ4Encoder : SafeHandle
+public unsafe struct LZ4Encoder : IDisposable
 {
-    // LZ4F_cctx_s* base.handle
-    LZ4F_preferences_t preferences;
-    LZ4Dictionary? dictionary;
+    // native context in SafeHandle(for safety) and all struct fields in heap(for struct small size)
+    LZ4EncoderState? state;
 
-    bool isWrittenHeader;
-
-    public override bool IsInvalid => handle == IntPtr.Zero;
-
-    public bool IsWriteHeader { get; set; } = true;
+    public bool IsWriteHeader
+    {
+        get
+        {
+            Validate();
+            return state.isWriteHeader;
+        }
+        set
+        {
+            Validate();
+            state.isWriteHeader = value;
+        }
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LZ4Encoder"/> with default settings.
@@ -56,15 +56,10 @@ public unsafe class LZ4Encoder : SafeHandle
     /// <param name="options">Frame format options such as block size, compression level, and checksums. Pass LZ4CompressionOptions.Default for defaults.</param>
     /// <exception cref="LZ4Exception">Thrown when the compression context cannot be created.</exception>
     public LZ4Encoder(in LZ4CompressionOptions options)
-        : base(IntPtr.Zero, true)
     {
-        LZ4F_cctx_s* ptr = default;
-        var code = LZ4F_createCompressionContext(&ptr, LZ4.FrameVersion);
-        LZ4.ThrowIfError(code);
-
-        SetHandle((IntPtr)ptr); // assign to SafeHandle
-        this.preferences = options.ToPreferences(); // freeze preferences
-        this.dictionary = options.Dictionary;
+        this.state = LZ4EncoderState.Create();
+        this.state.preferences = options.ToPreferences();
+        this.state.dictionary = options.Dictionary;
     }
 
     /// <summary>
@@ -85,8 +80,10 @@ public unsafe class LZ4Encoder : SafeHandle
     /// </remarks>
     public unsafe int GetMaxCompressedLength(int inputSize, bool includingHeader = true, bool includingFooter = true)
     {
+        Validate();
+
         int bound;
-        fixed (LZ4F_preferences_t* prefs = &this.preferences)
+        fixed (LZ4F_preferences_t* prefs = &this.state.preferences)
         {
             bound = (int)LZ4F_compressBound((nuint)inputSize, prefs);
         }
@@ -117,14 +114,16 @@ public unsafe class LZ4Encoder : SafeHandle
     /// <returns>Actual header size in bytes.</returns>
     public int GetActualFrameHeaderLength()
     {
+        Validate();
+
         int size = 7; // Base size (magic, FLG, BD, HC)
 
-        if (preferences.frameInfo.contentSize > 0)
+        if (state.preferences.frameInfo.contentSize > 0)
         {
             size += 8; // Content size field
         }
 
-        if (preferences.frameInfo.dictID != 0)
+        if (state.preferences.frameInfo.dictID != 0)
         {
             size += 4; // Dictionary ID field
         }
@@ -138,9 +137,11 @@ public unsafe class LZ4Encoder : SafeHandle
     /// <returns>Actual footer size in bytes.</returns>
     public int GetActualFrameFooterLength()
     {
+        Validate();
+
         int size = 4; // End mark (always present)
 
-        if (preferences.frameInfo.contentChecksumFlag == LZ4F_contentChecksum_t.LZ4F_contentChecksumEnabled)
+        if (state.preferences.frameInfo.contentChecksumFlag == LZ4F_contentChecksum_t.LZ4F_contentChecksumEnabled)
         {
             size += 4; // Content checksum
         }
@@ -162,24 +163,24 @@ public unsafe class LZ4Encoder : SafeHandle
     public int Compress(ReadOnlySpan<byte> source, Span<byte> destination)
     {
         Validate();
-        var context = (LZ4F_cctx_s*)handle;
+        var context = state.DangerousGetHandle();
 
         var totalWritten = 0;
 
         // Write header block
-        if (!isWrittenHeader)
+        if (!state.isWrittenHeader)
         {
-            fixed (LZ4F_preferences_t* preference = &this.preferences)
+            fixed (LZ4F_preferences_t* preference = &state.preferences)
             fixed (byte* dest = destination)
             {
-                var writtenOrErrorCode = (dictionary == null)
+                var writtenOrErrorCode = (state.dictionary == null)
                     ? LZ4F_compressBegin(context, dest, (nuint)destination.Length, preference)
-                    : LZ4F_compressBegin_usingCDict(context, dest, (nuint)destination.Length, dictionary.Handle, preference);
+                    : LZ4F_compressBegin_usingCDict(context, dest, (nuint)destination.Length, state.dictionary.Handle, preference);
                 LZ4.ThrowIfError(writtenOrErrorCode);
-                isWrittenHeader = true;
+                state.isWrittenHeader = true;
 
                 // LZ4F_cctx_s always need to call compressBegin but header can ignore(write for single frame from multiple context(multiple block))
-                if (IsWriteHeader)
+                if (state.isWriteHeader)
                 {
                     destination = destination.Slice((int)writtenOrErrorCode);
                     totalWritten += (int)writtenOrErrorCode;
@@ -222,7 +223,7 @@ public unsafe class LZ4Encoder : SafeHandle
     public int Flush(Span<byte> destination)
     {
         Validate();
-        var context = (LZ4F_cctx_s*)handle;
+        var context = state.DangerousGetHandle();
 
         fixed (byte* dest = destination)
         {
@@ -247,10 +248,10 @@ public unsafe class LZ4Encoder : SafeHandle
     public int Close(Span<byte> destination)
     {
         Validate();
-        var context = (LZ4F_cctx_s*)handle;
+        var context = state.DangerousGetHandle();
 
         var totalWritten = 0;
-        if (!isWrittenHeader)
+        if (!state.isWrittenHeader)
         {
             // This will write header, empty body.
             var written = Compress([], destination);
@@ -267,15 +268,10 @@ public unsafe class LZ4Encoder : SafeHandle
 
             // secret option, LZ4Encoder can reuse after call Close()
             // beacuse: A successful call to LZ4F_compressEnd() makes `cctx` available again for another compression task.
-            isWrittenHeader = false;
+            state.isWrittenHeader = false;
         }
 
         return totalWritten;
-    }
-
-    void Validate()
-    {
-        if (IsInvalid) Throws.InvalidContextNullException();
     }
 
     /// <summary>
@@ -284,16 +280,61 @@ public unsafe class LZ4Encoder : SafeHandle
     /// <param name="options">The LZ4 frame options to apply.</param>
     public void SetOptions(in LZ4CompressionOptions options)
     {
-        this.preferences = options.ToPreferences();
-        this.dictionary = options.Dictionary;
+        Validate();
+        this.state.preferences = options.ToPreferences();
+        this.state.dictionary = options.Dictionary;
     }
 
-    protected override bool ReleaseHandle()
+    public void Dispose()
     {
-        // Note1 : LZ4F_freeCompressionContext() is always successful. Its return value can be ignored.
-        // Note2 : LZ4F_freeCompressionContext() works fine with NULL input pointers (do nothing).
-        LZ4F_freeCompressionContext((LZ4F_cctx_s*)handle);
-        handle = IntPtr.Zero;
-        return true;
+        if (state == null) return;
+        state.Dispose();
+    }
+
+    [MemberNotNull(nameof(state))]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void Validate()
+    {
+        if (state == null) Throws.InvalidContextNullException();
+        if (state.IsClosed) Throws.ObjectDisposedException();
+    }
+
+    unsafe class LZ4EncoderState : SafeHandle
+    {
+        // for LZ4Encoder fields(store in heap)
+        internal LZ4F_preferences_t preferences;
+        internal LZ4Dictionary? dictionary;
+        internal bool isWrittenHeader;
+        internal bool isWriteHeader;
+
+        public override bool IsInvalid => handle == IntPtr.Zero;
+
+        public new LZ4F_cctx_s* DangerousGetHandle() => (LZ4F_cctx_s*)handle;
+
+        LZ4EncoderState()
+           : base(IntPtr.Zero, true)
+        {
+        }
+
+        public static LZ4EncoderState Create()
+        {
+            LZ4F_cctx_s* ptr = default;
+            var code = LZ4F_createCompressionContext(&ptr, LZ4.FrameVersion);
+            LZ4.ThrowIfError(code);
+
+            var state = new LZ4EncoderState();
+            state.handle = (IntPtr)ptr; // assign to SafeHandle
+
+            return state;
+        }
+
+        protected override bool ReleaseHandle()
+        {
+            // Note1 : LZ4F_freeCompressionContext() is always successful. Its return value can be ignored.
+            // Note2 : LZ4F_freeCompressionContext() works fine with NULL input pointers (do nothing).
+            LZ4F_freeCompressionContext((LZ4F_cctx_s*)handle);
+            handle = IntPtr.Zero;
+            return true;
+        }
     }
 }
