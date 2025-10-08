@@ -21,6 +21,7 @@ jobs:
     uses: ./.github/workflows/check-new-release.yaml
     with:
       repository: lz4/lz4
+      submodule_path: lz4
 
   build-windows:
     needs: [check_new_release]

@@ -9,6 +9,10 @@ on:
         description: "The repository to check for new releases (e.g. facebook/openzl)"
         required: true
         type: string
+      submodule_path:
+        description: "The path to the submodule in the current repository (e.g. openzl)"
+        required: true
+        type: string
     outputs:
       needs_update:
         description: "Whether an update is needed"
@@ -35,7 +39,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
-      - name: Check openzl latest release
+      - name: Check ${{ inputs.repository }} latest release
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
@@ -56,7 +60,7 @@ jobs:
           fi
 
           # Get current submodule tag (if exists)
-          cd openzl
+          cd "${{ inputs.submodule_path }}"
             CURRENT_TAG=$(git describe --tags --exact-match HEAD 2>/dev/null || echo "")
             CURRENT_COMMIT=$(git rev-parse HEAD)
           cd ..
