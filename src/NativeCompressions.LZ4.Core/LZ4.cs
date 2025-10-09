@@ -81,19 +81,19 @@ public static partial class LZ4
 
     public static int GetMaxCompressedLength(int inputSize) => GetMaxCompressedLength(inputSize, LZ4CompressionOptions.Default);
 
-    public static int GetMaxCompressedLength(int inputSize, in LZ4CompressionOptions options) => checked((int)GetMaxCompressedLongLength(inputSize, options));
+    public static int GetMaxCompressedLength(int inputSize, in LZ4CompressionOptions options) => checked((int)GetMaxCompressedLength(inputSize, options));
 
-    public static long GetMaxCompressedLongLength(int inputSize) => GetMaxCompressedLongLength(inputSize, LZ4CompressionOptions.Default);
+    public static nuint GetMaxCompressedLength(nuint inputSize) => GetMaxCompressedLength(inputSize, LZ4CompressionOptions.Default);
 
-    public static long GetMaxCompressedLongLength(int inputSize, in LZ4CompressionOptions options)
+    public static nuint GetMaxCompressedLength(nuint inputSize, in LZ4CompressionOptions options)
     {
         ref var preferences_t = ref Unsafe.As<LZ4CompressionOptions, LZ4F_preferences_t>(ref Unsafe.AsRef(in options));
         unsafe
         {
             // calculate bound for LZ4F_compressFrame
             // compressFrameBound uses max header size so changing ContentSize and DictionaryId is ok(in Compress methods, we changes it)
-            var bound = LZ4F_compressFrameBound((nuint)inputSize, (LZ4F_preferences_t*)Unsafe.AsPointer(ref preferences_t));
-            return (long)bound;
+            var bound = LZ4F_compressFrameBound(inputSize, (LZ4F_preferences_t*)Unsafe.AsPointer(ref preferences_t));
+            return bound;
         }
     }
 

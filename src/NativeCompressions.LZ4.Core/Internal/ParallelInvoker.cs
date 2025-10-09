@@ -6,6 +6,7 @@ internal class ParallelInvoker : IThreadPoolWorkItem, IValueTaskSource
 {
     readonly Func<int, CancellationToken, Task> body;
     readonly CancellationTokenSource cancellationTokenSource;
+    readonly CancellationToken cancellationToken;
     int workerId = -1;
     int remaining;
 
@@ -15,6 +16,7 @@ internal class ParallelInvoker : IThreadPoolWorkItem, IValueTaskSource
     {
         this.body = body;
         this.cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        this.cancellationToken = this.cancellationTokenSource.Token;
         this.remaining = maxDegreeOfParallelism;
     }
 
@@ -35,7 +37,7 @@ internal class ParallelInvoker : IThreadPoolWorkItem, IValueTaskSource
         try
         {
             var id = Interlocked.Increment(ref workerId);
-            await body(id, cancellationTokenSource.Token);
+            await body(id, cancellationToken);
 
             if (Interlocked.Decrement(ref remaining) == 0) // all workers complete successfully.
             {

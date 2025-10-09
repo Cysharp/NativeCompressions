@@ -45,7 +45,15 @@ public static partial class Zstandard
     /// </summary>
     public static int GetMaxCompressedLength(int inputSize)
     {
-        return (int)ZSTD_compressBound((nuint)inputSize);
+        return checked((int)ZSTD_compressBound((nuint)inputSize));
+    }
+
+    /// <summary>
+    /// Gets the maximum compressed size for a given input size.
+    /// </summary>
+    public static nuint GetMaxCompressedLength(nuint inputSize)
+    {
+        return ZSTD_compressBound(inputSize);
     }
 
     public static unsafe bool TryGetFrameContentSize(ReadOnlySpan<byte> source, out ulong size)

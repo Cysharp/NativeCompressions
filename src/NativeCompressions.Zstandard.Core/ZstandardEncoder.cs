@@ -2,6 +2,7 @@
 using NativeCompressions.Interop;
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
+using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using static NativeCompressions.Interop.ZstandardNativeMethods;
