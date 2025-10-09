@@ -29,7 +29,7 @@ public unsafe struct ZstandardDecoder : IDisposable
     /// </summary>
     public ZstandardDecoder(in ZstandardDecompressionOptions decompressionOptions)
     {
-        this.state = ZstandardDecoderState.Create();
+        this.state = new ZstandardDecoderState();
         try
         {
             decompressionOptions.SetParameter(state.DangerousGetHandle());
@@ -153,20 +153,13 @@ public unsafe struct ZstandardDecoder : IDisposable
 
         public new ZSTD_DCtx_s* DangerousGetHandle() => (ZSTD_DCtx_s*)handle;
 
-        ZstandardDecoderState()
+        public ZstandardDecoderState()
            : base(IntPtr.Zero, true)
-        {
-        }
-
-        public static ZstandardDecoderState Create()
         {
             var context = ZSTD_createDCtx();
             if (context == null) throw new ZstandardException("Failed to create decompression context");
 
-            var state = new ZstandardDecoderState();
-            state.handle = (IntPtr)context; // assign to SafeHandle
-
-            return state;
+            this.handle = (IntPtr)context; // assign to SafeHandle
         }
 
         protected override bool ReleaseHandle()

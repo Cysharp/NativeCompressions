@@ -29,7 +29,7 @@ public unsafe struct ZstandardEncoder : IDisposable
     /// </summary>
     public ZstandardEncoder(int compressionLevel)
     {
-        this.state = ZstandardEncoderState.Create();
+        this.state = new ZstandardEncoderState();
 
         if (compressionLevel != Zstandard.DefaultCompressionLevel)
         {
@@ -51,7 +51,7 @@ public unsafe struct ZstandardEncoder : IDisposable
     /// </summary>
     public ZstandardEncoder(in ZstandardCompressionOptions compressionOptions)
     {
-        this.state = ZstandardEncoderState.Create();
+        this.state = new ZstandardEncoderState();
         try
         {
             compressionOptions.SetParameter(state.DangerousGetHandle());
@@ -204,20 +204,13 @@ public unsafe struct ZstandardEncoder : IDisposable
 
         public new ZSTD_CCtx_s* DangerousGetHandle() => (ZSTD_CCtx_s*)handle;
 
-        ZstandardEncoderState()
+        public ZstandardEncoderState()
            : base(IntPtr.Zero, true)
-        {
-        }
-
-        public static ZstandardEncoderState Create()
         {
             var context = ZSTD_createCCtx();
             if (context == null) throw new ZstandardException("Failed to create compression context");
 
-            var state = new ZstandardEncoderState();
-            state.handle = (IntPtr)context; // assign to SafeHandle
-
-            return state;
+            this.handle = (IntPtr)context; // assign to SafeHandle
         }
 
         protected override bool ReleaseHandle()

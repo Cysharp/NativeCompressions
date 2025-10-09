@@ -37,9 +37,11 @@ public unsafe struct LZ4Decoder : IDisposable
     /// <exception cref="LZ4Exception">Thrown when the decompression context cannot be created.</exception>
     public LZ4Decoder(in LZ4DecompressionOptions options)
     {
-        this.state = LZ4DecoderState.Create();
-        this.state.options = options.ToDecompressOptions();
-        this.state.dictionary = options.Dictionary;
+        this.state = new LZ4DecoderState
+        {
+            options = options.ToDecompressOptions(),
+            dictionary = options.Dictionary
+        };
     }
 
     /// <summary>
@@ -337,21 +339,14 @@ public unsafe struct LZ4Decoder : IDisposable
 
         public new LZ4F_dctx_s* DangerousGetHandle() => (LZ4F_dctx_s*)handle;
 
-        LZ4DecoderState()
+        public LZ4DecoderState()
            : base(IntPtr.Zero, true)
-        {
-        }
-
-        public static LZ4DecoderState Create()
         {
             LZ4F_dctx_s* ptr = default;
             var code = LZ4F_createDecompressionContext(&ptr, LZ4.FrameVersion);
             LZ4.ThrowIfError(code);
 
-            var state = new LZ4DecoderState();
-            state.handle = (IntPtr)ptr; // assign to SafeHandle
-
-            return state;
+            this.handle = (IntPtr)ptr; // assign to SafeHandle
         }
 
         protected override bool ReleaseHandle()

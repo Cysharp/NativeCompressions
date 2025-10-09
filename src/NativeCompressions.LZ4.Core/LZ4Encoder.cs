@@ -57,9 +57,11 @@ public unsafe struct LZ4Encoder : IDisposable
     /// <exception cref="LZ4Exception">Thrown when the compression context cannot be created.</exception>
     public LZ4Encoder(in LZ4CompressionOptions options)
     {
-        this.state = LZ4EncoderState.Create();
-        this.state.preferences = options.ToPreferences();
-        this.state.dictionary = options.Dictionary;
+        this.state = new LZ4EncoderState()
+        {
+            preferences = options.ToPreferences(),
+            dictionary = options.Dictionary
+        };
     }
 
     /// <summary>
@@ -311,21 +313,14 @@ public unsafe struct LZ4Encoder : IDisposable
 
         public new LZ4F_cctx_s* DangerousGetHandle() => (LZ4F_cctx_s*)handle;
 
-        LZ4EncoderState()
+        public LZ4EncoderState()
            : base(IntPtr.Zero, true)
-        {
-        }
-
-        public static LZ4EncoderState Create()
         {
             LZ4F_cctx_s* ptr = default;
             var code = LZ4F_createCompressionContext(&ptr, LZ4.FrameVersion);
             LZ4.ThrowIfError(code);
 
-            var state = new LZ4EncoderState();
-            state.handle = (IntPtr)ptr; // assign to SafeHandle
-
-            return state;
+            this.handle = (IntPtr)ptr; // assign to SafeHandle
         }
 
         protected override bool ReleaseHandle()
