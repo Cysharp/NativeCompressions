@@ -512,6 +512,7 @@ public sealed class ZstandardStream : Stream
             if (buffer != null && mode == CompressionMode.Compress)
             {
                 // Dispose is called from Close so share implementation.
+                // TODO: need loop for close
                 var status = encoder.Close(buffer, out var written);
                 if (status == OperationStatus.Done)
                 {
@@ -560,7 +561,7 @@ public sealed class ZstandardStream : Stream
 
             if (!leaveOpen)
             {
-                stream.Dispose();
+                await stream.DisposeAsync();
             }
         }
         finally
