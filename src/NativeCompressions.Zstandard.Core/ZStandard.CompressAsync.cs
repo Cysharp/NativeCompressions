@@ -170,7 +170,6 @@ public static partial class Zstandard
                 remaining -= read;
             }
 
-
             if (writtenInDest != 0)
             {
                 destination.Advance(writtenInDest);
