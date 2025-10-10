@@ -136,7 +136,7 @@ public static partial class Zstandard
         try
         {
             var totalWritten = 0;
-            var dest = destination.GetSpan(sizeHint);
+            var dest = destination.GetMemory(sizeHint);
             var remaining = sourceLength - offset;
             while (remaining != 0)
             {
@@ -147,7 +147,7 @@ public static partial class Zstandard
                 var status = OperationStatus.DestinationTooSmall;
                 while (status != OperationStatus.Done)
                 {
-                    status = encoder.Compress(sourceMemory.Span, dest, out var bytesConsumed, out var bytesWritten, isFinalBlock: false); // not guarantees finalBlock
+                    status = encoder.Compress(sourceMemory.Span, dest.Span, out var bytesConsumed, out var bytesWritten, isFinalBlock: false); // not guarantees finalBlock
                     sourceMemory = sourceMemory.Slice(bytesConsumed);
                     dest = dest.Slice(bytesWritten);
                     totalWritten += bytesWritten;
@@ -163,7 +163,7 @@ public static partial class Zstandard
                         await destination.FlushAsync(cancellationToken);
 
                         totalWritten = 0;
-                        dest = destination.GetSpan(sizeHint);
+                        dest = destination.GetMemory(sizeHint);
                     }
                 }
 
@@ -182,8 +182,8 @@ public static partial class Zstandard
                 var status = OperationStatus.DestinationTooSmall;
                 while (status != OperationStatus.Done)
                 {
-                    dest = destination.GetSpan(sizeHint);
-                    status = encoder.Close(dest, out var bytesWritten);
+                    dest = destination.GetMemory(sizeHint);
+                    status = encoder.Close(dest.Span, out var bytesWritten);
 
                     if (status == OperationStatus.InvalidData)
                     {
@@ -240,7 +240,7 @@ public static partial class Zstandard
         var sizeHint = requestBufferSize;
 
         var totalWritten = 0;
-        var dest = destination.GetSpan(sizeHint);
+        var dest = destination.GetMemory(sizeHint);
 
         ReadResult result = default;
         while (!result.IsCompleted)
@@ -255,7 +255,7 @@ public static partial class Zstandard
                 var status = OperationStatus.DestinationTooSmall;
                 while (status != OperationStatus.Done) // when chunk is fully consumed, go to next chunk
                 {
-                    status = encoder.Compress(chunk.Span, dest, out var bytesConsumed, out var bytesWritten, isFinalBlock: false); // not guarantees finalBlock
+                    status = encoder.Compress(chunk.Span, dest.Span, out var bytesConsumed, out var bytesWritten, isFinalBlock: false); // not guarantees finalBlock
                     chunk = chunk.Slice(bytesConsumed);
                     dest = dest.Slice(bytesWritten);
                     totalWritten += bytesWritten;
@@ -271,7 +271,7 @@ public static partial class Zstandard
                         await destination.FlushAsync(cancellationToken);
 
                         totalWritten = 0;
-                        dest = destination.GetSpan(sizeHint);
+                        dest = destination.GetMemory(sizeHint);
                     }
                 }
             }
@@ -289,8 +289,8 @@ public static partial class Zstandard
             var status = OperationStatus.DestinationTooSmall;
             while (status != OperationStatus.Done)
             {
-                dest = destination.GetSpan(sizeHint);
-                status = encoder.Close(dest, out var bytesWritten);
+                dest = destination.GetMemory(sizeHint);
+                status = encoder.Close(dest.Span, out var bytesWritten);
 
                 if (status == OperationStatus.InvalidData)
                 {
