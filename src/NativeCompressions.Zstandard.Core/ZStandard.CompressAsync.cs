@@ -30,7 +30,7 @@ public static partial class Zstandard
 
             if (status == OperationStatus.InvalidData)
             {
-                throw new ZstandardException("ZStandardEncoder returns InvalidData.");
+                throw new ZstandardException("ZstandardEncoder returns InvalidData.");
             }
 
             destination.Advance(bytesWritten);
@@ -48,7 +48,7 @@ public static partial class Zstandard
     {
         var sizeHint = GetBufferSize(source.Length, requestBufferSize);
         var dest = destination.GetSpan(sizeHint);
-        var totalWritten = 0;
+        var writtenInDest = 0;
 
         foreach (var item in source)
         {
@@ -59,27 +59,27 @@ public static partial class Zstandard
                 status = encoder.Compress(chunk.Span, dest, out var bytesConsumed, out var bytesWritten, isFinalBlock: false); // not guarantees finalBlock
                 chunk = chunk.Slice(bytesConsumed);
                 dest = dest.Slice(bytesWritten);
-                totalWritten += bytesWritten;
+                writtenInDest += bytesWritten;
 
                 if (status == OperationStatus.InvalidData)
                 {
-                    throw new ZstandardException("ZStandardEncoder returns InvalidData.");
+                    throw new ZstandardException("ZstandardEncoder returns InvalidData.");
                 }
 
                 if (dest.Length == 0)
                 {
-                    destination.Advance(totalWritten);
+                    destination.Advance(writtenInDest);
                     await destination.FlushAsync(cancellationToken);
 
-                    totalWritten = 0;
+                    writtenInDest = 0;
                     dest = destination.GetSpan(sizeHint);
                 }
             }
         }
 
-        if (totalWritten != 0)
+        if (writtenInDest != 0)
         {
-            destination.Advance(totalWritten);
+            destination.Advance(writtenInDest);
             await destination.FlushAsync(cancellationToken);
         }
 
@@ -93,7 +93,7 @@ public static partial class Zstandard
 
                 if (status == OperationStatus.InvalidData)
                 {
-                    throw new ZstandardException("ZStandardEncoder.Close returns InvalidData.");
+                    throw new ZstandardException("ZstandardEncoder.Close returns InvalidData.");
                 }
 
                 destination.Advance(bytesWritten);
@@ -135,7 +135,7 @@ public static partial class Zstandard
         var sourceBuffer = ArrayPool<byte>.Shared.Rent(sizeHint);
         try
         {
-            var totalWritten = 0;
+            var writtenInDest = 0;
             var dest = destination.GetMemory(sizeHint);
             var remaining = sourceLength - offset;
             while (remaining != 0)
@@ -150,19 +150,19 @@ public static partial class Zstandard
                     status = encoder.Compress(sourceMemory.Span, dest.Span, out var bytesConsumed, out var bytesWritten, isFinalBlock: false); // not guarantees finalBlock
                     sourceMemory = sourceMemory.Slice(bytesConsumed);
                     dest = dest.Slice(bytesWritten);
-                    totalWritten += bytesWritten;
+                    writtenInDest += bytesWritten;
 
                     if (status == OperationStatus.InvalidData)
                     {
-                        throw new ZstandardException("ZStandardEncoder returns InvalidData.");
+                        throw new ZstandardException("ZstandardEncoder returns InvalidData.");
                     }
 
                     if (dest.Length == 0)
                     {
-                        destination.Advance(totalWritten);
+                        destination.Advance(writtenInDest);
                         await destination.FlushAsync(cancellationToken);
 
-                        totalWritten = 0;
+                        writtenInDest = 0;
                         dest = destination.GetMemory(sizeHint);
                     }
                 }
@@ -171,9 +171,9 @@ public static partial class Zstandard
             }
 
 
-            if (totalWritten != 0)
+            if (writtenInDest != 0)
             {
-                destination.Advance(totalWritten);
+                destination.Advance(writtenInDest);
                 await destination.FlushAsync(cancellationToken);
             }
 
@@ -187,7 +187,7 @@ public static partial class Zstandard
 
                     if (status == OperationStatus.InvalidData)
                     {
-                        throw new ZstandardException("ZStandardEncoder.Close returns InvalidData.");
+                        throw new ZstandardException("ZstandardEncoder.Close returns InvalidData.");
                     }
 
                     destination.Advance(bytesWritten);
@@ -239,7 +239,7 @@ public static partial class Zstandard
     {
         var sizeHint = requestBufferSize;
 
-        var totalWritten = 0;
+        var writtenInDest = 0;
         var dest = destination.GetMemory(sizeHint);
 
         ReadResult result = default;
@@ -258,19 +258,19 @@ public static partial class Zstandard
                     status = encoder.Compress(chunk.Span, dest.Span, out var bytesConsumed, out var bytesWritten, isFinalBlock: false); // not guarantees finalBlock
                     chunk = chunk.Slice(bytesConsumed);
                     dest = dest.Slice(bytesWritten);
-                    totalWritten += bytesWritten;
+                    writtenInDest += bytesWritten;
 
                     if (status == OperationStatus.InvalidData)
                     {
-                        throw new ZstandardException("ZStandardEncoder returns InvalidData.");
+                        throw new ZstandardException("ZstandardEncoder returns InvalidData.");
                     }
 
                     if (dest.Length == 0)
                     {
-                        destination.Advance(totalWritten);
+                        destination.Advance(writtenInDest);
                         await destination.FlushAsync(cancellationToken);
 
-                        totalWritten = 0;
+                        writtenInDest = 0;
                         dest = destination.GetMemory(sizeHint);
                     }
                 }
@@ -278,9 +278,9 @@ public static partial class Zstandard
             source.AdvanceTo(buffer.End);
         }
 
-        if (totalWritten != 0)
+        if (writtenInDest != 0)
         {
-            destination.Advance(totalWritten);
+            destination.Advance(writtenInDest);
             await destination.FlushAsync(cancellationToken);
         }
 
@@ -294,7 +294,7 @@ public static partial class Zstandard
 
                 if (status == OperationStatus.InvalidData)
                 {
-                    throw new ZstandardException("ZStandardEncoder.Close returns InvalidData.");
+                    throw new ZstandardException("ZstandardEncoder.Close returns InvalidData.");
                 }
 
                 destination.Advance(bytesWritten);
