@@ -169,7 +169,7 @@ public static partial class LZ4
             ContentSize = (ulong)source.Length,
         };
 
-        if (maxDegreeOfParallelism == 1 || source.Length < AllowParallelCompressThreshold)
+        if (maxDegreeOfParallelism == null || maxDegreeOfParallelism == 1 || source.Length < AllowParallelCompressThreshold)
         {
             // multi-block, single-thread
 
@@ -384,7 +384,7 @@ public static partial class LZ4
             ContentSize = (ulong)sourceLength,
         };
 
-        if (maxDegreeOfParallelism == 1 || sourceLength < AllowParallelCompressThreshold)
+        if (maxDegreeOfParallelism == null || maxDegreeOfParallelism == 1 || sourceLength < AllowParallelCompressThreshold)
         {
             // multi-block, single-thread
 

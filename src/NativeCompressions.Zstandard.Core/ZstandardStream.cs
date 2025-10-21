@@ -153,6 +153,8 @@ public sealed class ZstandardStream : Stream
         {
             throw new InvalidOperationException($"Flush failed: {status}");
         }
+
+        stream.Flush();
     }
 
     public override async Task FlushAsync(CancellationToken cancellationToken)
@@ -174,6 +176,7 @@ public sealed class ZstandardStream : Stream
         {
             throw new InvalidOperationException($"Flush failed: {status}");
         }
+        await stream.FlushAsync(cancellationToken);
     }
 
     void WriteCore(ReadOnlySpan<byte> source)
@@ -228,7 +231,7 @@ public sealed class ZstandardStream : Stream
             }
 
             source = source.Slice(consumed);
-            await stream.WriteAsync(dest.AsMemory(0, written));
+            await stream.WriteAsync(dest.AsMemory(0, written), cancellationToken);
         }
     }
 
@@ -511,11 +514,10 @@ public sealed class ZstandardStream : Stream
         {
             if (buffer != null && mode == CompressionMode.Compress)
             {
-                // Dispose is called from Close so share implementation.
-                // TODO: need loop for close
-                var status = encoder.Close(buffer, out var written);
-                if (status == OperationStatus.Done)
+                var status = OperationStatus.DestinationTooSmall;
+                while (status == OperationStatus.DestinationTooSmall)
                 {
+                    status = encoder.Close(buffer, out var written);
                     stream.Write(buffer, 0, written);
                 }
             }
@@ -552,9 +554,10 @@ public sealed class ZstandardStream : Stream
             if (buffer != null && mode == CompressionMode.Compress)
             {
                 // Dispose is called from Close so share implementation.
-                var status = encoder.Close(buffer, out var written);
-                if (status == OperationStatus.Done)
+                var status = OperationStatus.DestinationTooSmall;
+                while (status == OperationStatus.DestinationTooSmall)
                 {
+                    status = encoder.Close(buffer, out var written);
                     await stream.WriteAsync(buffer.AsMemory(0, written));
                 }
             }

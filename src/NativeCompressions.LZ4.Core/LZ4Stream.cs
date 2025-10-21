@@ -2,6 +2,7 @@
 
 using NativeCompressions.Internal;
 using System.Buffers;
+using System.Data;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 
@@ -146,6 +147,8 @@ public sealed class LZ4Stream : Stream
         // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
         var written = encoder.Flush(buffer);
         stream.Write(buffer, 0, written);
+
+        stream.Flush();
     }
 
     public override async Task FlushAsync(CancellationToken cancellationToken)
@@ -160,6 +163,8 @@ public sealed class LZ4Stream : Stream
         // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
         var written = encoder.Flush(buffer);
         await stream.WriteAsync(buffer.AsMemory(0, written), cancellationToken); // use ValueTask overload.
+
+        await stream.FlushAsync(cancellationToken);
     }
 
     void WriteCore(ReadOnlySpan<byte> source)

@@ -20,7 +20,9 @@ using System.Threading.Tasks;
 //Console.WriteLine(Zstandard.MinCompressionLevel);
 //Console.WriteLine(Zstandard.MaxCompressionLevel);
 
-
+var a = int.Parse("1");
+var b = int.Parse("1");
+var c = a / b;
 
 
 Console.WriteLine(OpenZL.DefaultEncodingVersion);
@@ -39,6 +41,8 @@ var p = new ArrayBufferPipeWriter();
 await Zstandard.CompressAsync(original, p);
 
 
+
+// Assembly.ReflectionOnlyLoadLoad(new byte[] { 1, 2, 3 });
 
 
 //Console.ReadLine();

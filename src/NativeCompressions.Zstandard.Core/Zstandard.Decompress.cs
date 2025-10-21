@@ -15,7 +15,6 @@ public static partial class Zstandard
 
     public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, in ZstandardDecompressionOptions decompressionOptions, bool trustedData = false)
     {
-        // TODO: is this ok to trust frame header on multithread-data(multi-frame?)
         if (trustedData && TryGetFrameContentSize(source, out var size))
         {
             if (size > (ulong)Array.MaxLength)
@@ -105,6 +104,4 @@ public static partial class Zstandard
             return (int)bytesWritten;
         }
     }
-
-    // TODO: DecompressAsync variations
 }

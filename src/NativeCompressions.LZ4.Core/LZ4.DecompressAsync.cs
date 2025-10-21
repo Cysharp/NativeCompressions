@@ -10,7 +10,6 @@ namespace NativeCompressions;
 
 public static partial class LZ4
 {
-    // TODO: null maxDegreeOfParallelism change to don't parallel(as default)
     public static async ValueTask DecompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
         using var decoder = new LZ4Decoder(options ?? LZ4DecompressionOptions.Default);
@@ -24,7 +23,7 @@ public static partial class LZ4
             ? 4
             : 0;
 
-        var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism == null || maxDegreeOfParallelism > 1);
+        var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism > 1);
 
         if (!supportMultithreadDecode)
         {
@@ -50,7 +49,7 @@ public static partial class LZ4
         }
         else
         {
-            var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
+            var threadCount = maxDegreeOfParallelism!.Value;
             var capacity = threadCount * 2;
 
             var inputChannel = Channel.CreateBounded<DecompressionInputBuffer>(new BoundedChannelOptions(capacity)
@@ -131,7 +130,7 @@ public static partial class LZ4
             ? 4
             : 0;
 
-        var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism == null || maxDegreeOfParallelism > 1);
+        var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism > 1);
 
         if (!supportMultithreadDecode)
         {
@@ -193,7 +192,7 @@ public static partial class LZ4
         }
         else
         {
-            var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
+            var threadCount = maxDegreeOfParallelism!.Value;
             var capacity = threadCount * 2;
 
             var inputChannel = Channel.CreateBounded<DecompressionInputBuffer>(new BoundedChannelOptions(capacity)
@@ -292,7 +291,7 @@ public static partial class LZ4
             ? 4
             : 0;
 
-        var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism == null || maxDegreeOfParallelism > 1);
+        var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism > 1);
 
         if (!supportMultithreadDecode)
         {
@@ -355,7 +354,7 @@ public static partial class LZ4
         }
         else
         {
-            var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
+            var threadCount = maxDegreeOfParallelism!.Value;
             var capacity = threadCount * 2;
 
             var inputChannel = Channel.CreateBounded<DecompressionInputBuffer>(new BoundedChannelOptions(capacity)
@@ -524,7 +523,7 @@ public static partial class LZ4
             ? 4
             : 0;
 
-        var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism == null || maxDegreeOfParallelism > 1);
+        var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism > 1);
 
         if (!supportMultithreadDecode)
         {
@@ -591,7 +590,7 @@ public static partial class LZ4
         else
         {
             // multi-thread decompress
-            var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
+            var threadCount = maxDegreeOfParallelism!.Value;
             var capacity = threadCount * 2;
 
             var inputChannel = Channel.CreateBounded<DecompressionInputBuffer>(new BoundedChannelOptions(capacity)
