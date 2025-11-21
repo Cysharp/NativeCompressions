@@ -20,6 +20,13 @@
 
 
   <ItemGroup>
+    <Using Include="TUnit" />
+    <Using Include="TUnit.Core" />
+    <Using Include="TUnit.Assertions" />
+    <Using Include ="TUnit.Assertions.Assert" Static="true" />
+
+    <Using Include="NativeCompressions" />
+    <Using Include="NativeCompressions.Interop" />
   </ItemGroup>
 
 </Project>

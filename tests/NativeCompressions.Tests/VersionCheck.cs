@@ -1,10 +1,4 @@
-﻿using NativeCompressions;
-using NativeCompressions.Interop;
-using System;
-
-using static TUnit.Assertions.Assert;
-
-namespace NativeCompressions.Tests;
+﻿namespace NativeCompressions.Tests;
 
 // Library loading and version check test.
 
