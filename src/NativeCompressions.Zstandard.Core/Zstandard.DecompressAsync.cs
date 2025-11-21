@@ -133,7 +133,7 @@ public static partial class Zstandard
         try
         {
             var status = OperationStatus.DestinationTooSmall;
-            var dest = destination.GetSpan(sizeHint);
+            var dest = destination.GetMemory(sizeHint);
             var writtenInDest = 0;
             var remaining = sourceLength - offset;
 
@@ -146,7 +146,7 @@ public static partial class Zstandard
                 var chunk = sourceBuffer.AsMemory(0, read);
                 while (chunk.Length > 0)
                 {
-                    status = decoder.Decompress(chunk.Span, dest, out var bytesConsumed, out var bytesWritten);
+                    status = decoder.Decompress(chunk.Span, dest.Span, out var bytesConsumed, out var bytesWritten);
                     chunk = chunk.Slice(bytesConsumed);
                     dest = dest.Slice(bytesWritten);
                     writtenInDest += bytesWritten;
@@ -165,7 +165,7 @@ public static partial class Zstandard
                     {
                         destination.Advance(writtenInDest);
                         await destination.FlushAsync(cancellationToken);
-                        dest = destination.GetSpan(sizeHint);
+                        dest = destination.GetMemory(sizeHint);
                         writtenInDest = 0;
                     }
                 }
@@ -183,8 +183,8 @@ public static partial class Zstandard
             // flush remaining data in native context
             while (status == OperationStatus.DestinationTooSmall)
             {
-                dest = destination.GetSpan(sizeHint);
-                status = decoder.Decompress([], dest, out _, out var bytesWritten);
+                dest = destination.GetMemory(sizeHint);
+                status = decoder.Decompress([], dest.Span, out _, out var bytesWritten);
                 destination.Advance(bytesWritten);
                 await destination.FlushAsync(cancellationToken);
             }
@@ -238,7 +238,7 @@ public static partial class Zstandard
     {
         var sizeHint = requestBufferSize;
         var status = OperationStatus.DestinationTooSmall;
-        var dest = destination.GetSpan(sizeHint);
+        var dest = destination.GetMemory(sizeHint);
         var writtenInDest = 0;
 
         ReadResult result = default;
@@ -253,7 +253,7 @@ public static partial class Zstandard
                 var chunk = item;
                 while (chunk.Length > 0)
                 {
-                    status = decoder.Decompress(chunk.Span, dest, out var bytesConsumed, out var bytesWritten);
+                    status = decoder.Decompress(chunk.Span, dest.Span, out var bytesConsumed, out var bytesWritten);
                     chunk = chunk.Slice(bytesConsumed);
                     dest = dest.Slice(bytesWritten);
                     writtenInDest += bytesWritten;
@@ -272,7 +272,7 @@ public static partial class Zstandard
                     {
                         destination.Advance(writtenInDest);
                         await destination.FlushAsync(cancellationToken);
-                        dest = destination.GetSpan(sizeHint);
+                        dest = destination.GetMemory(sizeHint);
                         writtenInDest = 0;
                     }
                 }
@@ -290,8 +290,8 @@ public static partial class Zstandard
         // flush remaining data in native context
         while (status == OperationStatus.DestinationTooSmall)
         {
-            dest = destination.GetSpan(sizeHint);
-            status = decoder.Decompress([], dest, out _, out var bytesWritten);
+            dest = destination.GetMemory(sizeHint);
+            status = decoder.Decompress([], dest.Span, out _, out var bytesWritten);
             destination.Advance(bytesWritten);
             await destination.FlushAsync(cancellationToken);
         }

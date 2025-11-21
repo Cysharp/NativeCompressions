@@ -1,24 +1,31 @@
-﻿//using NativeCompressions.Lz4;
-//using NativeCompressions.Zstandard;
+﻿using NativeCompressions;
+using NativeCompressions.Interop;
+using System;
 
-//namespace NativeCompressions.Tests
-//{
-//    // Library loading and version check test.
+using static TUnit.Assertions.Assert;
 
-//    public unsafe class VersionCheck
-//    {
-//        [Fact]
-//        public void LZ4Version()
-//        {
-//            var version = new string((sbyte*)Lz4NativeMethods.LZ4_versionString());
-//            version.Should().Be("1.9.4");
-//        }
+namespace NativeCompressions.Tests;
 
-//        [Fact]
-//        public void ZstdVersion()
-//        {
-//            var version = new string((sbyte*)ZStdNativeMethods.ZSTD_versionString());
-//            version.Should().Be("1.5.2");
-//        }
-//    }
-//}
+// Library loading and version check test.
+
+public class VersionCheck
+{
+    [Test]
+    public async Task LZ4Version()
+    {
+        string version;
+        unsafe
+        {
+            version = new string((sbyte*)LZ4NativeMethods.LZ4_versionString());
+        }
+
+        await That(version).IsEqualTo("1.10.0");
+    }
+
+    //[Fact]
+    //public void ZstdVersion()
+    //{
+    //    var version = new string((sbyte*)ZStdNativeMethods.ZSTD_versionString());
+    //    version.Should().Be("1.5.2");
+    //}
+}
