@@ -114,6 +114,11 @@ jobs:
               make libopenzl.so BUILD_TYPE=OPT OS=Windows_NT \
                 CC=aarch64-w64-mingw32-gcc \
                 MOREFLAGS='-flto'"
+          # NOTE: Environment exports (CC, WINDRES, TARGET_OS, TARGET_SYSTEM) propagate to
+          # dependency sub-makes (lz4, zstd) whose MAKEOVERRIDES is cleared by OpenZL's Makefile.
+          # Command-line CC= is also needed for the parent make (highest priority in GNU Make).
+          # TARGET_OS=MINGW64 (not Windows_NT) is required because lz4's Makefile.inc produces
+          # 'liblz4.dll' for MINGW% but 'liblz4-1.dll' for Windows%, and OpenZL expects the former.
           file -L openzl/libopenzl.so
       - name: Prepare artifacts
         run: |
@@ -203,13 +208,20 @@ jobs:
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       # TODO: Currently, the build artifact extension is .so even on macOS. OpenZL may update the Makefile in the future to create .dylib files for macOS, which could cause CI errors. Please update the file extensions accordingly if this change occurs.
+      # NOTE: Arch flags must reach dependency sub-makes (lz4, zstd) whose MAKEOVERRIDES is
+      # cleared by OpenZL's Makefile. CC with embedded arch is the most robust method because
+      # zstd uses SET_CACHE_DIRECTORY which re-invokes make and may not preserve env CFLAGS.
+      # CXXFLAGS is needed because OpenZL's addTargetAsmObject macro uses $(CC) $(CXXFLAGS)
+      # for .S files (not CFLAGS). MOREFLAGS only carries -flto for the parent make.
       - name: Build dynamic library
         env:
+          CC: "clang ${{ matrix.flags }}"
           CFLAGS: ${{ matrix.flags }}
+          CXXFLAGS: ${{ matrix.flags }}
           LDFLAGS: ${{ matrix.flags }}
         run: |
           cd openzl
-          make libopenzl.so BUILD_TYPE=OPT MOREFLAGS="${{ matrix.flags }} -flto" -j "$(sysctl -n hw.ncpu)"
+          make libopenzl.so BUILD_TYPE=OPT MOREFLAGS="-flto" -j "$(sysctl -n hw.ncpu)"
           ls -la
           lipo -info libopenzl.so
           file -L libopenzl.so
