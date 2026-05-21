@@ -101,10 +101,16 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/work" \
             mstorsjo/llvm-mingw:latest \
-            bash -c "cd /work/openzl && \
+            bash -c "
+              git config --global --add safe.directory /work/openzl && \
+              cd /work/openzl && \
+              export CC=aarch64-w64-mingw32-gcc && \
+              export WINDRES=aarch64-w64-mingw32-windres && \
+              export TARGET_OS=MINGW64 && \
+              export TARGET_SYSTEM=Windows_NT && \
               make libopenzl.so BUILD_TYPE=OPT OS=Windows_NT \
-              CC=aarch64-w64-mingw32-gcc \
-              MOREFLAGS='-flto'"
+                CC=aarch64-w64-mingw32-gcc \
+                MOREFLAGS='-flto'"
           file -L openzl/libopenzl.so
       - name: Prepare artifacts
         run: |
