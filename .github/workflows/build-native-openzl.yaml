@@ -10,6 +10,9 @@ name: Build-Native-OpenZL
 #     - Commit that updates the submodule
 #     - Commit that openzl dynamic lib artifacts placed in src/NativeCompressions.OpenZL.Runtime/runtimes/{platform_name}/native/{lib}
 on:
+  push:
+    branches:
+      - openzl
   workflow_dispatch:
   schedule:
     - cron: "0 3 * * *" # Every day at 3:00 AM (UTC)
