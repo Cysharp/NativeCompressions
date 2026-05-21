@@ -204,6 +204,9 @@ jobs:
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       # TODO: Currently, the build artifact extension is .so even on macOS. OpenZL may update the Makefile in the future to create .dylib files for macOS, which could cause CI errors. Please update the file extensions accordingly if this change occurs.
       - name: Build dynamic library
+        env:
+          CFLAGS: ${{ matrix.flags }}
+          LDFLAGS: ${{ matrix.flags }}
         run: |
           cd openzl
           make libopenzl.so BUILD_TYPE=OPT MOREFLAGS="${{ matrix.flags }} -flto" -j "$(sysctl -n hw.ncpu)"
