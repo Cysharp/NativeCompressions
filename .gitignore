@@ -152,3 +152,7 @@ bindgen/target/.rustc_info.json
 
 # ignore ci artifacts directory
 artifacts/
+
+bindgen/target/flycheck0/stderr
+
+bindgen/target/flycheck0/stdout
