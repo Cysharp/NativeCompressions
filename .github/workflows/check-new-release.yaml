@@ -44,6 +44,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ inputs.repository }}
+          SUBMODULE_PATH: ${{ inputs.submodule_path }}
         run: |
           # Get latest release tag
           LATEST_TAG=$(gh release view --json tagName -q '.tagName')
@@ -60,7 +61,7 @@ jobs:
           fi
 
           # Get current submodule tag (if exists)
-          cd "${{ inputs.submodule_path }}"
+          cd "${SUBMODULE_PATH}"
             CURRENT_TAG=$(git describe --tags --exact-match HEAD 2>/dev/null || echo "")
             CURRENT_COMMIT=$(git rev-parse HEAD)
           cd ..
