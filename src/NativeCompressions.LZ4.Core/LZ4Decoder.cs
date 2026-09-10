@@ -1,9 +1,7 @@
-﻿using NativeCompressions.Internal;
+using NativeCompressions.Internal;
 using NativeCompressions.Interop;
 using System.Buffers;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using static NativeCompressions.Interop.LZ4NativeMethods;
 
 namespace NativeCompressions;
@@ -14,12 +12,17 @@ namespace NativeCompressions;
 /// </summary>
 /// <remarks>
 /// The decoder automatically handles frame headers, block headers, and validates checksums if present.
-/// It can decompress data incrementally, making it suitable for streaming scenarios.
+/// Call <see cref="Dispose"/> to release the native context. A finalizer releases it if Dispose is never called.
+/// Instances are not thread-safe.
 /// </remarks>
-public unsafe struct LZ4Decoder : IDisposable
+public sealed unsafe class LZ4Decoder : IDisposable
 {
-    // native context in SafeHandle(for safety) and all struct fields in heap(for struct small size)
-    LZ4DecoderState? state;
+    // Held as a raw pointer instead of SafeHandle to keep a single managed allocation.
+    // Released by Dispose or the finalizer.
+    LZ4F_dctx_s* dctx;
+
+    LZ4F_decompressOptions_t options;
+    LZ4Dictionary? dictionary; // keeps the dictionary reachable while this decoder uses it
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LZ4Decoder"/>.
@@ -28,7 +31,6 @@ public unsafe struct LZ4Decoder : IDisposable
     public LZ4Decoder()
         : this(LZ4DecompressionOptions.Default)
     {
-
     }
 
     /// <summary>
@@ -37,18 +39,36 @@ public unsafe struct LZ4Decoder : IDisposable
     /// <exception cref="LZ4Exception">Thrown when the decompression context cannot be created.</exception>
     public LZ4Decoder(in LZ4DecompressionOptions options)
     {
-        this.state = new LZ4DecoderState
-        {
-            options = options.ToDecompressOptions(),
-            dictionary = options.Dictionary
-        };
+        LZ4F_dctx_s* context = null;
+        var code = LZ4F_createDecompressionContext(&context, LZ4.FrameVersion);
+        LZ4.ThrowIfError(code);
+
+        this.dctx = context;
+        this.options = options.ToDecompressOptions();
+        this.dictionary = options.Dictionary;
     }
+
+    ~LZ4Decoder()
+    {
+        // Finalizer runs only when the object is unreachable, so no race with Dispose.
+        var context = dctx;
+        if (context != null)
+        {
+            dctx = null;
+            LZ4F_freeDecompressionContext(context);
+        }
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the decoder has been disposed.
+    /// </summary>
+    public bool IsDisposed => dctx == null;
 
     /// <summary>
     /// Determines the size of an LZ4 frame header from the beginning of a compressed stream.
     /// </summary>
     /// <param name="source">
-    /// The beginning of a compressed LZ4 frame. Must be at least <see cref="GetMinSizeToKnowHeaderLength"/> bytes.
+    /// The beginning of a compressed LZ4 frame. Must be at least <see cref="LZ4.MinSizeToKnowFrameHeaderLength"/> bytes.
     /// </param>
     /// <returns>
     /// The size of the frame header in bytes (between 7 and 19 bytes for standard frames,
@@ -58,19 +78,9 @@ public unsafe struct LZ4Decoder : IDisposable
     /// Thrown when the source doesn't contain a valid LZ4 frame magic number,
     /// or when the source is too small to determine header size.
     /// </exception>
-    /// <remarks>
-    /// Call this method when you need to know how much data to read for the complete header.
-    /// The actual header size depends on which optional fields are present:
-    /// - Base header: 7 bytes (magic number, flags, block descriptor)
-    /// - Content size field: +8 bytes (if enabled)
-    /// - Dictionary ID: +4 bytes (if present)
-    /// 
-    /// For skippable frames, the header is always 8 bytes.
-    /// </remarks>
     public int GetHeaderSize(ReadOnlySpan<byte> source)
     {
-        Validate();
-        var context = state.DangerousGetHandle();
+        ThrowIfDisposed();
 
         fixed (byte* src = source)
         {
@@ -79,6 +89,7 @@ public unsafe struct LZ4Decoder : IDisposable
             return (int)sizeOrErrorCode;
         }
     }
+
     /// <summary>
     /// Extracts frame information from an LZ4 frame header and initializes the decompression context.
     /// </summary>
@@ -94,29 +105,19 @@ public unsafe struct LZ4Decoder : IDisposable
     /// The frame information extracted from the header, including block size,
     /// content size (if present), checksum flags, and other frame parameters.
     /// </returns>
-    /// <exception cref="ObjectDisposedException">
-    /// Thrown when the decoder has been disposed.
-    /// </exception>
+    /// <exception cref="ObjectDisposedException">Thrown when the decoder has been disposed.</exception>
     /// <exception cref="LZ4Exception">
     /// Thrown when the source doesn't contain a valid LZ4 frame header,
     /// or when decompression context initialization fails.
     /// </exception>
     /// <remarks>
-    /// This method serves two purposes:
-    /// 1. Extracts frame metadata from the header
-    /// 2. Initializes the decompression context for subsequent <see cref="Decompress"/> calls
-    /// 
-    /// After calling this method, the decoder is ready to decompress the frame body.
+    /// This method serves two purposes: it extracts frame metadata from the header and it
+    /// initializes the decompression context for subsequent <see cref="Decompress"/> calls.
     /// The bytes consumed should be skipped from the source when calling <see cref="Decompress"/>.
-    /// 
-    /// If the frame header specifies a content size, it will be available in the returned
-    /// <see cref="LZ4FrameInfo.ContentSize"/> property, which can be used to pre-allocate
-    /// the exact output buffer size.
     /// </remarks>
     public LZ4FrameInfo GetFrameInfo(ReadOnlySpan<byte> source, out int bytesConsumed)
     {
-        Validate();
-        var context = state.DangerousGetHandle();
+        var context = GetContext();
 
         fixed (byte* src = source)
         {
@@ -125,6 +126,7 @@ public unsafe struct LZ4Decoder : IDisposable
 
             var consumed = (nuint)source.Length;
             var hintOrErrorCode = LZ4F_getFrameInfo(context, (LZ4F_frameInfo_t*)Unsafe.AsPointer(ref frameInfo), src, &consumed);
+            GC.KeepAlive(this);
             LZ4.ThrowIfError(hintOrErrorCode);
 
             bytesConsumed = (int)consumed;
@@ -135,45 +137,17 @@ public unsafe struct LZ4Decoder : IDisposable
     /// <summary>
     /// Decompresses compressed data from the source buffer to the destination buffer.
     /// </summary>
-    /// <param name="source">
-    /// The compressed data to decompress. Can be partial frame data for streaming scenarios.
-    /// </param>
-    /// <param name="destination">
-    /// The buffer to write decompressed data to. Must be large enough to hold the decompressed output.
-    /// </param>
-    /// <param name="bytesConsumed">
-    /// When this method returns, contains the number of bytes consumed from the source buffer.
-    /// </param>
-    /// <param name="bytesWritten">
-    /// When this method returns, contains the number of bytes written to the destination buffer.
-    /// </param>
+    /// <param name="source">The compressed data to decompress. Can be partial frame data for streaming scenarios.</param>
+    /// <param name="destination">The buffer to write decompressed data to.</param>
+    /// <param name="bytesConsumed">When this method returns, contains the number of bytes consumed from the source buffer.</param>
+    /// <param name="bytesWritten">When this method returns, contains the number of bytes written to the destination buffer.</param>
     /// <returns>
     /// <see cref="OperationStatus.Done"/> if the current frame is completely decompressed;
     /// <see cref="OperationStatus.NeedMoreData"/> if more compressed data is needed to continue;
-    /// <see cref="OperationStatus.DestinationTooSmall"/> if the destination buffer is likely too small.
+    /// <see cref="OperationStatus.DestinationTooSmall"/> if the destination buffer is likely too small;
+    /// <see cref="OperationStatus.InvalidData"/> if the data is invalid.
     /// </returns>
-    /// <exception cref="ObjectDisposedException">
-    /// Thrown when the decoder has been disposed.
-    /// </exception>
-    /// <exception cref="LZ4Exception">
-    /// Thrown when decompression fails due to data corruption, invalid format, or other errors.
-    /// After this exception, the decoder is in an undefined state and must be disposed and recreated.
-    /// </exception>
-    /// <remarks>
-    /// This method supports streaming decompression and can be called multiple times with sequential
-    /// chunks of compressed data. The decoder maintains internal state between calls.
-    /// 
-    /// When <see cref="OperationStatus.Done"/> is returned, the current frame has been completely
-    /// decompressed and the decoder is ready to process a new frame.
-    /// 
-    /// The distinction between <see cref="OperationStatus.NeedMoreData"/> and 
-    /// <see cref="OperationStatus.DestinationTooSmall"/> is heuristic-based:
-    /// - If the destination buffer was completely filled, it's likely too small
-    /// - Otherwise, more source data is needed
-    /// 
-    /// For optimal performance, provide destination buffers of at least 64KB or use
-    /// the content size from <see cref="GetFrameInfo"/> if available.
-    /// </remarks>
+    /// <exception cref="ObjectDisposedException">Thrown when the decoder has been disposed.</exception>
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten)
     {
         return Decompress(source, destination, out bytesConsumed, out bytesWritten, out _);
@@ -182,86 +156,64 @@ public unsafe struct LZ4Decoder : IDisposable
     /// <summary>
     /// Decompresses compressed data from the source buffer to the destination buffer.
     /// </summary>
-    /// <param name="source">
-    /// The compressed data to decompress. Can be partial frame data for streaming scenarios.
-    /// </param>
-    /// <param name="destination">
-    /// The buffer to write decompressed data to. Must be large enough to hold the decompressed output.
-    /// </param>
-    /// <param name="bytesConsumed">
-    /// When this method returns, contains the number of bytes consumed from the source buffer.
-    /// </param>
-    /// <param name="bytesWritten">
-    /// When this method returns, contains the number of bytes written to the destination buffer.
-    /// </param>
+    /// <param name="source">The compressed data to decompress. Can be partial frame data for streaming scenarios.</param>
+    /// <param name="destination">The buffer to write decompressed data to.</param>
+    /// <param name="bytesConsumed">When this method returns, contains the number of bytes consumed from the source buffer.</param>
+    /// <param name="bytesWritten">When this method returns, contains the number of bytes written to the destination buffer.</param>
     /// <param name="hintOfNextSrcSize">
-    ///  An hint of how many `source` bytes expects for next call.
-    ///  Schematically, it's the size of the current (or remaining) compressed block + header of next block.
-    ///  Respecting the hint provides some small speed benefit, because it skips intermediate buffers.
-    ///  This is just a hint though, it's always possible to provide any srcSize.
+    /// A hint of how many source bytes the next call expects, roughly the remaining compressed block plus the next block header.
+    /// Respecting the hint skips intermediate buffers. Any source size is still accepted. 0 when the frame is complete or on error.
     /// </param>
     /// <returns>
     /// <see cref="OperationStatus.Done"/> if the current frame is completely decompressed;
     /// <see cref="OperationStatus.NeedMoreData"/> if more compressed data is needed to continue;
     /// <see cref="OperationStatus.DestinationTooSmall"/> if the destination buffer is likely too small;
-    /// <see cref="OperationStatus.InvalidData"/> if the data is invalid can not process;
+    /// <see cref="OperationStatus.InvalidData"/> if the data is invalid.
     /// </returns>
-    /// <exception cref="ObjectDisposedException">
-    /// Thrown when the decoder has been disposed.
-    /// </exception>
-    /// <exception cref="LZ4Exception">
-    /// Thrown when decompression fails due to data corruption, invalid format, or other errors.
-    /// After this exception, the decoder is in an undefined state and must be disposed and recreated.
-    /// </exception>
+    /// <exception cref="ObjectDisposedException">Thrown when the decoder has been disposed.</exception>
     /// <remarks>
-    /// This method supports streaming decompression and can be called multiple times with sequential
-    /// chunks of compressed data. The decoder maintains internal state between calls.
-    /// 
-    /// When <see cref="OperationStatus.Done"/> is returned, the current frame has been completely
-    /// decompressed and the decoder is ready to process a new frame.
-    /// 
-    /// The distinction between <see cref="OperationStatus.NeedMoreData"/> and 
-    /// <see cref="OperationStatus.DestinationTooSmall"/>
-    /// - If the destination buffer was completely filled, it's likely too small
-    /// - Otherwise, more source data is needed
-    /// 
-    /// For optimal performance, provide destination buffers of at least 64KB or use
-    /// the content size from <see cref="GetFrameInfo"/> if available.
+    /// The decoder maintains internal state between calls. When <see cref="OperationStatus.Done"/> is returned,
+    /// the frame is complete and the decoder is ready for the next frame.
+    /// After <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset"/> before reusing the decoder.
+    /// The distinction between <see cref="OperationStatus.NeedMoreData"/> and <see cref="OperationStatus.DestinationTooSmall"/>
+    /// is heuristic: a completely filled destination is reported as too small, otherwise more source is requested.
     /// </remarks>
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, out int hintOfNextSrcSize)
     {
-        Validate();
-        var context = state.DangerousGetHandle();
+        var context = GetContext();
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)
-        fixed (LZ4F_decompressOptions_t* optionsPtr = &state.options)
+        fixed (LZ4F_decompressOptions_t* optionsPtr = &options)
         {
             var consumed = (nuint)source.Length;
             var written = (nuint)destination.Length;
 
             nuint hintOrErrorCode;
-            if (state.dictionary == null)
+            if (dictionary == null)
             {
                 hintOrErrorCode = LZ4F_decompress(context, dest, &written, src, &consumed, dOptPtr: optionsPtr);
             }
             else
             {
-                var dict = state.dictionary.RawDictionary;
+                var dict = dictionary.RawDictionary;
                 fixed (void* dictPtr = dict)
                 {
                     hintOrErrorCode = LZ4F_decompress_usingDict(context, dest, &written, src, &consumed, dictPtr, (nuint)dict.Length, decompressOptionsPtr: optionsPtr);
                 }
             }
+            GC.KeepAlive(this);
 
             bytesConsumed = (int)consumed;
             bytesWritten = (int)written;
-            hintOfNextSrcSize = (int)hintOrErrorCode;
 
             if (LZ4.IsError(hintOrErrorCode))
             {
+                hintOfNextSrcSize = 0; // the value is an error code, not a size
                 return OperationStatus.InvalidData;
             }
+
+            hintOfNextSrcSize = hintOrErrorCode > int.MaxValue ? int.MaxValue : (int)hintOrErrorCode;
 
             if (hintOrErrorCode == 0)
             {
@@ -293,68 +245,45 @@ public unsafe struct LZ4Decoder : IDisposable
     }
 
     /// <summary>
-    /// Resets the decoder state to prepare for decompressing a new frame.
+    /// Resets the decoder to start decoding a new frame, also after an error.
     /// </summary>
-    /// <remarks>
-    /// This method clears the internal state and prepares the decoder for a new frame.
-    /// It is automatically called internally when a frame is completely decompressed
-    /// (when <see cref="Decompress"/> returns <see cref="OperationStatus.Done"/>).
-    /// 
-    /// You may call this method explicitly in the following scenarios:
-    /// - To abandon decompression of the current frame and start processing a new one
-    /// - To clear internal buffers and reduce memory usage between frames
-    /// - When switching between different compressed streams
-    /// 
-    /// Note: This method does NOT recover from decompression errors. If <see cref="Decompress"/>
-    /// throws an exception due to corrupted data, the decoder must be disposed and recreated,
-    /// not reset.
-    /// </remarks>
     public void Reset()
     {
-        Validate();
-        LZ4F_resetDecompressionContext(state.DangerousGetHandle());
+        var context = GetContext();
+        LZ4F_resetDecompressionContext(context);
+        GC.KeepAlive(this);
     }
 
+    /// <summary>
+    /// Releases the native decompression context. Safe to call multiple times.
+    /// </summary>
     public void Dispose()
     {
-        if (state == null) return;
-        state.Dispose();
+        // Interlocked has no pointer overload, so swap the field as an IntPtr while it is pinned.
+        LZ4F_dctx_s* context;
+        fixed (LZ4F_dctx_s** p = &dctx)
+        {
+            context = (LZ4F_dctx_s*)Interlocked.Exchange(ref *(IntPtr*)p, IntPtr.Zero);
+        }
+
+        if (context != null)
+        {
+            LZ4F_freeDecompressionContext(context);
+        }
+        GC.SuppressFinalize(this);
     }
 
-    [MemberNotNull(nameof(state))]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    void Validate()
+    LZ4F_dctx_s* GetContext()
     {
-        if (state == null) Throws.InvalidContextNullException();
-        if (state.IsClosed) Throws.ObjectDisposedException();
+        var context = dctx;
+        if (context == null) Throws.ObjectDisposedException(nameof(LZ4Decoder));
+        return context;
     }
 
-    unsafe class LZ4DecoderState : SafeHandle
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void ThrowIfDisposed()
     {
-        // for LZ4Decoder fields(store in heap)
-        internal LZ4F_decompressOptions_t options;
-        internal LZ4Dictionary? dictionary;
-
-        public override bool IsInvalid => handle == IntPtr.Zero;
-
-        public new LZ4F_dctx_s* DangerousGetHandle() => (LZ4F_dctx_s*)handle;
-
-        public LZ4DecoderState()
-           : base(IntPtr.Zero, true)
-        {
-            LZ4F_dctx_s* ptr = default;
-            var code = LZ4F_createDecompressionContext(&ptr, LZ4.FrameVersion);
-            LZ4.ThrowIfError(code);
-
-            this.handle = (IntPtr)ptr; // assign to SafeHandle
-        }
-
-        protected override bool ReleaseHandle()
-        {
-            // LZ4F_freeDecompressionContext always returns success, no need to check
-            LZ4F_freeDecompressionContext((LZ4F_dctx_s*)handle);
-            handle = IntPtr.Zero;
-            return true;
-        }
+        if (dctx == null) Throws.ObjectDisposedException(nameof(LZ4Decoder));
     }
 }

@@ -16,7 +16,7 @@ jobs:
   build-dotnet:
     permissions:
       contents: read
-    runs-on: ubuntu-24.04
+    runs-on: windows-2025
     timeout-minutes: 10
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
@@ -25,9 +25,15 @@ jobs:
           dotnet-version: |
             9.0.x
             10.0.x
+            11.0.x
+      # Core projects target net10.0-ios. The iOS workload is only available on Windows and macOS hosts.
+      - run: dotnet workload install ios
       - run: dotnet build -c Release -p:Version=${{ inputs.tag }}
+      # runs the test project on net8.0, net9.0 and net11.0 against the matching library builds
       - run: dotnet test -c Release --no-build
       - run: dotnet pack -c Release -p:Version=${{ inputs.tag }} -o ./publish
+      # the netstandard2.1 build of the library has its own code paths (no RandomAccess, polyfills), run the tests against it too
+      - run: dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.1 -p:Version=${{ inputs.tag }}
       # Store artifacts.
       - uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:

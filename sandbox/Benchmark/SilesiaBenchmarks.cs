@@ -83,7 +83,10 @@ public class SilesiaMultiThread_ZStandard : CompressionBenchmarkBase<int>
     protected override int CompressCore(byte[] source, byte[] destination, int maxDegreeOfParallelism)
     {
         var writer = new ArrayPipeWriter(destination);
-        NativeCompressions.Zstandard.CompressAsync(source, writer, maxDegreeOfParallelism: maxDegreeOfParallelism).GetAwaiter().GetResult();
+        var options = maxDegreeOfParallelism <= 1
+            ? (NativeCompressions.ZstandardCompressionOptions?)null
+            : NativeCompressions.ZstandardCompressionOptions.Default with { NbWorkers = maxDegreeOfParallelism };
+        NativeCompressions.Zstandard.CompressAsync(source, writer, options).GetAwaiter().GetResult();
         return writer.WrittenCount;
     }
 

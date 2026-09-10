@@ -56,10 +56,14 @@ public readonly record struct LZ4CompressionOptions
     /// <summary>LZ4F_frame or LZ4F_skippableFrame</summary>
     public FrameType FrameType { get => frameType; init => frameType = value; }
 
-    /// <summary>Size of uncompressed content ; 0 == unknown</summary>
+    /// <summary>
+    /// Size of the uncompressed content recorded in the frame header; 0 == unknown, nothing is recorded.
+    /// For streaming with LZ4Encoder this must be the exact size that will be written.
+    /// For the one-shot Compress methods any non-zero value means "record the size", the real size is written.
+    /// </summary>
     public ulong ContentSize { get => contentSize; init => contentSize = value; }
 
-    /// <summary>Dictionary ID, sent by compressor to help decoder select correct dictionary; 0 == no dictID provided. This proeprty is automatically set with Dictionary proeprty.</summary>
+    /// <summary>Dictionary ID, sent by compressor to help decoder select correct dictionary; 0 == no dictID provided. This property is automatically set with the Dictionary property.</summary>
     public uint DictionaryID { get => dictionaryID; }
 
     /// <summary>1: each block followed by a checksum of block's compressed data; 0 == default (disabled)</summary>

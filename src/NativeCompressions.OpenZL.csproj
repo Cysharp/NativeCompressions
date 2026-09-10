@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.1;net8.0;net9.0;</TargetFrameworks>
+    <TargetFrameworks>netstandard2.1;net8.0;net9.0;net11.0;</TargetFrameworks>
     <Nullable>enable</Nullable>
     <!-- Not include this dll, only native dlls. -->
     <IncludeBuildOutput>false</IncludeBuildOutput>
@@ -9,8 +9,6 @@
     <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
     <Description>Native OpenZL high-performance streaming compression for .NET.</Description>
 
-    <!-- NuGet -->
-    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>

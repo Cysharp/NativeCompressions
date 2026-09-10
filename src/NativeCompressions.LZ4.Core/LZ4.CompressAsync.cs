@@ -20,6 +20,7 @@ public static partial class LZ4
     public static async ValueTask CompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
         var newOptions = options ?? LZ4CompressionOptions.Default;
+        ThrowIfParallelWithContentChecksum(newOptions, maxDegreeOfParallelism);
 
         newOptions = newOptions with
         {
@@ -65,11 +66,6 @@ public static partial class LZ4
         {
             // multi-block, multi-thread
 
-            if (newOptions.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
-            {
-                throw new NotSupportedException("Content checksum is not supported in async compress.");
-            }
-
             newOptions = newOptions with
             {
                 BlockSizeID = (newOptions.BlockSizeID == BlockSizeId.Default)
@@ -82,7 +78,7 @@ public static partial class LZ4
 
             var threadCount = maxDegreeOfParallelism.Value;
             // modify thread count for avoid too many buffer.
-            int totalBlocks = (source.Length + actualChunkSize - 1) / actualChunkSize; // TODO: is this calculation correct?
+            var totalBlocks = (int)(((long)source.Length + actualChunkSize - 1) / actualChunkSize); // ceiling, long to avoid int overflow
             threadCount = Math.Min(threadCount, totalBlocks);
 
             var capacity = threadCount * 2;
@@ -108,7 +104,7 @@ public static partial class LZ4
             // producer: slice buffer and compress, send compressed buffer.
             var bufferId = -1;
 
-            var outputProducers = ParallelInvoker.InvokeAsync(threadCount, cancellationToken, async (producerId, token) =>
+            var outputProducers = ParallelInvoker.InvokeAsync(threadCount, channelToken.Token, async (producerId, token) =>
             {
                 using (LZ4ActivitySource.Start("InputCompressLoop", tagKey: "LoopId", tagValue: producerId))
                 {
@@ -145,23 +141,29 @@ public static partial class LZ4
 
             var outputConsumer = StartWriteCompressedBuffer(destination, newOptions, outputChannel, channelToken);
 
-            try
+            // producers complete the output channel when done, or fail it so the writer stops;
+            // the first failure cancels everything else so nobody blocks on a full channel.
+            var producersThenComplete = Task.Run(async () =>
             {
-                await outputProducers;
-                outputChannel.Writer.Complete(); // all reader complete, input is finished.
-                await outputConsumer; // wait for complete flush compressed data
-            }
-            catch
-            {
-                channelToken.Cancel(); // when any exception, cancel all tasks.
-                throw;
-            }
+                try
+                {
+                    await outputProducers;
+                    outputChannel.Writer.Complete(); // all producers done, input is finished.
+                }
+                catch (Exception ex)
+                {
+                    outputChannel.Writer.TryComplete(ex);
+                    throw;
+                }
+            });
+            await WhenAllCancelOnFailureAsync(channelToken, producersThenComplete, outputConsumer);
         }
     }
 
     public static async ValueTask CompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
         var newOptions = options ?? LZ4CompressionOptions.Default;
+        ThrowIfParallelWithContentChecksum(newOptions, maxDegreeOfParallelism);
 
         // not auto-flush
         newOptions = newOptions with
@@ -212,11 +214,6 @@ public static partial class LZ4
         else
         {
             // multi-block, multi-thread
-
-            if (newOptions.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
-            {
-                throw new NotSupportedException("Content checksum is not supported in async compress.");
-            }
 
             newOptions = newOptions with
             {
@@ -340,17 +337,22 @@ public static partial class LZ4
 
             var outputConsumer = StartWriteCompressedBuffer(destination, newOptions, outputChannel, channelToken);
 
-            try
+            // producers complete the output channel when done, or fail it so the writer stops;
+            // the first failure cancels everything else so nobody blocks on a full channel.
+            var producersThenComplete = Task.Run(async () =>
             {
-                await Task.WhenAll(outputProducers);
-                outputChannel.Writer.Complete(); // all reader complete, input is finished.
-                await outputConsumer; // wait for complete flush compressed data
-            }
-            catch
-            {
-                channelToken.Cancel(); // when any exception, cancel all tasks.
-                throw;
-            }
+                try
+                {
+                    await outputProducers;
+                    outputChannel.Writer.Complete(); // all producers done, input is finished.
+                }
+                catch (Exception ex)
+                {
+                    outputChannel.Writer.TryComplete(ex);
+                    throw;
+                }
+            });
+            await WhenAllCancelOnFailureAsync(channelToken, producersThenComplete, outputConsumer);
         }
     }
 
@@ -365,17 +367,15 @@ public static partial class LZ4
         {
             throw new ArgumentException("Invalid file handle", nameof(source));
         }
-#if NETSTANDARD2_1 || NET5_0
-        // TODO: should dispose?
-        var fs = new FileStream(source, FileAccess.Read, 1, true);
-        if (offset != 0)
-        {
-            fs.Position = offset;
-        }
+
+        // same contract on every framework, even where the netstandard2.1 path compresses sequentially
+        var newOptions = options ?? LZ4CompressionOptions.Default;
+        ThrowIfParallelWithContentChecksum(newOptions, maxDegreeOfParallelism);
+#if NETSTANDARD2_1
+        var fs = NonOwningFileStream.Open(source, offset); // not disposed, it does not own the handle
         await CompressAsync(fs, destination, options, cancellationToken);
         return;
 #else
-        var newOptions = options ?? LZ4CompressionOptions.Default;
         long sourceLength = RandomAccess.GetLength(source) - offset; // we can accept `long` length(over 2GB file), don't cast to int.
 
         newOptions = newOptions with
@@ -402,11 +402,12 @@ public static partial class LZ4
 
             var srcBuffer = ArrayPool<byte>.Shared.Rent(actualChunkSize);
 
-            var remaining = sourceLength - offset;
-            while (remaining != 0)
+            var remaining = sourceLength; // sourceLength already excludes the offset
+            while (remaining > 0)
             {
                 var count = (int)Math.Min(remaining, actualChunkSize); // compress per chunk-size
                 var read = await RandomAccess.ReadAsync(source, srcBuffer, offset + sourceLength - remaining, cancellationToken);
+                if (read == 0) break; // EOF, the file shrank while reading
 
                 var buffer = destination.GetSpan(encoder.GetMaxCompressedLength(count, includingHeader: true, includingFooter: false));
                 var written = encoder.Compress(srcBuffer.AsSpan(0, read), buffer);
@@ -424,11 +425,6 @@ public static partial class LZ4
         else
         {
             // multi-block, multi-thread
-
-            if (newOptions.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
-            {
-                throw new NotSupportedException("Content checksum is not supported in async compress.");
-            }
 
             newOptions = newOptions with
             {
@@ -483,7 +479,7 @@ public static partial class LZ4
                         var id = Interlocked.Increment(ref bufferId);
                         var offset = initialOffset + id * (long)actualChunkSize; // long for over 2GB file
 
-                        var remaining = sourceLength - offset;
+                        var remaining = sourceLength - id * (long)actualChunkSize; // sourceLength already excludes initialOffset
                         if (remaining <= 0)
                         {
                             break;
@@ -526,7 +522,7 @@ public static partial class LZ4
                             var id = Interlocked.Increment(ref bufferId);
                             var offset = initialOffset + id * (long)actualChunkSize; // long for over 2GB file
 
-                            var remaining = sourceLength - offset;
+                            var remaining = sourceLength - id * (long)actualChunkSize; // sourceLength already excludes initialOffset
                             if (remaining <= 0)
                             {
                                 break;
@@ -559,17 +555,22 @@ public static partial class LZ4
 
             var outputConsumer = StartWriteCompressedBuffer(destination, newOptions, outputChannel, channelToken);
 
-            try
+            // producers complete the output channel when done, or fail it so the writer stops;
+            // the first failure cancels everything else so nobody blocks on a full channel.
+            var producersThenComplete = Task.Run(async () =>
             {
-                await Task.WhenAll(outputProducers);
-                outputChannel.Writer.Complete(); // all reader complete, input is finished.
-                await outputConsumer; // wait for complete flush compressed data
-            }
-            catch
-            {
-                channelToken.Cancel(); // when any exception, cancel all tasks.
-                throw;
-            }
+                try
+                {
+                    await outputProducers;
+                    outputChannel.Writer.Complete(); // all producers done, input is finished.
+                }
+                catch (Exception ex)
+                {
+                    outputChannel.Writer.TryComplete(ex);
+                    throw;
+                }
+            });
+            await WhenAllCancelOnFailureAsync(channelToken, producersThenComplete, outputConsumer);
         }
 #endif
     }
@@ -580,11 +581,20 @@ public static partial class LZ4
 
         if (source is MemoryStream ms && ms.TryGetBuffer(out var buffer))
         {
-            await CompressAsync((ReadOnlyMemory<byte>)buffer, destination, options, maxDegreeOfParallelism: 1, cancellationToken);
+            // honor the stream position, and leave the stream at the end like a normal read would.
+            // A position at or past the end is a legal EOF and is left where it is.
+            if (ms.Position >= ms.Length)
+            {
+                await CompressAsync(ReadOnlyMemory<byte>.Empty, destination, options, maxDegreeOfParallelism: 1, cancellationToken);
+                return;
+            }
+            var position = (int)ms.Position;
+            await CompressAsync(((ReadOnlyMemory<byte>)buffer).Slice(position), destination, options, maxDegreeOfParallelism: 1, cancellationToken);
+            ms.Position = ms.Length;
             return;
         }
 
-#if !(NETSTANDARD2_1 || NET5_0)
+#if !NETSTANDARD2_1
         if (source is FileStream fs && fs.CanSeek)
         {
             await CompressAsync(fs.SafeFileHandle, fs.Position, destination, options, maxDegreeOfParallelism: 1, cancellationToken);
@@ -702,6 +712,15 @@ public static partial class LZ4
 
             await destination.FlushAsync(channelToken.Token);
         });
+    }
+
+    // The content checksum is xxHash32 over the whole content in order, which block-parallel compression cannot produce.
+    static void ThrowIfParallelWithContentChecksum(in LZ4CompressionOptions options, int? maxDegreeOfParallelism)
+    {
+        if (maxDegreeOfParallelism > 1 && options.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
+        {
+            throw new NotSupportedException("A content checksum cannot be produced by parallel compression. Set maxDegreeOfParallelism to 1 to keep ContentChecksumFlag, or disable ContentChecksumFlag to compress in parallel.");
+        }
     }
 
     static int GetMaxBlockSize(BlockSizeId id)

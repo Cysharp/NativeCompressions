@@ -19,6 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .csharp_class_name("OpenZLNativeMethods")
         .csharp_namespace("NativeCompressions.Interop")
         .csharp_dll_name("libopenzl")
+        .csharp_dll_name_if("__IOS__", "__Internal")
         .csharp_class_accessibility("public")
         // .csharp_generate_const_filter(|x| x.starts_with("ZL_"))
         .generate_csharp_file("../../src/NativeCompressions.OpenZL.Core/Interop/OpenZLNativeMethods.cs")?;

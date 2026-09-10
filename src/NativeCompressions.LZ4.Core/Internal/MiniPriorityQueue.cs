@@ -1,40 +1,55 @@
-﻿using System.Runtime.InteropServices;
-
 namespace NativeCompressions.Internal;
 
-// use PriorityQueue<,> is easy to use but not available in netstandard2.1
-// this simple implementation should be effective in a small size.
+// PriorityQueue<,> is not available in netstandard2.1, and the queues here are tiny (bounded by the thread count),
+// so a sorted array is enough. Stored in reverse order so the smallest item is at the end and cheap to remove.
 internal struct MiniPriorityQueue<T>
     where T : IComparable<T>
 {
-    // reverse-order
     static readonly Comparer<T> ReverseComparer = Comparer<T>.Create((x, y) => y.CompareTo(x));
 
-    List<T> list;
+    T[] items;
+    int count;
 
-    public int Count => list.Count;
+    public int Count => count;
 
-    public ReadOnlySpan<T> Values => CollectionsMarshal.AsSpan<T>(list);
+    public ReadOnlySpan<T> Values => items.AsSpan(0, count);
 
     public MiniPriorityQueue()
     {
-        list = new List<T>();
+        items = new T[8];
+        count = 0;
     }
 
-    public ref T Peek() => ref CollectionsMarshal.AsSpan(list)[^1];
+    public ref T Peek()
+    {
+        if (count == 0) throw new InvalidOperationException("The queue is empty.");
+        return ref items[count - 1];
+    }
 
     public void Enqueue(T item)
     {
-        // Binary search for insertion point
-        int index = list.BinarySearch(item, ReverseComparer);
+        if (count == items.Length)
+        {
+            Array.Resize(ref items, items.Length * 2);
+        }
+
+        var index = Array.BinarySearch(items, 0, count, item, ReverseComparer);
         if (index < 0) index = ~index;
-        list.Insert(index, item);
+
+        if (index < count)
+        {
+            Array.Copy(items, index, items, index + 1, count - index);
+        }
+        items[index] = item;
+        count++;
     }
 
     public T Dequeue()
     {
-        var item = list[^1];
-        list.RemoveAt(list.Count - 1); // Remove from last is performant than remove first
+        if (count == 0) throw new InvalidOperationException("The queue is empty.");
+        var item = items[count - 1];
+        items[count - 1] = default!;
+        count--;
         return item;
     }
 }

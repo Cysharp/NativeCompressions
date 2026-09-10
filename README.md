@@ -141,13 +141,13 @@ using var fs = new NetworkStream(socket);
 await LZ4.CompressAsync(source, PipeWriter.Create(fs));
 ```
 
-When source is `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, or `SafeFileHandle`, you can specify `int? maxDegreeOfParallelism`. If null or 2 or greater, parallel processing occurs when the target source is 1MB or larger. null (default) uses `Environment.ProcessorCount`. Specifying 1 always results in sequential processing.
+When source is `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, or `SafeFileHandle`, you can specify `int? maxDegreeOfParallelism`. When it is 2 or greater, parallel processing occurs when the target source is 1MB or larger. null (default) and 1 always result in sequential processing. Parallel compression cannot produce a content checksum, so combining it with `ContentChecksumFlag` throws `NotSupportedException`.
 
 ```csharp
 // Parallel Compression from File to File
 using SafeFileHandle sourceHandle = File.OpenHandle("foo.bin");
 using var dest = new FileStream("foo.lz4", FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
-await LZ4.CompressAsync(sourceHandle, PipeWriter.Create(dest), maxDegreeOfParallelism: null);
+await LZ4.CompressAsync(sourceHandle, PipeWriter.Create(dest), maxDegreeOfParallelism: Environment.ProcessorCount);
 ```
 
 When source is a file, passing `SafeFileHandle` enables parallel processing and can expect higher performance than `FileStream`. `Stream` or `PipeReader` doesn't perform parallel processing because the maximum source length is unknown, preventing estimation of appropriate block size for division.
@@ -164,7 +164,7 @@ await LZ4.DecompressAsync(source, PipeWriter.Create(ms));
 var decompressed = ms.ToArray();
 ```
 
-Decompress parallel processing occurs when the LZ4 frame is compressed with `BlockIndependent` and `maxDegreeOfParallelism` is null or 2 or greater. In NativeCompressions, normal LZ4 compression processes with `BlockLinked`, but only compresses as `BlockIndependent` when parallel processing in `CompressAsync`.
+Decompress parallel processing occurs when the LZ4 frame is compressed with `BlockIndependent` and `maxDegreeOfParallelism` is 2 or greater. null (default) and 1 decode sequentially. In NativeCompressions, normal LZ4 compression processes with `BlockLinked`, but only compresses as `BlockIndependent` when parallel processing in `CompressAsync`.
 
 Similar to Compress, explicitly specifying maxDegreeOfParallelism as 1 is recommended for ASP.NET servers.
 
@@ -257,15 +257,13 @@ It is generally similar to the LZ4 API. The `Zstandard` class has static methods
 
 `ZstandardEncoder` and `ZstandardDecoder` API is completely same as `BrotliEncoder`/`BrotliDecoder` unlike `LZ4Encoder/Decoder`. In other words, Compress returns an `OperationStatus`, which contains `int bytesConsumed`, `int bytesWritten`, and `bool isFinalBlock`.
 
+Unlike `BrotliEncoder`/`BrotliDecoder` (which are structs), `ZstandardEncoder` and `ZstandardDecoder` are sealed classes that own a single native context (`ZSTD_CCtx`/`ZSTD_DCtx`). This matches the design of `System.IO.Compression.ZstandardEncoder`/`ZstandardDecoder` in .NET 11, and makes it safe to cache and share a single instance by reference (for example in a serializer) without the copy-then-dispose pitfalls of a struct. The native context is stored as a raw pointer rather than a `SafeHandle`, so creating an encoder costs one managed allocation plus the native context. Always call `Dispose()`; a finalizer releases the native context if you forget, and `Dispose()` is safe to call multiple times. Using an instance after `Dispose()` throws `ObjectDisposedException`. Instances are not thread-safe.
+
 Detailed documentation will also be prepared later.
 
 OpenZL
 ---
-[OpenZL](https://github.com/facebook/openzl) is a new compression library announced in October 2025. For the time being, NativeCompressions will provide bindings as experimental support. Therefore, when installing, you need to explicitly add the NuGet Package.
-
-```bash
-dotnet add package NativeCompressions.OpenZL
-```
+[OpenZL](https://github.com/facebook/openzl) is a new compression library announced in October 2025. NativeCompressions carries experimental bindings for it in this repository, but they are not part of the 1.0 release and no NuGet package is published for them. To try OpenZL, build `src/NativeCompressions.OpenZL.csproj` from source.
 
 High-level APIs for C# exist as `OpenZL.Compress` and `OpenZL.Decompress`, but since they essentially just process with Zstandard, they are not very meaningful. All of the C API is exposed in `NativeCompressions.Interop.OpenZLNativeMethods`, so you can try out OpenZL using that. APIs for C# will be created progressively.
 
@@ -332,7 +330,13 @@ The `NativeCompressions` package includes all runtimes. If you want to install o
 
 NuGetForUnity basically handles native runtimes correctly, but there are some that are not currently supported. For example, win-arm64, linux-arm64, android-arm, android-x64, and ios-x64 cannot be imported. As a workaround, you can replace `ProjectSettings/Packages/com.github-glitchenzo.nugetforunity/NativeRuntimeSettings.json` with this [NativeRuntimeSettings.json](https://github.com/Cysharp/NativeCompressions/blob/6123b5a/sandbox/UnityApp/ProjectSettings/Packages/com.github-glitchenzo.nugetforunity/NativeRuntimeSettings.json) to enable import support. I have submitted a PR to NuGetForUnity to support this by default, but until that is released, please use the above workaround.
 
-The current preview does not support IL2CPP builds for iOS. We plan to support this in the official release. It works without issues on all other platforms.
+iOS builds need one additional package. iOS links native libraries statically, which requires `DllImport("__Internal")`, but the assemblies that NuGetForUnity installs use regular library names. Install the `NativeCompressions.Unity` editor package from the Package Manager with this git URL:
+
+```
+https://github.com/Cysharp/NativeCompressions.git?path=src/NativeCompressions.Unity
+```
+
+During an iOS player build it rewrites the library names to `__Internal` in the build output, before IL2CPP runs. The assemblies in your project are not modified, so the Editor and other platforms are unaffected. This limitation is Unity specific. .NET for iOS and .NET MAUI use the `net10.0-ios` build of the Core assemblies, which already uses `__Internal`.
 
 License
 ---

@@ -79,43 +79,77 @@ public static partial class LZ4
     /// </remarks>
     public const int MaxFrameFooterLength = 8;  // EndMarkSize + ChecksumSize
 
+    /// <summary>
+    /// Gets the maximum compressed size of a whole frame for the given input size, including header and footer.
+    /// </summary>
     public static int GetMaxCompressedLength(int inputSize) => GetMaxCompressedLength(inputSize, LZ4CompressionOptions.Default);
 
-    public static int GetMaxCompressedLength(int inputSize, in LZ4CompressionOptions options) => checked((int)GetMaxCompressedLength(inputSize, options));
-
-    public static nuint GetMaxCompressedLength(nuint inputSize) => GetMaxCompressedLength(inputSize, LZ4CompressionOptions.Default);
-
-    public static nuint GetMaxCompressedLength(nuint inputSize, in LZ4CompressionOptions options)
+    /// <summary>
+    /// Gets the maximum compressed size of a whole frame for the given input size and options, including header and footer.
+    /// </summary>
+    public static int GetMaxCompressedLength(int inputSize, in LZ4CompressionOptions options)
     {
-        ref var preferences_t = ref Unsafe.As<LZ4CompressionOptions, LZ4F_preferences_t>(ref Unsafe.AsRef(in options));
-        unsafe
-        {
-            // calculate bound for LZ4F_compressFrame
-            // compressFrameBound uses max header size so changing ContentSize and DictionaryId is ok(in Compress methods, we changes it)
-            var bound = LZ4F_compressFrameBound(inputSize, (LZ4F_preferences_t*)Unsafe.AsPointer(ref preferences_t));
-            return bound;
-        }
+        if (inputSize < 0) throw new ArgumentOutOfRangeException(nameof(inputSize));
+        return checked((int)GetMaxCompressedLength((nuint)inputSize, options));
     }
 
-    public static bool TryGetFrameInfo(ReadOnlySpan<byte> source, out LZ4FrameInfo frameInfo)
-    {
-        using var decoder = new LZ4Decoder();
+    /// <summary>
+    /// Gets the maximum compressed size of a whole frame for the given input size, including header and footer.
+    /// </summary>
+    public static nuint GetMaxCompressedLength(nuint inputSize) => GetMaxCompressedLength(inputSize, LZ4CompressionOptions.Default);
 
+    /// <summary>
+    /// Gets the maximum compressed size of a whole frame for the given input size and options, including header and footer.
+    /// </summary>
+    public static unsafe nuint GetMaxCompressedLength(nuint inputSize, in LZ4CompressionOptions options)
+    {
+        // compressFrameBound assumes the largest header, so ContentSize and DictionaryID do not matter here
+        var preferences = options.ToPreferences();
+        return LZ4F_compressFrameBound(inputSize, &preferences);
+    }
+
+    /// <summary>
+    /// Reads the frame header at the start of source. Returns false when source is too short or does not start with an LZ4 frame.
+    /// </summary>
+    public static unsafe bool TryGetFrameInfo(ReadOnlySpan<byte> source, out LZ4FrameInfo frameInfo)
+    {
+        frameInfo = default;
         if (source.Length < MinSizeToKnowFrameHeaderLength)
         {
-            frameInfo = default;
             return false;
         }
 
-        var headerSize = decoder.GetHeaderSize(source);
-        if (headerSize == 0 || source.Length < headerSize)
+        fixed (byte* src = source)
         {
-            frameInfo = default;
-            return false;
+            var headerSizeOrError = LZ4F_headerSize(src, (nuint)source.Length);
+            if (IsError(headerSizeOrError) || headerSizeOrError == 0 || (nuint)source.Length < headerSizeOrError)
+            {
+                return false;
+            }
         }
 
-        frameInfo = decoder.GetFrameInfo(source, out var _);
-        return true;
+        LZ4F_dctx_s* context = null;
+        var code = LZ4F_createDecompressionContext(&context, FrameVersion);
+        ThrowIfError(code);
+        try
+        {
+            fixed (byte* src = source)
+            {
+                ref var native = ref Unsafe.As<LZ4FrameInfo, LZ4F_frameInfo_t>(ref frameInfo);
+                var consumed = (nuint)source.Length;
+                var result = LZ4F_getFrameInfo(context, (LZ4F_frameInfo_t*)Unsafe.AsPointer(ref native), src, &consumed);
+                if (IsError(result))
+                {
+                    frameInfo = default;
+                    return false;
+                }
+                return true;
+            }
+        }
+        finally
+        {
+            LZ4F_freeDecompressionContext(context);
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

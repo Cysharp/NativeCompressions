@@ -8,30 +8,57 @@ namespace NativeCompressions;
 
 public static partial class Zstandard
 {
+    /// <summary>
+    /// Decompresses one or more concatenated frames into a new array.
+    /// </summary>
+    /// <param name="source">Compressed data. Empty input returns an empty array.</param>
+    /// <param name="trustedData">
+    /// When true, the result array is allocated up front from the sizes recorded in the frame headers and the
+    /// whole input is decoded in one call. Only use this for data you control, since the headers are not verified
+    /// before the allocation. When false, the data is decoded in blocks into a growing buffer instead. Every frame
+    /// in the input is decoded either way.
+    /// </param>
     public static byte[] Decompress(ReadOnlySpan<byte> source, bool trustedData = false)
     {
         return Decompress(source, ZstandardDecompressionOptions.Default, trustedData);
     }
 
+    /// <summary>
+    /// Decompresses one or more concatenated frames into a new array with specified options.
+    /// </summary>
+    /// <param name="source">Compressed data. Empty input returns an empty array.</param>
+    /// <param name="decompressionOptions">Decompression options such as a dictionary.</param>
+    /// <param name="trustedData">
+    /// When true, the result array is allocated up front from the sizes recorded in the frame headers and the
+    /// whole input is decoded in one call. Only use this for data you control, since the headers are not verified
+    /// before the allocation. When false, the data is decoded in blocks into a growing buffer instead. Every frame
+    /// in the input is decoded either way.
+    /// </param>
     public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, in ZstandardDecompressionOptions decompressionOptions, bool trustedData = false)
     {
-        if (trustedData && TryGetFrameContentSize(source, out var size))
+        if (source.IsEmpty)
         {
-            if (size > (ulong)Array.MaxLength)
-            {
-                throw new ZstandardException($"Frame size {size} exceeds maximum array size");
-            }
+            return [];
+        }
 
-            var destination = GC.AllocateUninitializedArray<byte>((int)size);
+        // The bound covers every frame in the input. It is exact when each frame records its content size.
+        // A frame without one contributes blocks * block size max, so the bound can exceed the real size.
+        // Truncated or corrupted input has no bound and goes through the streaming path, which reports the error.
+        if (trustedData && TryGetMaxDecompressedLength(source, out var bound) && bound <= Array.MaxLength)
+        {
+            var destination = GC.AllocateUninitializedArray<byte>((int)bound);
 
+            // zstd itself rejects a frame whose decoded size differs from the recorded content size,
+            // so a short result only means some frame had no recorded size.
             var bytesWritten = Decompress(source, destination, decompressionOptions);
-
-            if (bytesWritten != destination.Length)
+            if (bytesWritten == destination.Length)
             {
-                throw new ZstandardException($"Decompressed size mismatch. Expected {destination.Length}, got {bytesWritten}");
+                return destination;
             }
 
-            return destination;
+            var result = GC.AllocateUninitializedArray<byte>(bytesWritten);
+            destination.AsSpan(0, bytesWritten).CopyTo(result);
+            return result;
         }
         else
         {
@@ -41,24 +68,34 @@ public static partial class Zstandard
             var arrayProvider = new SegmentedArrayProvider<byte>(scratch);
             var dest = arrayProvider.GetSpan();
 
-            var status = OperationStatus.DestinationTooSmall;
-            while (status == OperationStatus.DestinationTooSmall)
+            // Same behavior as ZstandardStream and DecompressAsync: every frame is decoded,
+            // input that ends inside a frame or trailing garbage is an error.
+            while (true)
             {
-                status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
+                var status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
 
                 source = source.Slice(bytesConsumed);
                 dest = dest.Slice(bytesWritten);
                 arrayProvider.Advance(bytesWritten);
 
+                if (status == OperationStatus.Done)
+                {
+                    if (source.IsEmpty) break;
+                    decoder.Reset(); // another frame follows
+                }
+                else if (status == OperationStatus.NeedMoreData && source.IsEmpty)
+                {
+                    throw new ZstandardException("Decompression failed: input ends inside a frame.");
+                }
+                else if (status == OperationStatus.InvalidData)
+                {
+                    throw new ZstandardException("Decompression failed: invalid data.");
+                }
+
                 if (dest.Length == 0)
                 {
                     dest = arrayProvider.GetSpan();
                 }
-            }
-
-            if (status != OperationStatus.Done)
-            {
-                throw new ZstandardException($"Decompression failed: {status}");
             }
 
             var result = GC.AllocateUninitializedArray<byte>(arrayProvider.Count);

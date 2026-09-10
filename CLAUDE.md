@@ -5,6 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ### Build
+The Core projects also target `net10.0-ios`, so building the solution needs the iOS workload (`dotnet workload install ios`). The workload is only available on Windows and macOS hosts.
+
 ```bash
 # Build entire solution in Debug mode
 dotnet build -c Debug
@@ -67,6 +69,9 @@ The solution uses a multi-project structure with clear separation of concerns:
 - Platform detection and library loading handled automatically at runtime
 
 ### Testing Strategy
-- Unit tests in `tests/NativeCompressions.Tests/` using xUnit and FluentAssertions
+- Unit tests in `tests/NativeCompressions.Tests/` using xunit.v3 (Microsoft.Testing.Platform runner, project is `OutputType=Exe`)
+  - The test project targets net8.0, net9.0 and net11.0. The BCL Zstandard oracle tests and the fuzz regression tests compile only for net11.0.
+  - `dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.1` runs the tests against the netstandard2.1 build of the library (its own code paths for file handles and polyfills). CI runs this as a separate step.
+- Fuzz targets in `tests/NativeCompressions.Fuzz/` (SharpFuzz), replayed by the unit tests over seeds and mutations
 - Benchmarks in `sandbox/Benchmark/` using BenchmarkDotNet
 - Profiling projects in `sandbox/Profiling/` for performance analysis

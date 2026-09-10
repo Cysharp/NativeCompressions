@@ -12,8 +12,8 @@ public sealed class LZ4Stream : Stream
 {
     const int DecoderBufferSize = 65536;
 
-    LZ4Encoder encoder;
-    LZ4Decoder decoder;
+    LZ4Encoder? encoder;
+    LZ4Decoder? decoder;
     CompressionMode mode;
     bool needDisposeNativeCompressor;
 
@@ -65,7 +65,7 @@ public sealed class LZ4Stream : Stream
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.needDisposeNativeCompressor = false;
-        this.encoder = encoder;
+        this.encoder = encoder ?? throw new ArgumentNullException(nameof(encoder));
         this.mode = CompressionMode.Compress;
     }
 
@@ -74,7 +74,7 @@ public sealed class LZ4Stream : Stream
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.needDisposeNativeCompressor = false;
-        this.decoder = decoder;
+        this.decoder = decoder ?? throw new ArgumentNullException(nameof(decoder));
         this.mode = CompressionMode.Decompress;
     }
 
@@ -145,7 +145,7 @@ public sealed class LZ4Stream : Stream
         if (buffer == null) return;
 
         // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
-        var written = encoder.Flush(buffer);
+        var written = encoder!.Flush(buffer);
         stream.Write(buffer, 0, written);
 
         stream.Flush();
@@ -161,7 +161,7 @@ public sealed class LZ4Stream : Stream
         if (buffer == null) return;
 
         // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
-        var written = encoder.Flush(buffer);
+        var written = encoder!.Flush(buffer);
         await stream.WriteAsync(buffer.AsMemory(0, written), cancellationToken); // use ValueTask overload.
 
         await stream.FlushAsync(cancellationToken);
@@ -176,7 +176,7 @@ public sealed class LZ4Stream : Stream
         }
 
         // Adding headers and footers all the time is redundant, but we prioritize simplicity of implementation.
-        var maxDest = encoder.GetMaxCompressedLength(source.Length);
+        var maxDest = encoder!.GetMaxCompressedLength(source.Length);
 
         var dest = buffer;
         if (dest == null)
@@ -189,7 +189,7 @@ public sealed class LZ4Stream : Stream
             dest = buffer = ArrayPool<byte>.Shared.Rent(maxDest);
         }
 
-        var written = encoder.Compress(source, dest);
+        var written = encoder!.Compress(source, dest);
 
         if (written > 0)
         {
@@ -206,7 +206,7 @@ public sealed class LZ4Stream : Stream
         }
 
         // Adding headers and footers all the time is redundant, but we prioritize simplicity of implementation.
-        var maxDest = encoder.GetMaxCompressedLength(source.Length);
+        var maxDest = encoder!.GetMaxCompressedLength(source.Length);
 
         var dest = buffer;
         if (dest == null)
@@ -219,7 +219,7 @@ public sealed class LZ4Stream : Stream
             dest = buffer = ArrayPool<byte>.Shared.Rent(maxDest);
         }
 
-        var written = encoder.Compress(source.Span, dest);
+        var written = encoder!.Compress(source.Span, dest);
 
         if (written > 0)
         {
@@ -301,7 +301,7 @@ public sealed class LZ4Stream : Stream
                 source = ReadOnlySpan<byte>.Empty;
             }
 
-            var status = decoder.Decompress(source, destination, out var consumed, out var written);
+            var status = decoder!.Decompress(source, destination, out var consumed, out var written);
 
             // Update buffer state
             if (consumed > 0)
@@ -318,9 +318,12 @@ public sealed class LZ4Stream : Stream
 
             switch (status)
             {
+                case OperationStatus.InvalidData:
+                    throw new InvalidOperationException("Decompression failed: the input is not valid LZ4 frame data.");
+
                 case OperationStatus.Done:
                     // Frame completed, there might be another frame so continue
-                    decoder.Reset();
+                    decoder!.Reset();
                     break;
 
                 case OperationStatus.DestinationTooSmall:
@@ -410,7 +413,7 @@ public sealed class LZ4Stream : Stream
                 source = ReadOnlySpan<byte>.Empty;
             }
 
-            var status = decoder.Decompress(source, destination.Span, out var consumed, out var written);
+            var status = decoder!.Decompress(source, destination.Span, out var consumed, out var written);
 
             // Update buffer state
             if (consumed > 0)
@@ -427,9 +430,12 @@ public sealed class LZ4Stream : Stream
 
             switch (status)
             {
+                case OperationStatus.InvalidData:
+                    throw new InvalidOperationException("Decompression failed: the input is not valid LZ4 frame data.");
+
                 case OperationStatus.Done:
                     // Frame completed, there might be another frame so continue
-                    decoder.Reset();
+                    decoder!.Reset();
                     break;
 
                 case OperationStatus.DestinationTooSmall:
@@ -502,13 +508,21 @@ public sealed class LZ4Stream : Stream
     {
         if (isDisposed) return;
 
+        // A failed Close is reported after everything owned by this stream is released, so a bad frame never leaks the inner stream.
+        Exception? closeFailure = null;
         try
         {
             if (buffer != null && mode == CompressionMode.Compress)
             {
-                // Dispose is called from Close so share implementation.
-                var written = encoder.Close(buffer);
-                stream.Write(buffer, 0, written);
+                try
+                {
+                    var written = encoder!.Close(buffer);
+                    stream.Write(buffer, 0, written);
+                }
+                catch (Exception ex)
+                {
+                    closeFailure = ex;
+                }
             }
 
             if (!leaveOpen)
@@ -523,15 +537,19 @@ public sealed class LZ4Stream : Stream
                 ArrayPool<byte>.Shared.Return(buffer);
             }
 
-
             if (needDisposeNativeCompressor)
             {
-                encoder.Dispose();
-                decoder.Dispose();
+                encoder?.Dispose();
+                decoder?.Dispose();
             }
 
             isDisposed = true;
             base.Dispose(disposing);
+        }
+
+        if (closeFailure != null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(closeFailure).Throw();
         }
     }
 
@@ -539,18 +557,25 @@ public sealed class LZ4Stream : Stream
     {
         if (isDisposed) return;
 
+        Exception? closeFailure = null;
         try
         {
             if (buffer != null && mode == CompressionMode.Compress)
             {
-                // Dispose is called from Close so share implementation.
-                var written = encoder.Close(buffer);
-                await stream.WriteAsync(buffer.AsMemory(0, written));
+                try
+                {
+                    var written = encoder!.Close(buffer);
+                    await stream.WriteAsync(buffer.AsMemory(0, written));
+                }
+                catch (Exception ex)
+                {
+                    closeFailure = ex;
+                }
             }
 
             if (!leaveOpen)
             {
-                stream.Dispose();
+                await stream.DisposeAsync();
             }
         }
         finally
@@ -562,12 +587,17 @@ public sealed class LZ4Stream : Stream
 
             if (needDisposeNativeCompressor)
             {
-                encoder.Dispose();
-                decoder.Dispose();
+                encoder?.Dispose();
+                decoder?.Dispose();
             }
 
             isDisposed = true;
             base.Dispose();
+        }
+
+        if (closeFailure != null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(closeFailure).Throw();
         }
     }
 

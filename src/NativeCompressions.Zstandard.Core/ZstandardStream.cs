@@ -11,8 +11,8 @@ public sealed class ZstandardStream : Stream
 {
     const int BufferSize = 65536;
 
-    ZstandardEncoder encoder;
-    ZstandardDecoder decoder;
+    ZstandardEncoder? encoder;
+    ZstandardDecoder? decoder;
     CompressionMode mode;
     bool needDisposeNativeCompressor;
 
@@ -59,12 +59,72 @@ public sealed class ZstandardStream : Stream
         this.mode = CompressionMode.Decompress;
     }
 
+    public ZstandardStream(Stream stream, CompressionLevel compressionLevel, bool leaveOpen = false)
+        : this(stream, ZstandardCompressionOptions.Default with { CompressionLevel = ToCompressionLevel(compressionLevel) }, leaveOpen)
+    {
+    }
+
+    public ZstandardStream(Stream stream, CompressionMode mode, ZstandardDictionary dictionary, bool leaveOpen = false)
+    {
+        if (dictionary == null) throw new ArgumentNullException(nameof(dictionary));
+
+        this.stream = stream;
+        this.leaveOpen = leaveOpen;
+        this.mode = mode;
+        this.needDisposeNativeCompressor = true;
+
+        if (mode == CompressionMode.Decompress)
+        {
+            this.decoder = new ZstandardDecoder(ZstandardDecompressionOptions.Default with { Dictionary = dictionary });
+        }
+        else
+        {
+            this.encoder = new ZstandardEncoder(ZstandardCompressionOptions.Default with { CompressionLevel = dictionary.CompressionLevel, Dictionary = dictionary });
+        }
+    }
+
+    // Same mapping as BrotliStream. Zstandard level 0 means default, not "no compression", so NoCompression is rejected.
+    // SmallestSize does not exist in netstandard2.1 so match on the numeric values.
+    static int ToCompressionLevel(CompressionLevel compressionLevel) => (int)compressionLevel switch
+    {
+        0 => Zstandard.DefaultCompressionLevel, // Optimal
+        1 => 1, // Fastest
+        2 => throw new ArgumentException("NoCompression is not supported by Zstandard.", nameof(compressionLevel)),
+        3 => Zstandard.MaxCompressionLevel, // SmallestSize
+        _ => throw new ArgumentOutOfRangeException(nameof(compressionLevel))
+    };
+
+    /// <summary>
+    /// Gets the underlying stream.
+    /// </summary>
+    public Stream BaseStream
+    {
+        get
+        {
+            ValidateDisposed();
+            return stream;
+        }
+    }
+
+    /// <summary>
+    /// Declares the total size that will be written so it is recorded in the frame header. Call before the first Write.
+    /// </summary>
+    public void SetSourceLength(long length)
+    {
+        ValidateDisposed();
+        if (mode != CompressionMode.Compress)
+        {
+            throw new InvalidOperationException("SetSourceLength requires Compress mode.");
+        }
+        encoder!.SetSourceLength(length);
+    }
+
     public ZstandardStream(Stream stream, ZstandardEncoder encoder, bool leaveOpen = false)
     {
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.needDisposeNativeCompressor = false;
-        this.encoder = encoder;
+        this.encoder = encoder ?? throw new ArgumentNullException(nameof(encoder));
         this.mode = CompressionMode.Compress;
     }
 
@@ -73,7 +133,7 @@ public sealed class ZstandardStream : Stream
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.needDisposeNativeCompressor = false;
-        this.decoder = decoder;
+        this.decoder = decoder ?? throw new ArgumentNullException(nameof(decoder));
         this.mode = CompressionMode.Decompress;
     }
 
@@ -146,7 +206,7 @@ public sealed class ZstandardStream : Stream
         var status = OperationStatus.DestinationTooSmall;
         while (status == OperationStatus.DestinationTooSmall)
         {
-            status = encoder.Flush(buffer, out var written);
+            status = encoder!.Flush(buffer, out var written);
             stream.Write(buffer, 0, written);
         }
         if (status != OperationStatus.Done)
@@ -169,7 +229,7 @@ public sealed class ZstandardStream : Stream
         var status = OperationStatus.DestinationTooSmall;
         while (status == OperationStatus.DestinationTooSmall)
         {
-            status = encoder.Flush(buffer, out var written);
+            status = encoder!.Flush(buffer, out var written);
             await stream.WriteAsync(buffer.AsMemory(0, written), cancellationToken); // use ValueTask overload.
         }
         if (status != OperationStatus.Done)
@@ -196,7 +256,7 @@ public sealed class ZstandardStream : Stream
         var status = OperationStatus.DestinationTooSmall;
         while (status == OperationStatus.DestinationTooSmall)
         {
-            status = encoder.Compress(source, dest, out var consumed, out var written, isFinalBlock: false);
+            status = encoder!.Compress(source, dest, out var consumed, out var written, isFinalBlock: false);
             if (status == OperationStatus.InvalidData)
             {
                 throw new InvalidOperationException("Compression failed.");
@@ -224,7 +284,7 @@ public sealed class ZstandardStream : Stream
         var status = OperationStatus.DestinationTooSmall;
         while (status == OperationStatus.DestinationTooSmall)
         {
-            status = encoder.Compress(source.Span, dest, out var consumed, out var written, isFinalBlock: false);
+            status = encoder!.Compress(source.Span, dest, out var consumed, out var written, isFinalBlock: false);
             if (status == OperationStatus.InvalidData)
             {
                 throw new InvalidOperationException("Compression failed.");
@@ -309,7 +369,7 @@ public sealed class ZstandardStream : Stream
                 source = ReadOnlySpan<byte>.Empty;
             }
 
-            var status = decoder.Decompress(source, destination, out var consumed, out var written);
+            var status = decoder!.Decompress(source, destination, out var consumed, out var written);
 
             // Update buffer state
             if (consumed > 0)
@@ -326,9 +386,12 @@ public sealed class ZstandardStream : Stream
 
             switch (status)
             {
+                case OperationStatus.InvalidData:
+                    throw new InvalidOperationException("Decompression failed: the input is not valid Zstandard data.");
+
                 case OperationStatus.Done:
                     // Frame completed, there might be another frame so continue
-                    decoder.Reset();
+                    decoder!.Reset();
                     break;
 
                 case OperationStatus.DestinationTooSmall:
@@ -418,7 +481,7 @@ public sealed class ZstandardStream : Stream
                 source = ReadOnlySpan<byte>.Empty;
             }
 
-            var status = decoder.Decompress(source, destination.Span, out var consumed, out var written);
+            var status = decoder!.Decompress(source, destination.Span, out var consumed, out var written);
 
             // Update buffer state
             if (consumed > 0)
@@ -435,9 +498,12 @@ public sealed class ZstandardStream : Stream
 
             switch (status)
             {
+                case OperationStatus.InvalidData:
+                    throw new InvalidOperationException("Decompression failed: the input is not valid Zstandard data.");
+
                 case OperationStatus.Done:
                     // Frame completed, there might be another frame so continue
-                    decoder.Reset();
+                    decoder!.Reset();
                     break;
 
                 case OperationStatus.DestinationTooSmall:
@@ -510,15 +576,29 @@ public sealed class ZstandardStream : Stream
     {
         if (isDisposed) return;
 
+        // A failed Close is reported after everything owned by this stream is released, so a bad frame never leaks the inner stream.
+        Exception? closeFailure = null;
         try
         {
             if (buffer != null && mode == CompressionMode.Compress)
             {
-                var status = OperationStatus.DestinationTooSmall;
-                while (status == OperationStatus.DestinationTooSmall)
+                try
                 {
-                    status = encoder.Close(buffer, out var written);
-                    stream.Write(buffer, 0, written);
+                    var status = OperationStatus.DestinationTooSmall;
+                    while (status == OperationStatus.DestinationTooSmall)
+                    {
+                        status = encoder!.Close(buffer, out var written);
+                        stream.Write(buffer, 0, written);
+                    }
+                    if (status != OperationStatus.Done)
+                    {
+                        // for example a SetSourceLength that the written data did not match; silently dropping the frame would lose data
+                        closeFailure = new InvalidOperationException("Compression failed while closing the frame.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    closeFailure = ex;
                 }
             }
 
@@ -536,12 +616,17 @@ public sealed class ZstandardStream : Stream
 
             if (needDisposeNativeCompressor)
             {
-                encoder.Dispose();
-                decoder.Dispose();
+                encoder?.Dispose();
+                decoder?.Dispose();
             }
 
             isDisposed = true;
             base.Dispose(disposing);
+        }
+
+        if (closeFailure != null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(closeFailure).Throw();
         }
     }
 
@@ -549,16 +634,27 @@ public sealed class ZstandardStream : Stream
     {
         if (isDisposed) return;
 
+        Exception? closeFailure = null;
         try
         {
             if (buffer != null && mode == CompressionMode.Compress)
             {
-                // Dispose is called from Close so share implementation.
-                var status = OperationStatus.DestinationTooSmall;
-                while (status == OperationStatus.DestinationTooSmall)
+                try
                 {
-                    status = encoder.Close(buffer, out var written);
-                    await stream.WriteAsync(buffer.AsMemory(0, written));
+                    var status = OperationStatus.DestinationTooSmall;
+                    while (status == OperationStatus.DestinationTooSmall)
+                    {
+                        status = encoder!.Close(buffer, out var written);
+                        await stream.WriteAsync(buffer.AsMemory(0, written));
+                    }
+                    if (status != OperationStatus.Done)
+                    {
+                        closeFailure = new InvalidOperationException("Compression failed while closing the frame.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    closeFailure = ex;
                 }
             }
 
@@ -576,12 +672,17 @@ public sealed class ZstandardStream : Stream
 
             if (needDisposeNativeCompressor)
             {
-                encoder.Dispose();
-                decoder.Dispose();
+                encoder?.Dispose();
+                decoder?.Dispose();
             }
 
             isDisposed = true;
             base.Dispose();
+        }
+
+        if (closeFailure != null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(closeFailure).Throw();
         }
     }
 

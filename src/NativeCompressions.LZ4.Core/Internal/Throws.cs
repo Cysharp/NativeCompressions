@@ -11,14 +11,14 @@ internal static class Throws
     }
 
     [DoesNotReturn]
-    public static void ArgumentOutOfRangeException(string? paramName)
+    public static void ObjectDisposedException(string objectName)
     {
-        throw new ArgumentOutOfRangeException(paramName);
+        throw new ObjectDisposedException(objectName);
     }
 
     [DoesNotReturn]
-    public static void InvalidContextNullException()
+    public static void ArgumentOutOfRangeException(string? paramName)
     {
-        throw new InvalidOperationException("The native context is null. There may be an error in the initialization (such as using default instead of a constructor).");
+        throw new ArgumentOutOfRangeException(paramName);
     }
 }
