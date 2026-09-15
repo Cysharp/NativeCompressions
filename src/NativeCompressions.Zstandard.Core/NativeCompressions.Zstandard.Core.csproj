@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.1;net8.0;net9.0;</TargetFrameworks>
+    <TargetFrameworks>netstandard2.1;net8.0;net9.0;net11.0;net10.0-ios;net11.0-ios</TargetFrameworks>
     <RootNamespace>NativeCompressions</RootNamespace>
     <Description>Core binding of native Zstandard high-performance streaming compression for .NET.</Description>
 
@@ -9,10 +9,21 @@
     <IsPackable>true</IsPackable>
   </PropertyGroup>
 
+  <!-- iOS links native libraries statically, so DllImport must use __Internal. -->
+  <PropertyGroup Condition="'$(TargetPlatformIdentifier)' == 'ios'">
+    <DefineConstants>$(DefineConstants);__IOS__</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
-    <Compile Include="..\NativeCompressions.LZ4.Core\Internal\**\*.cs"
-             Exclude="**\LZ4ActivitySource.cs"
-             Link="Internal\%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- Shared internals, only the ones Zstandard actually uses. -->
+    <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Throws.cs" Link="Internal\Throws.cs" />
+    <Compile Include="..\NativeCompressions.LZ4.Core\Internal\SegmentedArrayProvider.cs" Link="Internal\SegmentedArrayProvider.cs" />
+    <!-- netstandard2.1 polyfills: Array.MaxLength, GC.AllocateUninitializedArray, ValueTask.FromCanceled, File.OpenHandle -->
+    <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Polyfill\StaticExtensions.cs" Link="Internal\Polyfill\StaticExtensions.cs" />
+    <!-- pre .NET 8 polyfill for Stream.BeginRead / BeginWrite -->
+    <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Polyfill\TaskToAsyncResult.cs" Link="Internal\Polyfill\TaskToAsyncResult.cs" />
+    <!-- netstandard2.1 reads a SafeFileHandle through a FileStream without taking ownership of the handle -->
+    <Compile Include="..\NativeCompressions.LZ4.Core\Internal\NonOwningFileStream.cs" Link="Internal\NonOwningFileStream.cs" />
   </ItemGroup>
 
   <ItemGroup>

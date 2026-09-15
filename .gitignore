@@ -156,3 +156,8 @@ artifacts/
 bindgen/target/flycheck0/stderr
 
 bindgen/target/flycheck0/stdout
+
+# fuzzing work directories (tests/NativeCompressions.Fuzz)
+tests/NativeCompressions.Fuzz/corpus/
+tests/NativeCompressions.Fuzz/findings/
+tests/NativeCompressions.Fuzz/tools/

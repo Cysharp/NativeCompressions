@@ -57,7 +57,9 @@ public static partial class LZ4
     public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in LZ4CompressionOptions options)
     {
         var dictionary = options.Dictionary;
-        var pref = options.ToPreferencesWithContentSize((ulong)source.Length);
+        // Same rule as the array overload: LZ4F_compressFrame records the content size only when the
+        // preference is non zero, and then corrects it to the real size. So ContentSize acts as a flag here.
+        var pref = options.ToPreferencesWithContentSize(options.ContentSize);
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)

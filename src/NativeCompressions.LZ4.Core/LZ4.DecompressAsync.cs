@@ -1,4 +1,4 @@
-﻿using Microsoft.Win32.SafeHandles;
+using Microsoft.Win32.SafeHandles;
 using NativeCompressions.Internal;
 using System.Buffers;
 using System.Buffers.Binary;
@@ -10,253 +10,26 @@ namespace NativeCompressions;
 
 public static partial class LZ4
 {
+    // Every DecompressAsync overload turns its source into a PipeReader and runs DecompressCoreAsync,
+    // so they share one behavior: concatenated frames (and skippable frames) are all decoded, the same
+    // as LZ4Stream and the one-shot Decompress. Invalid data and input that ends inside a frame throw LZ4Exception.
+    // Frames in BlockIndependent mode are decoded block-parallel when maxDegreeOfParallelism is 2 or more,
+    // with block and content checksums verified the same way LZ4F does.
+
+    static readonly StreamPipeReaderOptions LargeBufferLeaveOpenPipeReaderOptions = new StreamPipeReaderOptions(bufferSize: 65536, leaveOpen: true);
+
     public static async ValueTask DecompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-        using var decoder = new LZ4Decoder(options ?? LZ4DecompressionOptions.Default);
-
-        var frameInfo = decoder.GetFrameInfo(source.Span, out var bytesConsumed);
-        source = source.Slice(bytesConsumed);
-
-        var maxBlockSize = GetMaxBlockSize(frameInfo.BlockSizeID);
-
-        var checksumSize = (frameInfo.BlockChecksumFlag == BlockChecksum.BlockChecksumEnabled)
-            ? 4
-            : 0;
-
-        var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism > 1);
-
-        if (!supportMultithreadDecode)
-        {
-            var status = OperationStatus.DestinationTooSmall;
-            while (status == OperationStatus.DestinationTooSmall)
-            {
-                var dest = destination.GetSpan(maxBlockSize);
-
-                status = decoder.Decompress(source.Span, dest, out bytesConsumed, out var bytesWritten);
-                if (bytesWritten == 0 && bytesConsumed == 0 && status == OperationStatus.DestinationTooSmall)
-                {
-                    throw new InvalidOperationException("Decoder stuck");
-                }
-                source = source.Slice(bytesConsumed);
-                destination.Advance(bytesWritten);
-                await destination.FlushAsync(cancellationToken);
-            }
-
-            if (status != OperationStatus.Done)
-            {
-                throw new InvalidOperationException("Invalid LZ4 frame.");
-            }
-        }
-        else
-        {
-            var threadCount = maxDegreeOfParallelism!.Value;
-            var capacity = threadCount * 2;
-
-            var inputChannel = Channel.CreateBounded<DecompressionInputBuffer>(new BoundedChannelOptions(capacity)
-            {
-                SingleWriter = true,
-                SingleReader = false,
-                FullMode = BoundedChannelFullMode.Wait
-            });
-
-            var outputChannel = Channel.CreateBounded<DecompressionOutputBuffer>(new BoundedChannelOptions(capacity)
-            {
-                SingleWriter = false,
-                SingleReader = true,
-                FullMode = BoundedChannelFullMode.Wait
-            });
-
-            using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-            var inputProducer = Task.Run(async () =>
-            {
-                var id = 0;
-                while (source.Length != 0)
-                {
-                    var blockHeader = ReadBlockHeader(source.Span);
-                    if (blockHeader.IsEndMark)
-                    {
-                        break;
-                    }
-
-                    var nextBlockOffset = blockHeader.CompressedSize + checksumSize;
-                    var item = new DecompressionInputBuffer()
-                    {
-                        Id = id,
-                        IsUncompressed = blockHeader.IsUncompressed,
-                        CompressedBuffer = source.Slice(4, nextBlockOffset - checksumSize), // skip block header, checksum
-                        IsBufferRentFromPool = false // slice from original
-                    };
-
-                    await inputChannel.Writer.WriteAsync(item, channelToken.Token);
-
-                    source = source.Slice(4 + nextBlockOffset);
-                    id++;
-                }
-                inputChannel.Writer.Complete();
-            });
-
-            Task inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
-            Task outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, channelToken);
-
-            try
-            {
-                await inputProducer;
-                await inputConsumerOutputProducers;
-                outputChannel.Writer.Complete();
-                await outputConsumer;
-            }
-            catch
-            {
-                channelToken.Cancel(); // when any exception, cancel all tasks.
-                throw;
-            }
-        }
+        var reader = PipeReader.Create(new ReadOnlySequence<byte>(source));
+        await DecompressCoreAsync(reader, destination, options ?? LZ4DecompressionOptions.Default, maxDegreeOfParallelism, cancellationToken);
+        await reader.CompleteAsync();
     }
 
     public static async ValueTask DecompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-        using var decoder = new LZ4Decoder(options ?? LZ4DecompressionOptions.Default);
-
-        Span<byte> temp = stackalloc byte[MaxFrameHeaderLength];
-        source.Slice(0, Math.Min(source.Length, temp.Length)).CopyTo(temp);
-
-        var frameInfo = decoder.GetFrameInfo(temp, out var bytesConsumed); // if temp is too small, LZ4F_getFrameInfo returns error.
-        source = source.Slice(bytesConsumed);
-
-        var maxBlockSize = GetMaxBlockSize(frameInfo.BlockSizeID);
-
-        var checksumSize = (frameInfo.BlockChecksumFlag == BlockChecksum.BlockChecksumEnabled)
-            ? 4
-            : 0;
-
-        var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism > 1);
-
-        if (!supportMultithreadDecode)
-        {
-            var status = OperationStatus.DestinationTooSmall;
-            var destWritten = 0;
-            var dest = destination.GetSpan(maxBlockSize); // decompress per block
-            foreach (var srcBuffer in source)
-            {
-                var src = srcBuffer;
-                while (src.Length > 0)
-                {
-                    status = decoder.Decompress(src.Span, dest, out bytesConsumed, out var bytesWritten);
-                    if (bytesWritten == 0 && bytesConsumed == 0 && status == OperationStatus.DestinationTooSmall)
-                    {
-                        throw new InvalidOperationException("Decoder stuck");
-                    }
-                    src = src.Slice(bytesConsumed);
-                    dest = dest.Slice(bytesWritten);
-                    destWritten += bytesWritten;
-
-                    if (dest.Length == 0)
-                    {
-                        destination.Advance(destWritten);
-                        await destination.FlushAsync(cancellationToken);
-                        dest = destination.GetSpan(maxBlockSize);
-                        destWritten = 0;
-                    }
-                    if (status == OperationStatus.Done)
-                    {
-                        goto END;
-                    }
-                }
-            }
-
-        END:
-            if (destWritten > 0)
-            {
-                destination.Advance(destWritten);
-                await destination.FlushAsync(cancellationToken);
-            }
-
-            while (status == OperationStatus.DestinationTooSmall)
-            {
-                dest = destination.GetSpan(maxBlockSize);
-
-                status = decoder.Decompress([], dest, out _, out var bytesWritten);
-                if (bytesWritten == 0 && status == OperationStatus.DestinationTooSmall)
-                {
-                    throw new InvalidOperationException("Decoder stuck");
-                }
-                destination.Advance(bytesWritten);
-                await destination.FlushAsync(cancellationToken);
-            }
-
-            if (status != OperationStatus.Done)
-            {
-                throw new InvalidOperationException("Invalid LZ4 frame.");
-            }
-        }
-        else
-        {
-            var threadCount = maxDegreeOfParallelism!.Value;
-            var capacity = threadCount * 2;
-
-            var inputChannel = Channel.CreateBounded<DecompressionInputBuffer>(new BoundedChannelOptions(capacity)
-            {
-                SingleWriter = true,
-                SingleReader = false,
-                FullMode = BoundedChannelFullMode.Wait
-            });
-
-            var outputChannel = Channel.CreateBounded<DecompressionOutputBuffer>(new BoundedChannelOptions(capacity)
-            {
-                SingleWriter = false,
-                SingleReader = true,
-                FullMode = BoundedChannelFullMode.Wait
-            });
-
-            using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-            var inputProducer = Task.Run(async () =>
-            {
-                var id = 0;
-                while (source.Length != 0)
-                {
-                    var blockHeader = ReadBlockHeader(source);
-                    if (blockHeader.IsEndMark)
-                    {
-                        break;
-                    }
-
-                    var compressedBuffer = ArrayPool<byte>.Shared.Rent(blockHeader.CompressedSize);
-                    source.Slice(4, blockHeader.CompressedSize).CopyTo(compressedBuffer); // skip header
-
-                    var item = new DecompressionInputBuffer()
-                    {
-                        Id = id,
-                        IsUncompressed = blockHeader.IsUncompressed,
-                        CompressedBuffer = compressedBuffer.AsMemory(0, blockHeader.CompressedSize),
-                        IsBufferRentFromPool = true
-                    };
-
-                    await inputChannel.Writer.WriteAsync(item, channelToken.Token);
-
-                    source = source.Slice(4 + blockHeader.CompressedSize + checksumSize); // header + data + footer
-                    id++;
-                }
-                inputChannel.Writer.Complete();
-            });
-
-            Task inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
-            Task outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, channelToken);
-
-            try
-            {
-                await inputProducer;
-                await inputConsumerOutputProducers;
-                outputChannel.Writer.Complete();
-                await outputConsumer;
-            }
-            catch
-            {
-                channelToken.Cancel(); // when any exception, cancel all tasks.
-                throw;
-            }
-        }
+        var reader = PipeReader.Create(source);
+        await DecompressCoreAsync(reader, destination, options ?? LZ4DecompressionOptions.Default, maxDegreeOfParallelism, cancellationToken);
+        await reader.CompleteAsync();
     }
 
     public static ValueTask DecompressAsync(SafeFileHandle source, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
@@ -266,217 +39,34 @@ public static partial class LZ4
 
     public static async ValueTask DecompressAsync(SafeFileHandle source, long offset, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-#if NETSTANDARD2_1 || NET5_0
-        var fs = new FileStream(source, FileAccess.Read, 1, isAsync: true);
-        if (offset != 0)
-        {
-            fs.Seek(offset, SeekOrigin.Begin);
-        }
-        await DecompressAsync(fs, destination, options, maxDegreeOfParallelism, cancellationToken);
-        return;
+#if NETSTANDARD2_1
+        var stream = NonOwningFileStream.Open(source, offset); // not disposed, it does not own the handle
 #else
-        using var decoder = new LZ4Decoder(options ?? LZ4DecompressionOptions.Default);
-
-        var sourceLength = RandomAccess.GetLength(source);
-
-        Span<byte> headerBuffer = stackalloc byte[LZ4.MaxFrameHeaderLength];
-        var headerRead = RandomAccess.Read(source, headerBuffer.Slice(0, LZ4.MaxFrameHeaderLength), offset); // read(oversize)
-
-        var frameInfo = decoder.GetFrameInfo(headerBuffer.Slice(0, headerRead), out var bytesConsumed); // if short size, LZ4F_getFrameInfo returns error
-        offset += bytesConsumed;
-
-        var maxBlockSize = GetMaxBlockSize(frameInfo.BlockSizeID);
-
-        var checksumSize = (frameInfo.BlockChecksumFlag == BlockChecksum.BlockChecksumEnabled)
-            ? 4
-            : 0;
-
-        var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism > 1);
-
-        if (!supportMultithreadDecode)
-        {
-            var remains = sourceLength - offset;
-
-            var sourceBuffer = ArrayPool<byte>.Shared.Rent(4 + maxBlockSize + checksumSize);
-            try
-            {
-                var dest = destination.GetMemory(maxBlockSize);
-                var destWritten = 0;
-
-                var status = OperationStatus.DestinationTooSmall;
-                while (remains > 0)
-                {
-                    var read = await RandomAccess.ReadAsync(source, sourceBuffer, offset, cancellationToken);
-                    if (read == 0) break;
-
-                    offset += read;
-                    var src = sourceBuffer.AsMemory(0, read);
-
-                    while (src.Length > 0 && remains > 0)
-                    {
-                        status = decoder.Decompress(src.Span, dest.Span, out bytesConsumed, out var bytesWritten, out var sizeHint);
-                        if (bytesWritten == 0 && bytesConsumed == 0 && status == OperationStatus.DestinationTooSmall)
-                        {
-                            throw new InvalidOperationException("Decoder stuck");
-                        }
-
-                        src = src.Slice(bytesConsumed);
-                        dest = dest.Slice(bytesWritten);
-                        remains -= bytesConsumed;
-                        destWritten += bytesWritten;
-
-                        if (dest.Length == 0)
-                        {
-                            destination.Advance(destWritten);
-                            await destination.FlushAsync(cancellationToken);
-                            dest = destination.GetMemory(maxBlockSize);
-                            destWritten = 0;
-                        }
-                    }
-                }
-
-                if (destWritten > 0)
-                {
-                    destination.Advance(destWritten);
-                    await destination.FlushAsync(cancellationToken);
-                    dest = destination.GetMemory(maxBlockSize);
-                }
-
-                if (status == OperationStatus.NeedMoreData)
-                {
-                    throw new InvalidOperationException("Invalid LZ4 frame.");
-                }
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(sourceBuffer, clearArray: false);
-            }
-        }
-        else
-        {
-            var threadCount = maxDegreeOfParallelism!.Value;
-            var capacity = threadCount * 2;
-
-            var inputChannel = Channel.CreateBounded<DecompressionInputBuffer>(new BoundedChannelOptions(capacity)
-            {
-                SingleWriter = true,
-                SingleReader = false,
-                FullMode = BoundedChannelFullMode.Wait
-            });
-
-            var outputChannel = Channel.CreateBounded<DecompressionOutputBuffer>(new BoundedChannelOptions(capacity)
-            {
-                SingleWriter = false,
-                SingleReader = true,
-                FullMode = BoundedChannelFullMode.Wait
-            });
-
-            using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-            var remains = sourceLength - offset;
-
-            var inputProducer = Task.Run(async () =>
-            {
-                var id = 0;
-                var sourceBuffer = ArrayPool<byte>.Shared.Rent(4 + maxBlockSize + checksumSize);
-                try
-                {
-                    var src = Memory<byte>.Empty;
-                    while (remains != 0)
-                    {
-                        if (src.Length <= 3) // need to read header
-                        {
-                            if (src.Length == 0)
-                            {
-                                var read = await RandomAccess.ReadAsync(source, sourceBuffer, offset, cancellationToken);
-                                offset += read;
-                                src = sourceBuffer.AsMemory(0, read);
-                            }
-                            else
-                            {
-                                // copy-to-head
-                                src.Span.CopyTo(sourceBuffer);
-                                var read = await RandomAccess.ReadAsync(source, sourceBuffer.AsMemory(src.Length), offset, cancellationToken);
-                                offset += read;
-                                src = sourceBuffer.AsMemory(0, src.Length + read);
-                            }
-                        }
-
-                        var blockHeader = ReadBlockHeader(src.Span);
-                        if (blockHeader.IsEndMark)
-                        {
-                            break;
-                        }
-
-                        var compressedBuffer = ArrayPool<byte>.Shared.Rent(blockHeader.CompressedSize);
-
-                        if (blockHeader.CompressedSize + checksumSize > src.Length - 4)
-                        {
-                            // need to read more
-                            src.Span.Slice(4).CopyTo(compressedBuffer); // copy existing
-                            var copiedBytes = src.Length - 4;
-                            var read = await RandomAccess.ReadAsync(source, compressedBuffer.AsMemory(copiedBytes, blockHeader.CompressedSize - copiedBytes), offset, cancellationToken);
-                            offset += (read + checksumSize); // skip checksum
-                            src = default;
-                        }
-                        else
-                        {
-                            // enough data in src
-                            src.Slice(4, blockHeader.CompressedSize).CopyTo(compressedBuffer);
-                            src = src.Slice(4 + blockHeader.CompressedSize + checksumSize);
-                        }
-
-                        var item = new DecompressionInputBuffer()
-                        {
-                            Id = id,
-                            IsUncompressed = blockHeader.IsUncompressed,
-                            CompressedBuffer = compressedBuffer.AsMemory(0, blockHeader.CompressedSize),
-                            IsBufferRentFromPool = true
-                        };
-
-                        await inputChannel.Writer.WriteAsync(item, channelToken.Token);
-                        remains -= (4 + blockHeader.CompressedSize + checksumSize);
-                        id++;
-                    }
-
-                    inputChannel.Writer.Complete();
-                }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(sourceBuffer, clearArray: false);
-                }
-            });
-
-            Task inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
-            Task outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, channelToken);
-
-            try
-            {
-                await inputProducer;
-                await inputConsumerOutputProducers;
-                outputChannel.Writer.Complete();
-                await outputConsumer;
-            }
-            catch
-            {
-                channelToken.Cancel(); // when any exception, cancel all tasks.
-                throw;
-            }
-        }
+        var stream = new RandomAccessReadStream(source, offset);
 #endif
+        var reader = PipeReader.Create(stream, LargeBufferLeaveOpenPipeReaderOptions);
+        await DecompressCoreAsync(reader, destination, options ?? LZ4DecompressionOptions.Default, maxDegreeOfParallelism, cancellationToken);
+        await reader.CompleteAsync();
     }
 
     public static async ValueTask DecompressAsync(Stream source, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-        // change to fast-path
-
         if (source is MemoryStream ms && ms.TryGetBuffer(out var buffer))
         {
-            await DecompressAsync((ReadOnlyMemory<byte>)buffer, destination, options, maxDegreeOfParallelism, cancellationToken);
+            // honor the stream position, and leave the stream at the end like a normal read would.
+            // A position at or past the end is a legal EOF and is left where it is.
+            if (ms.Position >= ms.Length)
+            {
+                await DecompressAsync(ReadOnlyMemory<byte>.Empty, destination, options, maxDegreeOfParallelism, cancellationToken);
+                return;
+            }
+            var position = (int)ms.Position;
+            await DecompressAsync(((ReadOnlyMemory<byte>)buffer).Slice(position), destination, options, maxDegreeOfParallelism, cancellationToken);
+            ms.Position = ms.Length;
             return;
         }
 
-#if !(NETSTANDARD2_1 || NET5_0)
+#if !NETSTANDARD2_1
         if (source is FileStream fs && fs.CanSeek)
         {
             await DecompressAsync(fs.SafeFileHandle, fs.Position, destination, options, maxDegreeOfParallelism, cancellationToken);
@@ -484,179 +74,14 @@ public static partial class LZ4
         }
 #endif
 
-        var pipeReader = PipeReader.Create(source, LeaveOpenPipeReaderOptions);
-        await DecompressAsync(pipeReader, destination, options, maxDegreeOfParallelism, cancellationToken);
-        await pipeReader.CompleteAsync();
+        var reader = PipeReader.Create(source, LeaveOpenPipeReaderOptions);
+        await DecompressCoreAsync(reader, destination, options ?? LZ4DecompressionOptions.Default, maxDegreeOfParallelism, cancellationToken);
+        await reader.CompleteAsync();
     }
 
-    public static async ValueTask DecompressAsync(PipeReader source, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static ValueTask DecompressAsync(PipeReader source, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-        using var decoder = new LZ4Decoder(options ?? LZ4DecompressionOptions.Default);
-
-        LZ4FrameInfo frameInfo;
-
-        // get header.
-        {
-            // pick min frame-header
-            var result = await source.ReadAtLeastAsync(LZ4.MinSizeToKnowFrameHeaderLength, cancellationToken);
-
-            // to simplify implementation, always copy to working buffer from ReadOnlySpan<byte>
-            Span<byte> headerBuffer = stackalloc byte[LZ4.MaxFrameHeaderLength];
-            result.Buffer.Slice(0, LZ4.MinSizeToKnowFrameHeaderLength).CopyTo(headerBuffer);
-            source.AdvanceTo(result.Buffer.Start); // no-advance
-
-            var headerSize = decoder.GetHeaderSize(headerBuffer);
-
-            // pick actual frame-header
-            result = await source.ReadAtLeastAsync(headerSize, cancellationToken);
-
-            Span<byte> headerBuffer2 = stackalloc byte[LZ4.MaxFrameHeaderLength]; // don't trust headerSize for untrusted data
-            result.Buffer.Slice(0, headerSize).CopyTo(headerBuffer2);
-
-            frameInfo = decoder.GetFrameInfo(headerBuffer2, out var consumed);
-            source.AdvanceTo(result.Buffer.GetPosition(consumed));
-        }
-
-        var maxBlockSize = GetMaxBlockSize(frameInfo.BlockSizeID);
-
-        var checksumSize = (frameInfo.BlockChecksumFlag == BlockChecksum.BlockChecksumEnabled)
-            ? 4
-            : 0;
-
-        var supportMultithreadDecode = frameInfo.BlockMode == BlockMode.BlockIndependent && (maxDegreeOfParallelism > 1);
-
-        if (!supportMultithreadDecode)
-        {
-            // single-thread decompress
-            var status = OperationStatus.DestinationTooSmall;
-            var dest = destination.GetMemory(maxBlockSize);
-            var writtenCount = 0; // written count in this span
-
-            ReadResult result = default;
-            while (!result.IsCompleted) // Read Loop
-            {
-                result = await source.ReadAsync(cancellationToken);
-                if (result.IsCanceled) throw new OperationCanceledException();
-
-                var consumedInBuffer = 0;
-                foreach (var sequenceBuffer in result.Buffer) // Read(Buffer) Loop
-                {
-                    var src = sequenceBuffer;
-                    while (src.Length > 0) // Decompress Loop
-                    {
-                        status = decoder.Decompress(src.Span, dest.Span, out var bytesConsumed, out var bytesWritten);
-                        if (bytesWritten == 0 && bytesConsumed == 0 && status == OperationStatus.DestinationTooSmall)
-                        {
-                            throw new InvalidOperationException("Decoder stuck");
-                        }
-
-                        src = src.Slice(bytesConsumed);
-                        dest = dest.Slice(bytesWritten);
-                        consumedInBuffer += bytesConsumed;
-                        writtenCount += bytesWritten;
-
-                        if (dest.Length == 0)
-                        {
-                            destination.Advance(writtenCount);
-                            await destination.FlushAsync(cancellationToken);
-                            dest = destination.GetMemory(maxBlockSize);
-                            writtenCount = 0;
-                        }
-                        if (status == OperationStatus.Done)
-                        {
-                            source.AdvanceTo(result.Buffer.GetPosition(consumedInBuffer));
-                            goto END;
-                        }
-                    }
-                }
-                consumedInBuffer = 0;
-                source.AdvanceTo(result.Buffer.End);
-            }
-        END:
-
-            // flush final bytes
-            if (writtenCount > 0)
-            {
-                destination.Advance(writtenCount);
-                await destination.FlushAsync(cancellationToken);
-            }
-
-            if (status == OperationStatus.NeedMoreData)
-            {
-                throw new InvalidOperationException("Invalid LZ4 frame.");
-            }
-
-        }
-        else
-        {
-            // multi-thread decompress
-            var threadCount = maxDegreeOfParallelism!.Value;
-            var capacity = threadCount * 2;
-
-            var inputChannel = Channel.CreateBounded<DecompressionInputBuffer>(new BoundedChannelOptions(capacity)
-            {
-                SingleWriter = true,
-                SingleReader = false,
-                FullMode = BoundedChannelFullMode.Wait
-            });
-
-            var outputChannel = Channel.CreateBounded<DecompressionOutputBuffer>(new BoundedChannelOptions(capacity)
-            {
-                SingleWriter = false,
-                SingleReader = true,
-                FullMode = BoundedChannelFullMode.Wait
-            });
-
-            using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-            var inputProducer = Task.Run(async () =>
-            {
-                var id = 0;
-                while (true)
-                {
-                    var blockHeader = await ReadBlockHeaderAsync(source, cancellationToken);
-                    if (blockHeader.IsEndMark) break;
-
-                    var nextBlockOffset = blockHeader.CompressedSize + checksumSize;
-
-                    var readResult = await source.ReadAtLeastAsync(nextBlockOffset, channelToken.Token);
-
-                    var compressedBuffer = ArrayPool<byte>.Shared.Rent(blockHeader.CompressedSize);
-                    readResult.Buffer.Slice(0, blockHeader.CompressedSize).CopyTo(compressedBuffer);
-
-                    var item = new DecompressionInputBuffer()
-                    {
-                        Id = id,
-                        IsUncompressed = blockHeader.IsUncompressed,
-                        CompressedBuffer = compressedBuffer.AsMemory(0, blockHeader.CompressedSize),
-                        IsBufferRentFromPool = true,
-                    };
-
-                    await inputChannel.Writer.WriteAsync(item, channelToken.Token);
-
-                    source.AdvanceTo(readResult.Buffer.GetPosition(nextBlockOffset));
-                    id++;
-                }
-
-                inputChannel.Writer.Complete();
-            });
-
-            Task inputConsumerOutputProducers = StartDecompressBlock(options?.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken);
-            Task outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, channelToken);
-
-            try
-            {
-                await inputProducer;
-                await inputConsumerOutputProducers;
-                outputChannel.Writer.Complete();
-                await outputConsumer;
-            }
-            catch
-            {
-                channelToken.Cancel(); // when any exception, cancel all tasks.
-                throw;
-            }
-        }
+        return DecompressCoreAsync(source, destination, options ?? LZ4DecompressionOptions.Default, maxDegreeOfParallelism, cancellationToken);
     }
 
     public static async ValueTask DecompressAsync(string sourceFilePath, string destinationFilePath, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
@@ -673,13 +98,325 @@ public static partial class LZ4
         await DecompressAsync(sourceHandle, destination, options, maxDegreeOfParallelism, cancellationToken);
     }
 
-    static Task StartWriteDecompressedBuffer(PipeWriter destination, Channel<DecompressionOutputBuffer> outputChannel, CancellationTokenSource channelToken)
+    // ---- core
+
+    static async ValueTask DecompressCoreAsync(PipeReader source, PipeWriter destination, LZ4DecompressionOptions options, int? maxDegreeOfParallelism, CancellationToken cancellationToken)
     {
-        var outputConsumer = Task.Run(async () =>
+        using var decoder = new LZ4Decoder(options);
+
+        while (true)
+        {
+            // frame header, or the end of input
+            var result = await source.ReadAtLeastAsync(MinSizeToKnowFrameHeaderLength, cancellationToken);
+            if (result.IsCanceled) throw new OperationCanceledException();
+
+            var buffer = result.Buffer;
+            if (buffer.IsEmpty)
+            {
+                source.AdvanceTo(buffer.End);
+                return; // no more frames
+            }
+            if (buffer.Length < MinSizeToKnowFrameHeaderLength)
+            {
+                throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame header.");
+            }
+
+            var headerSize = ReadHeaderSize(buffer, decoder); // throws on bad magic
+            source.AdvanceTo(buffer.Start); // consume nothing, and leave the body unexamined so later reads return it at once
+
+            result = await source.ReadAtLeastAsync(headerSize, cancellationToken);
+            if (result.IsCanceled) throw new OperationCanceledException();
+            buffer = result.Buffer;
+            if (buffer.Length < headerSize)
+            {
+                throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame header.");
+            }
+
+            var frameInfo = ReadFrameInfo(buffer, headerSize, decoder, out var consumed);
+            source.AdvanceTo(buffer.GetPosition(consumed));
+
+            var parallel = maxDegreeOfParallelism > 1
+                && frameInfo.FrameType == FrameType.Frame
+                && frameInfo.BlockMode == BlockMode.BlockIndependent;
+
+            if (parallel)
+            {
+                await DecompressBlocksParallelAsync(source, destination, frameInfo, options, maxDegreeOfParallelism!.Value, cancellationToken);
+                decoder.Reset(); // the decoder only saw the header
+            }
+            else
+            {
+                var maxBlockSize = frameInfo.FrameType == FrameType.Frame ? GetMaxBlockSize(frameInfo.BlockSizeID) : 4096;
+                await DecompressFrameAsync(decoder, source, destination, maxBlockSize, cancellationToken);
+            }
+        }
+    }
+
+    static int ReadHeaderSize(in ReadOnlySequence<byte> buffer, LZ4Decoder decoder)
+    {
+        Span<byte> header = stackalloc byte[MinSizeToKnowFrameHeaderLength];
+        buffer.Slice(0, MinSizeToKnowFrameHeaderLength).CopyTo(header);
+        return decoder.GetHeaderSize(header);
+    }
+
+    static LZ4FrameInfo ReadFrameInfo(in ReadOnlySequence<byte> buffer, int headerSize, LZ4Decoder decoder, out int consumed)
+    {
+        Span<byte> header = stackalloc byte[MaxFrameHeaderLength];
+        buffer.Slice(0, headerSize).CopyTo(header);
+        return decoder.GetFrameInfo(header.Slice(0, headerSize), out consumed);
+    }
+
+    // Decodes one frame with the streaming decoder. Leaves the input after the frame so the next frame can follow.
+    static async ValueTask DecompressFrameAsync(LZ4Decoder decoder, PipeReader source, PipeWriter destination, int maxBlockSize, CancellationToken cancellationToken)
+    {
+        var status = OperationStatus.NeedMoreData;
+        var pending = 0; // bytes advanced but not yet flushed
+
+        while (true)
+        {
+            var result = await source.ReadAsync(cancellationToken);
+            if (result.IsCanceled) throw new OperationCanceledException();
+
+            var buffer = result.Buffer;
+            long consumedInBuffer = 0;
+            foreach (var segment in buffer)
+            {
+                var src = segment;
+                while (src.Length > 0)
+                {
+                    var dest = destination.GetMemory(maxBlockSize);
+                    status = decoder.Decompress(src.Span, dest.Span, out var bytesConsumed, out var bytesWritten);
+                    destination.Advance(bytesWritten);
+                    pending += bytesWritten;
+                    src = src.Slice(bytesConsumed);
+                    consumedInBuffer += bytesConsumed;
+
+                    if (status == OperationStatus.InvalidData)
+                    {
+                        throw new LZ4Exception("Invalid LZ4 frame.");
+                    }
+
+                    if (pending >= maxBlockSize)
+                    {
+                        await destination.FlushAsync(cancellationToken);
+                        pending = 0;
+                    }
+
+                    if (status == OperationStatus.Done)
+                    {
+                        source.AdvanceTo(buffer.GetPosition(consumedInBuffer));
+                        if (pending > 0) await destination.FlushAsync(cancellationToken);
+                        return;
+                    }
+                }
+            }
+            source.AdvanceTo(buffer.End);
+
+            if (result.IsCompleted)
+            {
+                break;
+            }
+        }
+
+        // input is exhausted, write out what the decoder still holds
+        while (status == OperationStatus.DestinationTooSmall)
+        {
+            var dest = destination.GetMemory(maxBlockSize);
+            status = decoder.Decompress(ReadOnlySpan<byte>.Empty, dest.Span, out _, out var bytesWritten);
+            destination.Advance(bytesWritten);
+            pending += bytesWritten;
+            if (bytesWritten == 0 && status == OperationStatus.DestinationTooSmall)
+            {
+                throw new LZ4Exception("Invalid LZ4 frame: decoder made no progress.");
+            }
+        }
+        if (pending > 0) await destination.FlushAsync(cancellationToken);
+
+        if (status != OperationStatus.Done)
+        {
+            throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
+        }
+    }
+
+    // Block-parallel decode of one BlockIndependent frame. The input is positioned right after the frame header
+    // and is left right after the frame (end mark and content checksum consumed).
+    // Block checksums are verified by the workers, the content checksum by the ordered writer, unless SkipChecksums is set.
+    static async ValueTask DecompressBlocksParallelAsync(PipeReader source, PipeWriter destination, LZ4FrameInfo frameInfo, LZ4DecompressionOptions options, int threadCount, CancellationToken cancellationToken)
+    {
+        // a block never exceeds the frame's block size: data that would not compress is stored raw instead
+        var maxBlockSize = GetMaxBlockSize(frameInfo.BlockSizeID);
+        var maxCompressedBlockSize = maxBlockSize;
+        var verifyBlockChecksum = frameInfo.BlockChecksumFlag == BlockChecksum.BlockChecksumEnabled && !options.SkipChecksums;
+        var verifyContentChecksum = frameInfo.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled && !options.SkipChecksums;
+        var checksumSize = frameInfo.BlockChecksumFlag == BlockChecksum.BlockChecksumEnabled ? 4 : 0;
+        var capacity = threadCount * 2;
+
+        var inputChannel = Channel.CreateBounded<DecompressionInputBuffer>(new BoundedChannelOptions(capacity)
+        {
+            SingleWriter = true,
+            SingleReader = false,
+            FullMode = BoundedChannelFullMode.Wait
+        });
+
+        var outputChannel = Channel.CreateBounded<DecompressionOutputBuffer>(new BoundedChannelOptions(capacity)
+        {
+            SingleWriter = false,
+            SingleReader = true,
+            FullMode = BoundedChannelFullMode.Wait
+        });
+
+        using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        // reads blocks and hands them to the workers, returns the content checksum stored in the frame footer
+        var inputProducer = Task.Run(async () =>
+        {
+            try
+            {
+                var id = 0;
+                while (true)
+                {
+                    var blockHeader = await ReadBlockHeaderAsync(source, channelToken.Token);
+                    if (blockHeader.IsEndMark) break;
+
+                    if (blockHeader.CompressedSize > maxCompressedBlockSize)
+                    {
+                        throw new LZ4Exception("Invalid LZ4 frame: block size exceeds the frame's block size limit.");
+                    }
+
+                    var blockLength = blockHeader.CompressedSize + checksumSize;
+                    var readResult = await source.ReadAtLeastAsync(blockLength, channelToken.Token);
+                    if (readResult.Buffer.Length < blockLength)
+                    {
+                        throw new LZ4Exception("Invalid LZ4 frame: input ends inside a block.");
+                    }
+
+                    var compressedBuffer = ArrayPool<byte>.Shared.Rent(blockHeader.CompressedSize);
+                    readResult.Buffer.Slice(0, blockHeader.CompressedSize).CopyTo(compressedBuffer);
+
+                    uint blockChecksum = 0;
+                    if (checksumSize != 0)
+                    {
+                        blockChecksum = ReadUInt32(readResult.Buffer.Slice(blockHeader.CompressedSize, 4));
+                    }
+                    source.AdvanceTo(readResult.Buffer.GetPosition(blockLength));
+
+                    var item = new DecompressionInputBuffer
+                    {
+                        Id = id,
+                        IsUncompressed = blockHeader.IsUncompressed,
+                        CompressedBuffer = compressedBuffer.AsMemory(0, blockHeader.CompressedSize),
+                        IsBufferRentFromPool = true,
+                        VerifyBlockChecksum = verifyBlockChecksum,
+                        BlockChecksum = blockChecksum,
+                    };
+                    await inputChannel.Writer.WriteAsync(item, channelToken.Token);
+                    id++;
+                }
+
+                uint? contentChecksum = null;
+                if (frameInfo.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
+                {
+                    var readResult = await source.ReadAtLeastAsync(4, channelToken.Token);
+                    if (readResult.Buffer.Length < 4)
+                    {
+                        throw new LZ4Exception("Invalid LZ4 frame: input ends inside the content checksum.");
+                    }
+                    contentChecksum = ReadUInt32(readResult.Buffer.Slice(0, 4));
+                    source.AdvanceTo(readResult.Buffer.GetPosition(4));
+                }
+
+                inputChannel.Writer.Complete();
+                return contentChecksum;
+            }
+            catch (Exception ex)
+            {
+                inputChannel.Writer.TryComplete(ex);
+                throw;
+            }
+        });
+
+        // workers complete the output channel when they are done, or fail it so the writer stops
+        var failure = new FirstFailure();
+        var workers = Task.Run(async () =>
+        {
+            try
+            {
+                await StartDecompressBlock(options.Dictionary, maxBlockSize, threadCount, inputChannel, outputChannel, channelToken, failure);
+                outputChannel.Writer.Complete();
+            }
+            catch (Exception ex)
+            {
+                outputChannel.Writer.TryComplete(ex);
+                throw;
+            }
+        });
+        var outputConsumer = StartWriteDecompressedBuffer(destination, outputChannel, verifyContentChecksum, channelToken);
+
+        // The producer blocks on a full channel when the workers die, so the first failure must cancel the others
+        // before anything is awaited to completion.
+        try
+        {
+            await WhenAllCancelOnFailureAsync(channelToken, inputProducer, workers, outputConsumer);
+        }
+        catch (OperationCanceledException) when (failure.Exception != null)
+        {
+            // a worker failed first and cancelled the rest, report its exception rather than the cancellation
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure.Exception).Throw();
+        }
+
+        var (contentChecksum, totalWritten) = outputConsumer.Result;
+        if (verifyContentChecksum && inputProducer.Result != contentChecksum)
+        {
+            throw new LZ4Exception("Invalid LZ4 frame: content checksum mismatch.");
+        }
+
+        // LZ4F validates the recorded content size at the end of a frame, and so must the block parallel path
+        if (frameInfo.ContentSize != 0 && frameInfo.ContentSize != (ulong)totalWritten)
+        {
+            throw new LZ4Exception($"Invalid LZ4 frame: content size mismatch. Header records {frameInfo.ContentSize} bytes, frame decoded to {totalWritten} bytes.");
+        }
+    }
+
+    // Waits for every task. When one faults, the token is cancelled so the others stop, and the first real failure is rethrown.
+    static async Task WhenAllCancelOnFailureAsync(CancellationTokenSource cancellation, params Task[] tasks)
+    {
+        var pending = new List<Task>(tasks);
+        Exception? failure = null;
+        while (pending.Count > 0)
+        {
+            var completed = await Task.WhenAny(pending);
+            pending.Remove(completed);
+
+            if (completed.IsFaulted || completed.IsCanceled)
+            {
+                // a parallel loop aggregates the cancellations that followed the real failure, so look past those
+                var ex = completed.Exception?.Flatten().InnerExceptions.FirstOrDefault(e => e is not OperationCanceledException)
+                    ?? completed.Exception?.InnerException
+                    ?? new OperationCanceledException();
+                if (failure == null || (failure is OperationCanceledException && ex is not OperationCanceledException))
+                {
+                    failure = ex;
+                }
+                cancellation.Cancel();
+            }
+        }
+
+        if (failure != null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+        }
+    }
+
+    // writes decoded blocks in order and returns the xxHash32 of the content (when asked to compute it) and the total size
+    static Task<(uint ContentChecksum, long TotalWritten)> StartWriteDecompressedBuffer(PipeWriter destination, Channel<DecompressionOutputBuffer> outputChannel, bool computeContentChecksum, CancellationTokenSource channelToken)
+    {
+        return Task.Run(async () =>
         {
             var reader = outputChannel.Reader;
             var nextId = 0; // id for write
             var buffers = new MiniPriorityQueue<DecompressionOutputBuffer>();
+            var hash = new XxHash32();
+            long totalWritten = 0;
 
             try
             {
@@ -694,6 +431,11 @@ public static partial class LZ4
                             var source = buffers.Dequeue();
                             nextId++;
 
+                            if (computeContentChecksum)
+                            {
+                                hash.Update(source.DecompressedBuffer.AsSpan(0, source.Count));
+                            }
+                            totalWritten += source.Count;
                             await destination.WriteAsync(source.DecompressedBuffer.AsMemory(0, source.Count), channelToken.Token);
                             ArrayPool<byte>.Shared.Return(source.DecompressedBuffer, clearArray: false);
                         }
@@ -701,6 +443,7 @@ public static partial class LZ4
                 }
 
                 await destination.FlushAsync(channelToken.Token);
+                return (hash.Digest(), totalWritten);
             }
             finally
             {
@@ -711,88 +454,21 @@ public static partial class LZ4
                 }
             }
         });
-        return outputConsumer;
     }
 
-    static Task StartDecompressBlock(LZ4Dictionary? dictionary, int maxBlockSize, int threadCount, Channel<DecompressionInputBuffer> inputChannel, Channel<DecompressionOutputBuffer> outputChannel, CancellationTokenSource channelToken)
+    static Task StartDecompressBlock(LZ4Dictionary? dictionary, int maxBlockSize, int threadCount, Channel<DecompressionInputBuffer> inputChannel, Channel<DecompressionOutputBuffer> outputChannel, CancellationTokenSource channelToken, FirstFailure failure)
     {
         Task inputConsumerOutputProducers;
 #if NET8_0_OR_GREATER
         inputConsumerOutputProducers = Parallel.ForAsync(0, threadCount, async (i, _) =>
         {
-            while (await inputChannel.Reader.WaitToReadAsync(channelToken.Token))
-            {
-                while (inputChannel.Reader.TryRead(out var item))
-                {
-                    var destination = ArrayPool<byte>.Shared.Rent(maxBlockSize);
-                    int written;
-                    if (item.IsUncompressed)
-                    {
-                        item.CompressedBuffer.CopyTo(destination);
-                        written = item.CompressedBuffer.Length;
-                    }
-                    else
-                    {
-                        // use LZ4 raw block decompress
-                        written = LZ4.Block.Decompress(item.CompressedBuffer.Span, destination, dictionary);
-                    }
-
-                    if (item.IsBufferRentFromPool && MemoryMarshal.TryGetArray(item.CompressedBuffer, out var segment))
-                    {
-                        ArrayPool<byte>.Shared.Return(segment.Array!, clearArray: false);
-                    }
-
-                    var item2 = new DecompressionOutputBuffer
-                    {
-                        Id = item.Id,
-                        DecompressedBuffer = destination,
-                        Count = written
-                    };
-
-                    await outputChannel.Writer.WriteAsync(item2, channelToken.Token);
-                }
-            }
+            await DecompressBlocksAsync(dictionary, maxBlockSize, inputChannel, outputChannel, channelToken, failure);
         });
 #else
         var inputConsumerOutputProducerTasks = new Task[threadCount];
         for (var i = 0; i < inputConsumerOutputProducerTasks.Length; i++)
         {
-            inputConsumerOutputProducerTasks[i] = Task.Run(async () =>
-            {
-                while (await inputChannel.Reader.WaitToReadAsync(channelToken.Token))
-                {
-                    while (inputChannel.Reader.TryRead(out var item))
-                    {
-                        var destination = ArrayPool<byte>.Shared.Rent(maxBlockSize);
-                        int written;
-                        if (item.IsUncompressed)
-                        {
-                            item.CompressedBuffer.CopyTo(destination);
-                            written = item.CompressedBuffer.Length;
-                        }
-                        else
-                        {
-                            // use LZ4 raw block decompress
-                            written = LZ4.Block.Decompress(item.CompressedBuffer.Span, destination, dictionary);
-                        }
-
-                        if (item.IsBufferRentFromPool &&
-                            MemoryMarshal.TryGetArray(item.CompressedBuffer, out var segment))
-                        {
-                            ArrayPool<byte>.Shared.Return(segment.Array!, clearArray: false);
-                        }
-
-                        var item2 = new DecompressionOutputBuffer
-                        {
-                            Id = item.Id,
-                            DecompressedBuffer = destination,
-                            Count = written
-                        };
-
-                        await outputChannel.Writer.WriteAsync(item2, channelToken.Token);
-                    }
-                }
-            });
+            inputConsumerOutputProducerTasks[i] = Task.Run(() => DecompressBlocksAsync(dictionary, maxBlockSize, inputChannel, outputChannel, channelToken, failure));
         }
 
         inputConsumerOutputProducers = Task.WhenAll(inputConsumerOutputProducerTasks);
@@ -801,56 +477,112 @@ public static partial class LZ4
         return inputConsumerOutputProducers;
     }
 
-    static BlockHeader ReadBlockHeader(ReadOnlySpan<byte> source)
+    static async Task DecompressBlocksAsync(LZ4Dictionary? dictionary, int maxBlockSize, Channel<DecompressionInputBuffer> inputChannel, Channel<DecompressionOutputBuffer> outputChannel, CancellationTokenSource channelToken, FirstFailure failure)
     {
-        // need 4 bytes
-        if (source.Length < 4) Throws.ArgumentOutOfRangeException(nameof(source));
-
-        var header = BinaryPrimitives.ReadUInt32LittleEndian(source);
-        return new BlockHeader(header);
+        try
+        {
+            await DecompressBlocksCoreAsync(dictionary, maxBlockSize, inputChannel, outputChannel, channelToken);
+        }
+        catch (Exception ex)
+        {
+            // The other workers and the producer wait on the channels and the input, which may never deliver more.
+            // The first failure has to stop them, or the whole operation hangs until the caller cancels.
+            // Cancelling wakes the others synchronously, so their cancellations can be recorded before this
+            // exception; remember it here so the caller can report the real cause.
+            if (ex is not OperationCanceledException) failure.Record(ex);
+            channelToken.Cancel();
+            throw;
+        }
     }
 
-    static BlockHeader ReadBlockHeader(ReadOnlySequence<byte> source)
+    sealed class FirstFailure
     {
-        // need 4 bytes
-        if (source.Length < 4) Throws.ArgumentOutOfRangeException(nameof(source));
+        Exception? exception;
 
-        if (source.FirstSpan.Length >= 4)
+        public Exception? Exception => exception;
+
+        public void Record(Exception ex) => Interlocked.CompareExchange(ref exception, ex, null);
+    }
+
+    static async Task DecompressBlocksCoreAsync(LZ4Dictionary? dictionary, int maxBlockSize, Channel<DecompressionInputBuffer> inputChannel, Channel<DecompressionOutputBuffer> outputChannel, CancellationTokenSource channelToken)
+    {
+        while (await inputChannel.Reader.WaitToReadAsync(channelToken.Token))
         {
-            var header = BinaryPrimitives.ReadUInt32LittleEndian(source.FirstSpan);
-            return new BlockHeader(header);
-        }
-        else
-        {
-            Span<byte> temp = stackalloc byte[4];
-            source.Slice(0, 4).CopyTo(temp);
-            var header = BinaryPrimitives.ReadUInt32LittleEndian(temp);
-            return new BlockHeader(header);
+            while (inputChannel.Reader.TryRead(out var item))
+            {
+                var destination = ArrayPool<byte>.Shared.Rent(maxBlockSize);
+                int written;
+                try
+                {
+                    // the block checksum covers the block as stored, compressed or not
+                    if (item.VerifyBlockChecksum && XxHash32.Hash(item.CompressedBuffer.Span) != item.BlockChecksum)
+                    {
+                        throw new LZ4Exception("Invalid LZ4 frame: block checksum mismatch.");
+                    }
+
+                    if (item.IsUncompressed)
+                    {
+                        item.CompressedBuffer.CopyTo(destination);
+                        written = item.CompressedBuffer.Length;
+                    }
+                    else
+                    {
+                        // use LZ4 raw block decompress
+                        written = Block.Decompress(item.CompressedBuffer.Span, destination, dictionary);
+                    }
+                }
+                catch
+                {
+                    ArrayPool<byte>.Shared.Return(destination, clearArray: false);
+                    throw;
+                }
+                finally
+                {
+                    if (item.IsBufferRentFromPool && MemoryMarshal.TryGetArray(item.CompressedBuffer, out var segment))
+                    {
+                        ArrayPool<byte>.Shared.Return(segment.Array!, clearArray: false);
+                    }
+                }
+
+                var item2 = new DecompressionOutputBuffer
+                {
+                    Id = item.Id,
+                    DecompressedBuffer = destination,
+                    Count = written
+                };
+
+                await outputChannel.Writer.WriteAsync(item2, channelToken.Token);
+            }
         }
     }
 
     static async ValueTask<BlockHeader> ReadBlockHeaderAsync(PipeReader source, CancellationToken cancellationToken)
     {
         var readResult = await source.ReadAtLeastAsync(4, cancellationToken);
-
-        uint header;
-        if (readResult.Buffer.FirstSpan.Length >= 4)
+        if (readResult.Buffer.Length < 4)
         {
-            header = BinaryPrimitives.ReadUInt32LittleEndian(readResult.Buffer.FirstSpan);
-        }
-        else
-        {
-            Span<byte> buffer = stackalloc byte[4];
-            readResult.Buffer.Slice(0, 4).CopyTo(buffer);
-            header = BinaryPrimitives.ReadUInt32LittleEndian(buffer);
+            throw new LZ4Exception("Invalid LZ4 frame: input ends inside a block header.");
         }
 
+        var header = ReadUInt32(readResult.Buffer.Slice(0, 4));
         source.AdvanceTo(readResult.Buffer.GetPosition(4));
 
         return new BlockHeader(header);
     }
 
-    struct BlockHeader(uint flag)
+    static uint ReadUInt32(ReadOnlySequence<byte> fourBytes)
+    {
+        if (fourBytes.FirstSpan.Length >= 4)
+        {
+            return BinaryPrimitives.ReadUInt32LittleEndian(fourBytes.FirstSpan);
+        }
+
+        Span<byte> buffer = stackalloc byte[4];
+        fourBytes.CopyTo(buffer);
+        return BinaryPrimitives.ReadUInt32LittleEndian(buffer);
+    }
+
+    readonly struct BlockHeader(uint flag)
     {
         const uint LZ4_BLOCK_UNCOMPRESSED_FLAG = 0x80000000;
         const uint LZ4_BLOCK_SIZE_MASK = 0x7FFFFFFF;
@@ -866,17 +598,13 @@ public static partial class LZ4
         public int Id;
         public bool IsUncompressed;
         public bool IsBufferRentFromPool;
-        public ReadOnlyMemory<byte> CompressedBuffer; // if IsUncomperred, this is Uncompressed buffer.
+        public bool VerifyBlockChecksum;
+        public uint BlockChecksum;
+        public ReadOnlyMemory<byte> CompressedBuffer; // if IsUncompressed, this is the raw block.
 
-        public int CompareTo(DecompressionInputBuffer other)
-        {
-            return Id.CompareTo(other.Id);
-        }
+        public int CompareTo(DecompressionInputBuffer other) => Id.CompareTo(other.Id);
 
-        public override string ToString()
-        {
-            return Id.ToString();
-        }
+        public override string ToString() => Id.ToString();
     }
 
     [StructLayout(LayoutKind.Auto)]
@@ -886,14 +614,8 @@ public static partial class LZ4
         public byte[] DecompressedBuffer;
         public int Count;
 
-        public int CompareTo(DecompressionOutputBuffer other)
-        {
-            return Id.CompareTo(other.Id);
-        }
+        public int CompareTo(DecompressionOutputBuffer other) => Id.CompareTo(other.Id);
 
-        public override string ToString()
-        {
-            return Id.ToString();
-        }
+        public override string ToString() => Id.ToString();
     }
 }

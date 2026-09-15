@@ -59,6 +59,7 @@
     <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.win-x64.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/NativeCompressions.Fuzz/NativeCompressions.Fuzz.csproj" />
     <Project Path="tests/NativeCompressions.Tests/NativeCompressions.Tests.csproj" />
   </Folder>
 </Solution>

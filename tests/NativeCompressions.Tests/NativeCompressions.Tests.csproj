@@ -1,29 +1,73 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Runs on every runtime the library targets. The BCL Zstandard oracle tests and the fuzz harness need .NET 11.
+
+    To exercise the netstandard2.1 build of the library (the Unity / older runtime code paths) instead of the
+    runtime specific build, pass TestCoreTfm:
+      dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.1
+  -->
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net8.0;net9.0;net11.0</TargetFrameworks>
+    <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsTestProject>true</IsTestProject>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <TestCoreTfm Condition="'$(TestCoreTfm)' == ''"></TestCoreTfm>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TestCoreTfm)' != ''">
+    <DefineConstants>$(DefineConstants);TEST_CORE_TFM_OVERRIDE</DefineConstants>
+    <!-- transitive references would resolve the Core projects for this project's own framework again -->
+    <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="TUnit" Version="1.2.11" />
+    <PackageReference Include="xunit.v3" Version="4.0.0" />
   </ItemGroup>
 
-  <ItemGroup>
+  <!-- library under test, optionally pinned to one of its target frameworks -->
+  <ItemGroup Condition="'$(TestCoreTfm)' == ''">
     <ProjectReference Include="..\..\src\NativeCompressions.LZ4.csproj" />
     <ProjectReference Include="..\..\src\NativeCompressions.Zstandard.csproj" />
     <ProjectReference Include="..\..\src\NativeCompressions.OpenZL.csproj" />
   </ItemGroup>
+  <ItemGroup Condition="'$(TestCoreTfm)' != ''">
+    <!-- the Core projects pinned to the requested build, plus the runtime projects for the native binaries -->
+    <ProjectReference Include="..\..\src\NativeCompressions.LZ4.Core\NativeCompressions.LZ4.Core.csproj" SetTargetFramework="TargetFramework=$(TestCoreTfm)" />
+    <ProjectReference Include="..\..\src\NativeCompressions.Zstandard.Core\NativeCompressions.Zstandard.Core.csproj" SetTargetFramework="TargetFramework=$(TestCoreTfm)" />
+    <ProjectReference Include="..\..\src\NativeCompressions.OpenZL.Core\NativeCompressions.OpenZL.Core.csproj" SetTargetFramework="TargetFramework=$(TestCoreTfm)" />
+    <ProjectReference Include="..\..\src\NativeCompressions.LZ4.Runtime\NativeCompressions.LZ4.Runtime.csproj" />
+    <ProjectReference Include="..\..\src\NativeCompressions.Zstandard.Runtime\NativeCompressions.Zstandard.Runtime.csproj" />
+    <ProjectReference Include="..\..\src\NativeCompressions.OpenZL.Runtime\NativeCompressions.OpenZL.Runtime.csproj" />
+    <!-- restore negotiates package dependencies for this project's own framework, so the netstandard2.1 build's packages must be listed here -->
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
+    <PackageReference Include="System.IO.Pipelines" Version="9.0.8" />
+    <PackageReference Include="System.Threading.Channels" Version="9.0.8" />
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="9.0.8" />
+  </ItemGroup>
 
+  <!-- .NET 11 only: System.IO.Compression.Zstandard as an oracle, and the fuzz harness -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <ProjectReference Include="..\NativeCompressions.Fuzz\NativeCompressions.Fuzz.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' != 'net11.0'">
+    <Compile Remove="ZstandardAdditionsTest.cs" />
+    <Compile Remove="ZstandardApiParityTest.cs" />
+    <Compile Remove="ZstandardAsyncApiTest.cs" />
+    <Compile Remove="ZstandardBclOracleTest.cs" />
+    <Compile Remove="ZstandardCompressionOptionsTest.cs" />
+    <Compile Remove="ZstandardEncoderDecoderStreamingTest.cs" />
+    <Compile Remove="ZstandardFuzzRegressionTest.cs" />
+    <Compile Remove="ZstandardStaticApiTest.cs" />
+    <Compile Remove="ZstandardStreamTest.cs" />
+  </ItemGroup>
 
   <ItemGroup>
-    <Using Include="TUnit" />
-    <Using Include="TUnit.Core" />
-    <Using Include="TUnit.Assertions" />
-    <Using Include ="TUnit.Assertions.Assert" Static="true" />
+    <Using Include="Xunit" />
 
     <Using Include="NativeCompressions" />
     <Using Include="NativeCompressions.Interop" />

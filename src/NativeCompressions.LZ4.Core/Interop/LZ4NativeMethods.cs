@@ -12,7 +12,12 @@ namespace NativeCompressions.Interop
 {
     public static unsafe partial class LZ4NativeMethods
     {
+#if __IOS__
+        const string __DllName = "__Internal";
+#else
         const string __DllName = "lz4";
+#endif
+        
 
 
 

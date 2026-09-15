@@ -1,9 +1,7 @@
-﻿using NativeCompressions.Internal;
+using NativeCompressions.Internal;
 using NativeCompressions.Interop;
 using System.Buffers;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
@@ -11,10 +9,22 @@ namespace NativeCompressions;
 /// <summary>
 /// Provides streaming decompression functionality for Zstandard format.
 /// </summary>
-public unsafe struct ZstandardDecoder : IDisposable
+/// <remarks>
+/// Call <see cref="Dispose"/> to release the native context. A finalizer releases it if Dispose is never called.
+/// Instances are not thread-safe.
+/// </remarks>
+public sealed unsafe class ZstandardDecoder : IDisposable
 {
-    // native context in SafeHandle(for safety) and all struct fields in heap(for struct small size)
-    ZstandardDecoderState? state;
+    // Held as a raw pointer instead of SafeHandle to keep a single managed allocation.
+    // Released by Dispose or the finalizer.
+    ZSTD_DCtx_s* dctx;
+
+    // The native context only references the dictionary, so keep it reachable while this decoder is alive.
+    ZstandardDictionary? dictionary;
+
+    // Pinned prefix set by SetPrefix. zstd references the memory, so it stays pinned until Reset, Dispose or the next SetPrefix.
+    MemoryHandle prefixHandle;
+    bool hasPrefix;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardDecoder"/>.
@@ -29,17 +39,35 @@ public unsafe struct ZstandardDecoder : IDisposable
     /// </summary>
     public ZstandardDecoder(in ZstandardDecompressionOptions decompressionOptions)
     {
-        this.state = new ZstandardDecoderState();
+        this.dctx = CreateContext();
         try
         {
-            decompressionOptions.SetParameter(state.DangerousGetHandle());
+            decompressionOptions.SetParameter(dctx);
+            this.dictionary = decompressionOptions.Dictionary;
         }
         catch
         {
-            this.state.Dispose();
+            Dispose();
             throw;
         }
     }
+
+    ~ZstandardDecoder()
+    {
+        // Finalizer runs only when the object is unreachable, so no race with Dispose.
+        var context = dctx;
+        if (context != null)
+        {
+            dctx = null;
+            ZSTD_freeDCtx(context);
+        }
+        prefixHandle.Dispose();
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the decoder has been disposed.
+    /// </summary>
+    public bool IsDisposed => dctx == null;
 
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten)
     {
@@ -48,8 +76,7 @@ public unsafe struct ZstandardDecoder : IDisposable
 
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, out int hintOfNextSrcSize)
     {
-        Validate();
-        var context = state.DangerousGetHandle();
+        var context = GetContext();
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)
@@ -74,15 +101,18 @@ public unsafe struct ZstandardDecoder : IDisposable
             //     the return value is a suggested next input size(just a hint for better latency)
             //     that will never request more than the remaining frame size.
             var hintOrErrorCode = ZSTD_decompressStream(context, &output, &input);
+            GC.KeepAlive(this); // keep the finalizer from freeing the context during the native call
 
             bytesConsumed = (int)input.pos;
             bytesWritten = (int)output.pos;
-            hintOfNextSrcSize = (int)hintOrErrorCode;
 
             if (Zstandard.IsError(hintOrErrorCode))
             {
+                hintOfNextSrcSize = 0; // the value is an error code, not a size
                 return OperationStatus.InvalidData;
             }
+
+            hintOfNextSrcSize = hintOrErrorCode > int.MaxValue ? int.MaxValue : (int)hintOrErrorCode;
 
             if (hintOrErrorCode == 0)
             {
@@ -115,58 +145,101 @@ public unsafe struct ZstandardDecoder : IDisposable
 
     public void Reset()
     {
-        Validate();
-        var context = state.DangerousGetHandle();
+        var context = GetContext();
 
         var result = ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_only);
         Zstandard.ThrowIfError(result);
+
+        // A session reset keeps an unused prefix referenced by the native context, so drop that reference before unpinning.
+        if (hasPrefix)
+        {
+            Zstandard.ThrowIfError(ZSTD_DCtx_refDDict(context, null));
+            ReleasePrefix();
+        }
+        GC.KeepAlive(this);
     }
 
     public void Reset(in ZstandardDecompressionOptions options)
     {
-        Validate();
-        var context = state.DangerousGetHandle();
+        var context = GetContext();
 
         var result = ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
         Zstandard.ThrowIfError(result);
+        dictionary = null;
+        ReleasePrefix();
 
         options.SetParameter(context);
+        dictionary = options.Dictionary;
+        GC.KeepAlive(this);
     }
 
+    /// <summary>
+    /// References the prefix the encoder used for the next frame only. Call before feeding any data of that frame.
+    /// </summary>
+    /// <remarks>
+    /// The memory is pinned and must not be modified until the frame is reset, the decoder is disposed, or another prefix is set.
+    /// Setting a prefix drops a dictionary given through options.
+    /// </remarks>
+    public void SetPrefix(ReadOnlyMemory<byte> prefix)
+    {
+        var context = GetContext();
+
+        // Pin and register the new prefix first. If zstd rejects it (for example mid frame) the current prefix
+        // stays referenced and pinned, so only the candidate is released.
+        var handle = prefix.Pin();
+        var result = ZSTD_DCtx_refPrefix(context, handle.Pointer, (nuint)prefix.Length);
+        if (Zstandard.IsError(result))
+        {
+            handle.Dispose();
+            Zstandard.ThrowIfError(result);
+        }
+
+        ReleasePrefix();
+        prefixHandle = handle;
+        hasPrefix = true;
+        dictionary = null; // refPrefix clears the referenced dictionary
+        GC.KeepAlive(this);
+    }
+
+    void ReleasePrefix()
+    {
+        prefixHandle.Dispose();
+        prefixHandle = default;
+        hasPrefix = false;
+    }
+
+    /// <summary>
+    /// Releases the native decompression context. Safe to call multiple times.
+    /// </summary>
     public void Dispose()
     {
-        if (state == null) return;
-        state.Dispose();
+        ReleasePrefix();
+        // Interlocked has no pointer overload, so swap the field as an IntPtr while it is pinned.
+        ZSTD_DCtx_s* context;
+        fixed (ZSTD_DCtx_s** p = &dctx)
+        {
+            context = (ZSTD_DCtx_s*)Interlocked.Exchange(ref *(IntPtr*)p, IntPtr.Zero);
+        }
+
+        if (context != null)
+        {
+            ZSTD_freeDCtx(context);
+        }
+        GC.SuppressFinalize(this);
     }
 
-    [MemberNotNull(nameof(state))]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    void Validate()
+    ZSTD_DCtx_s* GetContext()
     {
-        if (state == null) Throws.InvalidContextNullException();
-        if (state.IsClosed) Throws.ObjectDisposedException();
+        var context = dctx;
+        if (context == null) Throws.ObjectDisposedException(nameof(ZstandardDecoder));
+        return context;
     }
 
-    unsafe class ZstandardDecoderState : SafeHandle
+    static ZSTD_DCtx_s* CreateContext()
     {
-        public override bool IsInvalid => handle == IntPtr.Zero;
-
-        public new ZSTD_DCtx_s* DangerousGetHandle() => (ZSTD_DCtx_s*)handle;
-
-        public ZstandardDecoderState()
-           : base(IntPtr.Zero, true)
-        {
-            var context = ZSTD_createDCtx();
-            if (context == null) throw new ZstandardException("Failed to create decompression context");
-
-            this.handle = (IntPtr)context; // assign to SafeHandle
-        }
-
-        protected override bool ReleaseHandle()
-        {
-            ZSTD_freeDCtx((ZSTD_DCtx_s*)handle);
-            handle = IntPtr.Zero;
-            return true;
-        }
+        var context = ZSTD_createDCtx();
+        if (context == null) throw new ZstandardException("Failed to create decompression context");
+        return context;
     }
 }

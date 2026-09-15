@@ -25,7 +25,7 @@ var b = int.Parse("1");
 var c = a / b;
 
 
-Console.WriteLine(OpenZL.DefaultEncodingVersion);
+//Console.WriteLine(OpenZL.DefaultEncodingVersion); // OpenZL managed API is not shipped in 1.0
 
 
 //Console.WriteLine(LZ4.Version);

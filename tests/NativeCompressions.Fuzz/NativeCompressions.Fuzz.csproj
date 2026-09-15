@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>NativeCompressions.Fuzz</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- SharpFuzz instruments IL, keep it simple and deterministic -->
+    <TieredPGO>false</TieredPGO>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpFuzz" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\NativeCompressions.Zstandard.csproj" />
+    <ProjectReference Include="..\..\src\NativeCompressions.LZ4.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Crash reproductions found by fuzzing. Path: regressions/<target>/<any name>. Replayed by the unit tests. -->
+    <EmbeddedResource Include="regressions\**\*" Exclude="regressions\**\*.md" LogicalName="regressions/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NativeCompressions" />
+  </ItemGroup>
+
+</Project>

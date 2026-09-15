@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.cysharp.nativecompressions": "file:../../../src/NativeCompressions.Unity",
     "com.github-glitchenzo.nugetforunity": "https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity",
     "com.unity.2d.animation": "11.0.0",
     "com.unity.2d.aseprite": "1.2.5",

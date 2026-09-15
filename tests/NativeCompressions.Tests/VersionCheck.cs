@@ -4,8 +4,8 @@
 
 public class VersionCheck
 {
-    [Test]
-    public async Task LZ4Version()
+    [Fact]
+    public void LZ4Version()
     {
         string version;
         unsafe
@@ -13,7 +13,7 @@ public class VersionCheck
             version = new string((sbyte*)LZ4NativeMethods.LZ4_versionString());
         }
 
-        await That(version).IsEqualTo("1.10.0");
+        Assert.Equal("1.10.0", version);
     }
 
     //[Fact]

@@ -9,8 +9,6 @@
     <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
     <Description>OpenZL native runtime for android-arm64.</Description>
 
-    <!-- NuGet -->
-    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>

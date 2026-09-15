@@ -13,10 +13,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     csbindgen::Builder::new()
         .input_bindgen_file("src/zstd.rs")
-        .method_filter(|x| x.starts_with("ZSTD_"))
+        .method_filter(|x| x.starts_with("ZSTD_") || x.starts_with("ZDICT_"))
         .csharp_class_name("ZstandardNativeMethods")
         .csharp_namespace("NativeCompressions.Interop")
         .csharp_dll_name("libzstd")
+        .csharp_dll_name_if("__IOS__", "__Internal")
         .csharp_class_accessibility("public")
         .generate_csharp_file("../../src/NativeCompressions.Zstandard.Core/Interop/ZstandardNativeMethods.cs")?;
 

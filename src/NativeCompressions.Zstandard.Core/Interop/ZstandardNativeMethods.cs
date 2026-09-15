@@ -12,7 +12,12 @@ namespace NativeCompressions.Interop
 {
     public static unsafe partial class ZstandardNativeMethods
     {
+#if __IOS__
+        const string __DllName = "__Internal";
+#else
         const string __DllName = "libzstd";
+#endif
+        
 
 
 
@@ -660,6 +665,81 @@ namespace NativeCompressions.Interop
         [DllImport(__DllName, EntryPoint = "ZSTD_sizeof_DDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern nuint ZSTD_sizeof_DDict(ZSTD_DDict_s* ddict);
 
+        /// <summary>
+        ///  ZDICT_trainFromBuffer():
+        ///   Train a dictionary from an array of samples.
+        ///   Redirect towards ZDICT_optimizeTrainFromBuffer_fastCover() single-threaded, with d=8, steps=4,
+        ///   f=20, and accel=1.
+        ///   Samples must be stored concatenated in a single flat buffer `samplesBuffer`,
+        ///   supplied with an array of sizes `samplesSizes`, providing the size of each sample, in order.
+        ///   The resulting dictionary will be saved into `dictBuffer`.
+        ///  @return: size of dictionary stored into `dictBuffer` (&lt;= `dictBufferCapacity`)
+        ///           or an error code, which can be tested with ZDICT_isError().
+        ///   Note:  Dictionary training will fail if there are not enough samples to construct a
+        ///          dictionary, or if most of the samples are too small (&lt; 8 bytes being the lower limit).
+        ///          If dictionary training fails, you should use zstd without a dictionary, as the dictionary
+        ///          would've been ineffective anyways. If you believe your samples would benefit from a dictionary
+        ///          please open an issue with details, and we can look into it.
+        ///   Note: ZDICT_trainFromBuffer()'s memory usage is about 6 MB.
+        ///   Tips: In general, a reasonable dictionary has a size of ~ 100 KB.
+        ///         It's possible to select smaller or larger size, just by specifying `dictBufferCapacity`.
+        ///         In general, it's recommended to provide a few thousands samples, though this can vary a lot.
+        ///         It's recommended that total size of all samples be about ~x100 times the target size of dictionary.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZDICT_trainFromBuffer", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern nuint ZDICT_trainFromBuffer(void* dictBuffer, nuint dictBufferCapacity, void* samplesBuffer, nuint* samplesSizes, uint nbSamples);
+
+        /// <summary>
+        ///  ZDICT_finalizeDictionary():
+        ///  Given a custom content as a basis for dictionary, and a set of samples,
+        ///  finalize dictionary by adding headers and statistics according to the zstd
+        ///  dictionary format.
+        /// 
+        ///  Samples must be stored concatenated in a flat buffer `samplesBuffer`,
+        ///  supplied with an array of sizes `samplesSizes`, providing the size of each
+        ///  sample in order. The samples are used to construct the statistics, so they
+        ///  should be representative of what you will compress with this dictionary.
+        /// 
+        ///  The compression level can be set in `parameters`. You should pass the
+        ///  compression level you expect to use in production. The statistics for each
+        ///  compression level differ, so tuning the dictionary for the compression level
+        ///  can help quite a bit.
+        /// 
+        ///  You can set an explicit dictionary ID in `parameters`, or allow us to pick
+        ///  a random dictionary ID for you, but we can't guarantee no collisions.
+        /// 
+        ///  The dstDictBuffer and the dictContent may overlap, and the content will be
+        ///  appended to the end of the header. If the header + the content doesn't fit in
+        ///  maxDictSize the beginning of the content is truncated to make room, since it
+        ///  is presumed that the most profitable content is at the end of the dictionary,
+        ///  since that is the cheapest to reference.
+        /// 
+        ///  `maxDictSize` must be &gt;= max(dictContentSize, ZDICT_DICTSIZE_MIN).
+        /// 
+        ///  @return: size of dictionary stored into `dstDictBuffer` (&lt;= `maxDictSize`),
+        ///           or an error code, which can be tested by ZDICT_isError().
+        ///  Note: ZDICT_finalizeDictionary() will push notifications into stderr if
+        ///        instructed to, using notificationLevel&gt;0.
+        ///  NOTE: This function currently may fail in several edge cases including:
+        ///          * Not enough samples
+        ///          * Samples are uncompressible
+        ///          * Samples are all exactly the same
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZDICT_finalizeDictionary", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern nuint ZDICT_finalizeDictionary(void* dstDictBuffer, nuint maxDictSize, void* dictContent, nuint dictContentSize, void* samplesBuffer, nuint* samplesSizes, uint nbSamples, ZDICT_params_t parameters);
+
+        [DllImport(__DllName, EntryPoint = "ZDICT_getDictID", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern uint ZDICT_getDictID(void* dictBuffer, nuint dictSize);
+
+        [DllImport(__DllName, EntryPoint = "ZDICT_getDictHeaderSize", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern nuint ZDICT_getDictHeaderSize(void* dictBuffer, nuint dictSize);
+
+        [DllImport(__DllName, EntryPoint = "ZDICT_isError", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern uint ZDICT_isError(nuint errorCode);
+
+        [DllImport(__DllName, EntryPoint = "ZDICT_getErrorName", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern byte* ZDICT_getErrorName(nuint errorCode);
+
 
     }
 
@@ -730,6 +810,29 @@ namespace NativeCompressions.Interop
     public unsafe partial struct ZSTD_DDict_s
     {
         public fixed byte _unused[1];
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe partial struct ZDICT_params_t
+    {
+        /// <summary>
+        /// &lt; optimize for a specific zstd compression level; 0 means default
+        /// </summary>
+        public int compressionLevel;
+        /// <summary>
+        /// &lt; Write log to stderr; 0 = none (default); 1 = errors; 2 = progression; 3 = details; 4 = debug;
+        /// </summary>
+        public uint notificationLevel;
+        /// <summary>
+        /// &lt; force dictID value; 0 means auto mode (32-bits random value)
+        ///    NOTE: The zstd format reserves some dictionary IDs for future use.
+        ///          You may use them in private settings, but be warned that they
+        ///          may be used by zstd in a public dictionary registry in the future.
+        ///          These dictionary IDs are:
+        ///            - low range  : &lt;= 32767
+        ///            - high range : &gt;= (2^31)
+        /// </summary>
+        public uint dictID;
     }
 
 

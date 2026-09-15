@@ -17,7 +17,7 @@ internal static class NativeMethodsLoader
     {
         NativeLibrary.SetDllImportResolver(typeof(NativeCompressions.LZ4).Assembly, DllImportResolver);
         NativeLibrary.SetDllImportResolver(typeof(NativeCompressions.Zstandard).Assembly, DllImportResolver);
-        NativeLibrary.SetDllImportResolver(typeof(NativeCompressions.OpenZL).Assembly, DllImportResolver);
+        NativeLibrary.SetDllImportResolver(typeof(NativeCompressions.Interop.OpenZLNativeMethods).Assembly, DllImportResolver);
     }
 
     static IntPtr DllImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)

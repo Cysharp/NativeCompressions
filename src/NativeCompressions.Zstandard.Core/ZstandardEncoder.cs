@@ -1,10 +1,7 @@
-﻿using NativeCompressions.Internal;
+using NativeCompressions.Internal;
 using NativeCompressions.Interop;
 using System.Buffers;
-using System.Diagnostics.CodeAnalysis;
-using System.IO.Compression;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
@@ -12,10 +9,22 @@ namespace NativeCompressions;
 /// <summary>
 /// Provides streaming compression functionality for Zstandard format.
 /// </summary>
-public unsafe struct ZstandardEncoder : IDisposable
+/// <remarks>
+/// Call <see cref="Dispose"/> to release the native context. A finalizer releases it if Dispose is never called.
+/// Instances are not thread-safe.
+/// </remarks>
+public sealed unsafe class ZstandardEncoder : IDisposable
 {
-    // native context in SafeHandle(for safety) and all struct fields in heap(for struct small size)
-    ZstandardEncoderState? state;
+    // Held as a raw pointer instead of SafeHandle to keep a single managed allocation.
+    // Released by Dispose or the finalizer.
+    ZSTD_CCtx_s* cctx;
+
+    // The native context only references the dictionary, so keep it reachable while this encoder is alive.
+    ZstandardDictionary? dictionary;
+
+    // Pinned prefix set by SetPrefix. zstd references the memory, so it stays pinned until Reset, Dispose or the next SetPrefix.
+    MemoryHandle prefixHandle;
+    bool hasPrefix;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardEncoder"/> with default settings.
@@ -30,18 +39,18 @@ public unsafe struct ZstandardEncoder : IDisposable
     /// </summary>
     public ZstandardEncoder(int compressionLevel)
     {
-        this.state = new ZstandardEncoderState();
+        this.cctx = CreateContext();
 
         if (compressionLevel != Zstandard.DefaultCompressionLevel)
         {
             try
             {
-                var result = ZSTD_CCtx_setParameter(state.DangerousGetHandle(), ZSTD_cParameter.ZSTD_c_compressionLevel, compressionLevel);
+                var result = ZSTD_CCtx_setParameter(cctx, ZSTD_cParameter.ZSTD_c_compressionLevel, compressionLevel);
                 Zstandard.ThrowIfError(result);
             }
             catch
             {
-                this.state.Dispose();
+                Dispose();
                 throw;
             }
         }
@@ -52,17 +61,35 @@ public unsafe struct ZstandardEncoder : IDisposable
     /// </summary>
     public ZstandardEncoder(in ZstandardCompressionOptions compressionOptions)
     {
-        this.state = new ZstandardEncoderState();
+        this.cctx = CreateContext();
         try
         {
-            compressionOptions.SetParameter(state.DangerousGetHandle());
+            compressionOptions.SetParameter(cctx);
+            this.dictionary = compressionOptions.Dictionary;
         }
         catch
         {
-            this.state.Dispose();
+            Dispose();
             throw;
         }
     }
+
+    ~ZstandardEncoder()
+    {
+        // Finalizer runs only when the object is unreachable, so no race with Dispose.
+        var context = cctx;
+        if (context != null)
+        {
+            cctx = null;
+            ZSTD_freeCCtx(context);
+        }
+        prefixHandle.Dispose();
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the encoder has been disposed.
+    /// </summary>
+    public bool IsDisposed => cctx == null;
 
     /// <summary>
     /// Compresses source data and writes the result to the destination buffer.
@@ -100,8 +127,7 @@ public unsafe struct ZstandardEncoder : IDisposable
 
     OperationStatus CompressCore(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, ZSTD_EndDirective endOperation)
     {
-        Validate();
-        var context = state.DangerousGetHandle();
+        var context = GetContext();
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)
@@ -122,6 +148,8 @@ public unsafe struct ZstandardEncoder : IDisposable
 
             // @return provides a minimum amount of data remaining to be flushed from internal buffers or an error code
             var remaining = ZSTD_compressStream2(context, &output, &input, endOperation);
+            GC.KeepAlive(this); // keep the finalizer from freeing the context during the native call
+
             if (Zstandard.IsError(remaining))
             {
                 bytesWritten = 0;
@@ -141,8 +169,9 @@ public unsafe struct ZstandardEncoder : IDisposable
             // source is fully consumed
             if (input.pos == input.size)
             {
-                // If operation is final-block and remains data in internal buffer
-                if (endOperation == ZSTD_EndDirective.ZSTD_e_end && remaining > 0)
+                // Flush and Close promise that everything is written out, so data left in the internal buffer means "call again".
+                // For continue it is normal for data to stay buffered.
+                if (endOperation != ZSTD_EndDirective.ZSTD_e_continue && remaining > 0)
                 {
                     return OperationStatus.DestinationTooSmall;
                 }
@@ -167,58 +196,119 @@ public unsafe struct ZstandardEncoder : IDisposable
     /// </remarks>
     public void Reset()
     {
-        Validate();
-        var context = state.DangerousGetHandle();
+        var context = GetContext();
 
         var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_only);
         Zstandard.ThrowIfError(result);
+
+        // A session reset keeps an unused prefix referenced by the native context, so drop that reference before unpinning.
+        if (HasPrefix)
+        {
+            Zstandard.ThrowIfError(ZSTD_CCtx_refCDict(context, null));
+            ReleasePrefix();
+        }
+        GC.KeepAlive(this);
     }
 
     public void Reset(in ZstandardCompressionOptions options)
     {
-        Validate();
-        var context = state.DangerousGetHandle();
+        var context = GetContext();
 
         var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
         Zstandard.ThrowIfError(result);
+        dictionary = null;
+        ReleasePrefix();
 
         options.SetParameter(context);
+        dictionary = options.Dictionary;
+        GC.KeepAlive(this);
     }
 
+    /// <summary>
+    /// Declares the total size of the next frame so it is recorded in the frame header.
+    /// Call before feeding any data of that frame. The value applies to the next frame only,
+    /// and the frame fails to close if the actual size differs.
+    /// </summary>
+    public void SetSourceLength(long length)
+    {
+        if (length < 0) throw new ArgumentOutOfRangeException(nameof(length));
+        var context = GetContext();
+
+        var result = ZSTD_CCtx_setPledgedSrcSize(context, (ulong)length);
+        GC.KeepAlive(this);
+        Zstandard.ThrowIfError(result);
+    }
+
+    /// <summary>
+    /// References a prefix that acts as a raw content dictionary for the next frame only.
+    /// The decoder must be given the same prefix. Call before feeding any data of that frame.
+    /// </summary>
+    /// <remarks>
+    /// The memory is pinned and must not be modified until the frame is reset, the encoder is disposed, or another prefix is set.
+    /// Setting a prefix drops a dictionary given through options.
+    /// </remarks>
+    public void SetPrefix(ReadOnlyMemory<byte> prefix)
+    {
+        var context = GetContext();
+
+        // Pin and register the new prefix first. If zstd rejects it (for example mid frame) the current prefix
+        // stays referenced and pinned, so only the candidate is released.
+        var handle = prefix.Pin();
+        var result = ZSTD_CCtx_refPrefix(context, handle.Pointer, (nuint)prefix.Length);
+        if (Zstandard.IsError(result))
+        {
+            handle.Dispose();
+            Zstandard.ThrowIfError(result);
+        }
+
+        ReleasePrefix();
+        prefixHandle = handle;
+        hasPrefix = true;
+        dictionary = null; // refPrefix clears the referenced dictionary
+        GC.KeepAlive(this);
+    }
+
+    bool HasPrefix => hasPrefix;
+
+    void ReleasePrefix()
+    {
+        prefixHandle.Dispose();
+        prefixHandle = default;
+        hasPrefix = false;
+    }
+
+    /// <summary>
+    /// Releases the native compression context. Safe to call multiple times.
+    /// </summary>
     public void Dispose()
     {
-        if (state == null) return;
-        state.Dispose();
+        ReleasePrefix();
+        // Interlocked has no pointer overload, so swap the field as an IntPtr while it is pinned.
+        ZSTD_CCtx_s* context;
+        fixed (ZSTD_CCtx_s** p = &cctx)
+        {
+            context = (ZSTD_CCtx_s*)Interlocked.Exchange(ref *(IntPtr*)p, IntPtr.Zero);
+        }
+
+        if (context != null)
+        {
+            ZSTD_freeCCtx(context);
+        }
+        GC.SuppressFinalize(this);
     }
 
-    [MemberNotNull(nameof(state))]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    void Validate()
+    ZSTD_CCtx_s* GetContext()
     {
-        if (state == null) Throws.InvalidContextNullException();
-        if (state.IsClosed) Throws.ObjectDisposedException();
+        var context = cctx;
+        if (context == null) Throws.ObjectDisposedException(nameof(ZstandardEncoder));
+        return context;
     }
 
-    unsafe class ZstandardEncoderState : SafeHandle
+    static ZSTD_CCtx_s* CreateContext()
     {
-        public override bool IsInvalid => handle == IntPtr.Zero;
-
-        public new ZSTD_CCtx_s* DangerousGetHandle() => (ZSTD_CCtx_s*)handle;
-
-        public ZstandardEncoderState()
-           : base(IntPtr.Zero, true)
-        {
-            var context = ZSTD_createCCtx();
-            if (context == null) throw new ZstandardException("Failed to create compression context");
-
-            this.handle = (IntPtr)context; // assign to SafeHandle
-        }
-
-        protected override bool ReleaseHandle()
-        {
-            ZSTD_freeCCtx((ZSTD_CCtx_s*)handle);
-            handle = IntPtr.Zero;
-            return true;
-        }
+        var context = ZSTD_createCCtx();
+        if (context == null) throw new ZstandardException("Failed to create compression context");
+        return context;
     }
 }
