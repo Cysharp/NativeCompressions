@@ -87,3 +87,13 @@ selection, library exclusion and explicit failure on missing archives. They do
 not prove Catalyst execution. Phase 2 remains CI-pending until all four modes
 pass. Actual x64/Universal builds, other libraries, release packaging and publish
 validation belong to later phases in the implementation plan.
+
+## Phase 3 bootstrap: LZ4 x64
+
+The existing Catalyst workflow also generates the initial x64 archive on
+macos-26-intel. `CATALYST_ARCH=x64` selects x86_64-apple-ios15.0-macabi;
+`CATALYST_NATIVE_OUTPUT` selects its output directory. The script verifies the
+single archive architecture, each object's Catalyst platform and LZ4 symbols.
+The artifact `catalyst-phase3-lz4-x64-native` includes provenance and SHA256.
+After that CI succeeds, its real archive can seed the x64 Runtime package and
+x64 NuGet app tests. This job alone does not establish x64 app support.
