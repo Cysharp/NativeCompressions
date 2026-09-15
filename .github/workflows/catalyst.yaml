@@ -1,4 +1,4 @@
-name: Catalyst Phase 0
+name: Catalyst
 
 on:
   workflow_dispatch:
@@ -33,9 +33,9 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
-      - uses: actions/setup-dotnet@v5
+      - uses: Cysharp/Actions/.github/actions/setup-dotnet@main
         with:
-          dotnet-version: 10.0.401
+          dotnet-version: 10.0.x
       - name: Prepare isolated SDK validation
         run: |
           mkdir -p "$RUNNER_TEMP/catalyst-phase0/evidence"
@@ -89,7 +89,7 @@ jobs:
           dotnet build managed/Probe.csproj -c Release -r "$TARGET_RID" 2>&1 | tee evidence/managed-build.log
       - name: Save evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
           name: catalyst-phase0-${{ matrix.arch }}
           path: ${{ runner.temp }}/catalyst-phase0/evidence/
