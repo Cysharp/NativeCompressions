@@ -1,0 +1,8 @@
+probe.o:
+Load command 1
+      cmd LC_BUILD_VERSION
+  cmdsize 24
+ platform MACCATALYST
+    minos 15.0
+      sdk 26.5
+   ntools 0

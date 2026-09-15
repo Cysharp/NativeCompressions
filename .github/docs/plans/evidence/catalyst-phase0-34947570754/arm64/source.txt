@@ -1,0 +1,4 @@
+commit=127dd191f2222138a554c74a0a171cb01dd3b967
+runner=macOS
+arch=ARM64
+image=20260907.0351.1

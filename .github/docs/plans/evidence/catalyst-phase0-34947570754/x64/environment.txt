@@ -1,0 +1,158 @@
+
+## Collected at (UTC)
+2026-09-15T08:34:57Z
+
+## Host
+ProductName:		macOS
+ProductVersion:		26.6.1
+BuildVersion:		25G76
+x86_64
+
+## Selected .NET SDK
+10.0.401
+.NET SDK:
+ Version:           10.0.401
+ Commit:            e34a38d2ae
+ Workload version:  10.0.401
+ MSBuild version:   18.9.11+e34a38d2a
+
+Runtime Environment:
+ OS Name:     Mac OS X
+ OS Version:  26.6
+ OS Platform: Darwin
+ RID:         osx-x64
+ Base Path:   /Users/runner/.dotnet/sdk/10.0.401/
+
+.NET workloads installed:
+ [ios]
+   Installation Source: SDK 10.0.400
+   Manifest Version:    26.5.10318/10.0.100
+   Manifest Path:       /Users/runner/.dotnet/sdk-manifests/10.0.100/microsoft.net.sdk.ios/26.5.10318/WorkloadManifest.json
+   Install Type:        FileBased
+
+ [maccatalyst]
+   Installation Source: SDK 10.0.400
+   Manifest Version:    26.5.10318/10.0.100
+   Manifest Path:       /Users/runner/.dotnet/sdk-manifests/10.0.100/microsoft.net.sdk.maccatalyst/26.5.10318/WorkloadManifest.json
+   Install Type:        FileBased
+
+Configured to use workload sets when installing new manifests.
+
+Host:
+  Version:      10.0.12
+  Architecture: x64
+  Commit:       95017c711e
+
+.NET SDKs installed:
+  8.0.101 [/Users/runner/.dotnet/sdk]
+  8.0.204 [/Users/runner/.dotnet/sdk]
+  8.0.303 [/Users/runner/.dotnet/sdk]
+  8.0.424 [/Users/runner/.dotnet/sdk]
+  9.0.102 [/Users/runner/.dotnet/sdk]
+  9.0.203 [/Users/runner/.dotnet/sdk]
+  9.0.317 [/Users/runner/.dotnet/sdk]
+  10.0.103 [/Users/runner/.dotnet/sdk]
+  10.0.203 [/Users/runner/.dotnet/sdk]
+  10.0.302 [/Users/runner/.dotnet/sdk]
+  10.0.400 [/Users/runner/.dotnet/sdk]
+  10.0.401 [/Users/runner/.dotnet/sdk]
+
+.NET runtimes installed:
+  Microsoft.AspNetCore.App 8.0.1 [/Users/runner/.dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 8.0.4 [/Users/runner/.dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 8.0.7 [/Users/runner/.dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 8.0.30 [/Users/runner/.dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 9.0.1 [/Users/runner/.dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 9.0.4 [/Users/runner/.dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 9.0.19 [/Users/runner/.dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 10.0.3 [/Users/runner/.dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 10.0.7 [/Users/runner/.dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 10.0.10 [/Users/runner/.dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 10.0.11 [/Users/runner/.dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 10.0.12 [/Users/runner/.dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.NETCore.App 8.0.1 [/Users/runner/.dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 8.0.4 [/Users/runner/.dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 8.0.7 [/Users/runner/.dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 8.0.30 [/Users/runner/.dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 9.0.1 [/Users/runner/.dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 9.0.4 [/Users/runner/.dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 9.0.19 [/Users/runner/.dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 10.0.3 [/Users/runner/.dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 10.0.7 [/Users/runner/.dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 10.0.10 [/Users/runner/.dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 10.0.11 [/Users/runner/.dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 10.0.12 [/Users/runner/.dotnet/shared/Microsoft.NETCore.App]
+
+Other architectures found:
+  None
+
+Environment variables:
+  DOTNET_MULTILEVEL_LOOKUP                 [0]
+  DOTNET_NOLOGO                            [1]
+  DOTNET_ROOT                              [/Users/runner/.dotnet]
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE        [1]
+
+global.json file:
+  /Users/runner/work/_temp/catalyst-phase0/global.json
+
+Learn more:
+  https://aka.ms/dotnet/info
+
+Download .NET:
+  https://aka.ms/dotnet/download
+8.0.101 [/Users/runner/.dotnet/sdk]
+8.0.204 [/Users/runner/.dotnet/sdk]
+8.0.303 [/Users/runner/.dotnet/sdk]
+8.0.424 [/Users/runner/.dotnet/sdk]
+9.0.102 [/Users/runner/.dotnet/sdk]
+9.0.203 [/Users/runner/.dotnet/sdk]
+9.0.317 [/Users/runner/.dotnet/sdk]
+10.0.103 [/Users/runner/.dotnet/sdk]
+10.0.203 [/Users/runner/.dotnet/sdk]
+10.0.302 [/Users/runner/.dotnet/sdk]
+10.0.400 [/Users/runner/.dotnet/sdk]
+10.0.401 [/Users/runner/.dotnet/sdk]
+
+## Workloads
+
+Workload version: 10.0.401
+
+Installed Workload Id      Manifest Version         Installation Source
+-----------------------------------------------------------------------
+ios                        26.5.10318/10.0.100      SDK 10.0.400       
+maccatalyst                26.5.10318/10.0.100      SDK 10.0.400       
+
+Use `dotnet workload search` to find additional workloads to install.
+
+ Workload version: 10.0.401
+ Configured to use workload sets when installing new manifests.
+
+ [ios]
+   Installation Source: SDK 10.0.400
+   Manifest Version:    26.5.10318/10.0.100
+   Manifest Path:       /Users/runner/.dotnet/sdk-manifests/10.0.100/microsoft.net.sdk.ios/26.5.10318/WorkloadManifest.json
+   Install Type:        FileBased
+
+ [maccatalyst]
+   Installation Source: SDK 10.0.400
+   Manifest Version:    26.5.10318/10.0.100
+   Manifest Path:       /Users/runner/.dotnet/sdk-manifests/10.0.100/microsoft.net.sdk.maccatalyst/26.5.10318/WorkloadManifest.json
+   Install Type:        FileBased
+
+
+
+## Xcode selection
+DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer
+/Applications/Xcode_26.6.app/Contents/Developer
+Xcode 26.6
+Build version 17F113
+
+## Apple SDK
+/Applications/Xcode_26.6.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk
+26.5
+Apple clang version 21.0.0 (clang-2100.1.1.101)
+Target: x86_64-apple-darwin25.6.0
+Thread model: posix
+InstalledDir: /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin
+
+Collection complete; compare versions with mac-catalyst-phase0.md.
