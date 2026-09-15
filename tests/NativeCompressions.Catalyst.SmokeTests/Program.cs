@@ -20,7 +20,7 @@ public static class Program
 [Register("AppDelegate")]
 public sealed class AppDelegate : UIApplicationDelegate
 {
-    public override bool FinishedLaunching(UIApplication application, NSDictionary launchOptions)
+    public override bool FinishedLaunching(UIApplication application, NSDictionary? launchOptions)
     {
         BeginInvokeOnMainThread(Run);
         return true;

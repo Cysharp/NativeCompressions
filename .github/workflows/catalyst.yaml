@@ -135,22 +135,43 @@ jobs:
             xcrun --sdk macosx --show-sdk-path
           } > ../../artifacts/catalyst-phase1/evidence/environment.txt
           bash build-native.sh 2>&1 | tee ../../artifacts/catalyst-phase1/evidence/native-build.log
+      - name: Build LZ4 Core for Catalyst only
+        run: bash build-core.sh 2>&1 | tee ../../artifacts/catalyst-phase1/evidence/core-build.log
       - name: Build signed Catalyst app
         run: |
-          # Scope this .NET 10 probe to one TFM, including restore of the Core reference.
-          # The production solution still builds all its targets using its own SDK.
-          dotnet build -c Release -p:TargetFrameworks=net10.0-maccatalyst \
+          # Core was built separately; app restore has no multi-target ProjectReference.
+          dotnet build -c Release \
             -p:ArtifactsPath="$GITHUB_WORKSPACE/artifacts/catalyst-phase1/managed" \
+            -bl:"$GITHUB_WORKSPACE/artifacts/catalyst-phase1/evidence/app-build.binlog" \
             2>&1 | tee ../../artifacts/catalyst-phase1/evidence/app-build.log
       - name: Run LZ4 round trip inside Catalyst
         run: |
-          app_root="$GITHUB_WORKSPACE/artifacts/catalyst-phase1/managed"
-          mapfile_path="$RUNNER_TEMP/catalyst-app-paths.txt"
-          find "$app_root" -type d -name CatalystSmoke.app -prune > "$mapfile_path"
-          test "$(wc -l < "$mapfile_path" | tr -d ' ')" = 1
-          app="$(cat "$mapfile_path")"
-          codesign --verify --deep --strict "$app"
-          python3 run-app.py "$app" ../../artifacts/catalyst-phase1/evidence
+          app_root="$GITHUB_WORKSPACE/artifacts/catalyst-phase1/managed/bin"
+          evidence="$GITHUB_WORKSPACE/artifacts/catalyst-phase1/evidence"
+          mkdir -p "$evidence"
+          if [ ! -d "$app_root" ]; then
+            echo "::error::App build output directory does not exist: $app_root"
+            exit 1
+          fi
+          # Bundle names follow ApplicationTitle and need not match AssemblyName.
+          find "$app_root" -type d -name '*.app' -prune > "$evidence/app-paths.txt"
+          app_count="$(wc -l < "$evidence/app-paths.txt" | tr -d ' ')"
+          echo "Found $app_count app bundle(s) under $app_root:"
+          cat "$evidence/app-paths.txt"
+          if [ "$app_count" != 1 ]; then
+            echo "::error::Expected exactly one app bundle; found $app_count. See app-paths.txt."
+            exit 1
+          fi
+          app="$(cat "$evidence/app-paths.txt")"
+          echo "Verifying signature: $app"
+          if ! codesign --verify --deep --strict --verbose=2 "$app" > "$evidence/codesign.log" 2>&1; then
+            cat "$evidence/codesign.log"
+            echo "::error::App signature verification failed: $app"
+            exit 1
+          fi
+          cat "$evidence/codesign.log"
+          echo "Launching Catalyst LZ4 smoke test: $app"
+          python3 -u run-app.py "$app" "$evidence" 2>&1 | tee "$evidence/run-app.log"
       - name: Save diagnostics
         if: always()
         uses: Cysharp/Actions/.github/actions/upload-artifact@main

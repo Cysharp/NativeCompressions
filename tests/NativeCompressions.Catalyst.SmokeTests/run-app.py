@@ -11,6 +11,7 @@ output = pathlib.Path(sys.argv[2]).resolve()
 output.mkdir(parents=True, exist_ok=True)
 run_id = str(uuid.uuid4())
 result = output / f"result-{run_id}.json"
+print(f"App: {app}\nResult: {result}\nTimeout: 90 seconds", flush=True)
 deadline = time.monotonic() + 90
 with (output / "launch.log").open("w") as log:
     launcher = subprocess.Popen(
@@ -42,3 +43,8 @@ with (output / "launch.log").open("w") as log:
             except subprocess.TimeoutExpired:
                 launcher.kill()
                 launcher.wait()
+
+        log.flush()
+        launch_output = (output / "launch.log").read_text()
+        if launch_output:
+            print("LaunchServices output:\n" + launch_output, flush=True)

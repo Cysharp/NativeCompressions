@@ -1,6 +1,6 @@
 # Catalyst Phase 1: LZ4 ARM64
 
-This standalone .NET 10 app checks the LZ4 Core ProjectReference with an explicit
+This standalone .NET 10 app checks the separately built LZ4 Core DLL with an explicit
 Catalyst static NativeReference. NuGet integration is Phase 2. It is intentionally
 outside the root solution so ordinary Windows/Linux builds do not need Apple workloads.
 
@@ -32,14 +32,22 @@ From this directory with Xcode 26.6 selected and SDK 10.0.401 installed:
 export DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer
 dotnet workload install ios maccatalyst --version 10.0.401
 bash build-native.sh
-dotnet build -c Release -p:TargetFrameworks=net10.0-maccatalyst
-python3 run-app.py /absolute/path/to/CatalystSmoke.app /absolute/path/to/results
+bash build-core.sh
+dotnet build -c Release
+python3 run-app.py "/absolute/path/to/NativeCompressions Catalyst Smoke.app" /absolute/path/to/results
 ```
 
-The TFM override scopes this .NET 10 probe's restore to the Catalyst target of
-Core, avoiding its unrelated net11.0 targets. It is not an OS-skipping flag and
-does not change default package targets. The existing SDK-driven MACCATALYST
-symbol selects `__Internal` in both generated code and the bindgen recipe.
+build-core.sh builds only net10.0-maccatalyst from the production Core project
+and places the DLL under artifacts/catalyst-phase1/core. The app uses an assembly
+Reference with HintPath, so its restore cannot traverse Core's net11.0 targets.
+AdditionalProperties on ProjectReference did not restrict NuGet restore in this
+configuration. The TargetFrameworks override is therefore confined to the separate
+Core library command, never passed to the app or its SDK-generated linker projects.
+This explicit DLL/native archive arrangement is Phase 1 only; Phase 2 will test
+NuGet dependency resolution. Core currently has no runtime PackageReference for
+this TFM (PolySharp is a private build-time dependency); reassess that if its
+dependencies change. MACCATALYST selects __Internal in generated code and bindgen.
+CI saves both core-build.binlog and app-build.binlog for diagnosis.
 
 No ForceLoad is enabled initially. If link/run testing reveals missing symbols,
 inspect the native linker output and add the smallest justified retention rule;
@@ -47,3 +55,8 @@ do not treat a successful app build as proof of successful P/Invoke.
 
 Phase 1 is only complete after a successful CI run is recorded in the plan.
 Phase 7 will expand this development probe into maintained runtime validation.
+
+The .app bundle name follows ApplicationTitle, not AssemblyName. CI discovers
+bundles under the managed bin output, requires exactly one, and records candidates
+in app-paths.txt. Signature verification and launch diagnostics are saved to
+codesign.log, run-app.log and launch.log, with failures also visible in the job log.

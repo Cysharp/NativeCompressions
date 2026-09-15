@@ -12,16 +12,22 @@
     <CodesignKey>-</CodesignKey>
     <EnableCodeSigning>true</EnableCodeSigning>
     <IsPackable>false</IsPackable>
+    <Lz4CoreAssembly Condition="'$(Lz4CoreAssembly)' == ''">$(MSBuildThisFileDirectory)../../artifacts/catalyst-phase1/core/NativeCompressions.LZ4.Core.dll</Lz4CoreAssembly>
     <Lz4NativeArchive Condition="'$(Lz4NativeArchive)' == ''">$(MSBuildThisFileDirectory)../../artifacts/catalyst-phase1/native/liblz4.a</Lz4NativeArchive>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/NativeCompressions.LZ4.Core/NativeCompressions.LZ4.Core.csproj" />
+    <!-- Core is built separately for one TFM; app restore must not traverse its other TFMs. -->
+    <Reference Include="NativeCompressions.LZ4.Core">
+      <HintPath>$(Lz4CoreAssembly)</HintPath>
+      <Private>true</Private>
+    </Reference>
     <!-- Phase 1 uses an explicit static reference. NuGet integration is Phase 2. -->
     <NativeReference Include="$(Lz4NativeArchive)">
       <Kind>Static</Kind>
     </NativeReference>
   </ItemGroup>
-  <Target Name="CheckNativeArchive" BeforeTargets="PrepareForBuild">
+  <Target Name="CheckSmokeInputs" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(Lz4CoreAssembly)')" Text="Build the Catalyst LZ4 Core DLL with build-core.sh before building this app." />
     <Error Condition="!Exists('$(Lz4NativeArchive)')" Text="Build the Catalyst LZ4 archive with build-native.sh before building this app." />
   </Target>
 </Project>
