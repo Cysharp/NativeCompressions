@@ -16,7 +16,12 @@ jobs:
   build-dotnet:
     permissions:
       contents: read
+<<<<<<< HEAD
     runs-on: windows-2025
+=======
+      id-token: write # required for NuGet Trusted Publish
+    runs-on: ubuntu-24.04
+>>>>>>> origin/main
     timeout-minutes: 10
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
@@ -31,15 +36,33 @@ jobs:
       - run: dotnet build -c Release -p:Version=${{ inputs.tag }}
       # runs the test project on net8.0, net9.0 and net11.0 against the matching library builds
       - run: dotnet test -c Release --no-build
+<<<<<<< HEAD
       - run: dotnet pack -c Release -p:Version=${{ inputs.tag }} -o ./publish
       # the netstandard2.1 build of the library has its own code paths (no RandomAccess, polyfills), run the tests against it too
       - run: dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.1 -p:Version=${{ inputs.tag }}
+=======
+      - run: dotnet pack -c Release -p:Version=${{ inputs.tag }} -p:IncludeSymbols=true -o ./publish
+>>>>>>> origin/main
       # Store artifacts.
       - uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
           name: nuget
           path: ./publish/
           retention-days: 1
+      # push nuget
+      - name: NuGet login (OIDC)
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+      - run: dotnet nuget push "./publish/*.nupkg" --skip-duplicate -s https://api.nuget.org/v3/index.json -k "${NUGET_KEY}"
+        if: ${{ !inputs.dry-run }}
+        env:
+          NUGET_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+      - run: dotnet nuget push "./publish/*.snupkg" --skip-duplicate -s https://api.nuget.org/v3/index.json -k "${NUGET_KEY}"
+        if: ${{ !inputs.dry-run }}
+        env:
+          NUGET_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
 
   # release
   create-release:
@@ -52,6 +75,6 @@ jobs:
       commit-id: ""
       dry-run: ${{ inputs.dry-run }}
       tag: ${{ inputs.tag }}
-      nuget-push: true
+      nuget-push: false
       release-upload: false
     secrets: inherit

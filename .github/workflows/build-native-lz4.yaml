@@ -145,7 +145,7 @@ jobs:
           cd ..
           echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Install ARM64 cross-compiler
-        if: matrix.arch == 'arm64'
+        if: ${{ matrix.arch == 'arm64' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y ${{ matrix.packages }}

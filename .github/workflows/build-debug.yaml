@@ -51,9 +51,13 @@ jobs:
       - run: dotnet build -c Release
       # runs the test project on net8.0, net9.0 and net11.0 against the matching library builds
       - run: dotnet test -c Release --no-build
+<<<<<<< HEAD
       - run: dotnet pack -c Release --no-build
       # the netstandard2.1 build of the library has its own code paths (no RandomAccess, polyfills), run the tests against it too
       - run: dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.1
+=======
+      - run: dotnet pack -c Release --no-build -p:IncludeSymbols=true
+>>>>>>> origin/main
 
 #   linux-arm64:
 #     permissions:
