@@ -17,17 +17,18 @@ jobs:
     permissions:
       contents: read
       id-token: write # required for NuGet Trusted Publish
-    runs-on: windows-2025
-    timeout-minutes: 10
+    runs-on: macos-26
+    timeout-minutes: 20
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
       - uses: Cysharp/Actions/.github/actions/setup-dotnet@main
         with:
           dotnet-version: |
+            8.0.x
             9.0.x
             10.0.x
             11.0.x
-      # Core projects target net10.0-ios. The iOS workload is only available on Windows and macOS hosts.
+      # Core projects include iOS targets only on macOS; pack here to include all target frameworks.
       - run: dotnet workload install ios
       - run: dotnet build -c Release -p:Version=${{ inputs.tag }}
       # runs the test project on net8.0, net9.0 and net11.0 against the matching library builds
