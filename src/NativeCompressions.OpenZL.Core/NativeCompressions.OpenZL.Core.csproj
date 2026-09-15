@@ -1,7 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.1;net8.0;net9.0;net11.0;net10.0-ios</TargetFrameworks>
+    <TargetFrameworks>netstandard2.1;net8.0;net9.0;net11.0</TargetFrameworks>
+    <!-- Build iOS targets on macOS hosts (both ARM64 and x64). -->
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('OSX'))">$(TargetFrameworks);net10.0-ios</TargetFrameworks>
     <RootNamespace>NativeCompressions</RootNamespace>
     <Description>Core binding of native OpenZL high-performance streaming compression for .NET.</Description>
 
