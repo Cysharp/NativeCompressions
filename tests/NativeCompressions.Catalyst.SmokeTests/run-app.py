@@ -6,6 +6,8 @@ import sys
 import time
 import uuid
 
+arch = sys.argv[3] if len(sys.argv) > 3 else "arm64"
+expected_architecture = {"arm64": "Arm64", "x64": "X64"}[arch]
 app = pathlib.Path(sys.argv[1]).resolve()
 output = pathlib.Path(sys.argv[2]).resolve()
 output.mkdir(parents=True, exist_ok=True)
@@ -15,7 +17,7 @@ print(f"App: {app}\nResult: {result}\nTimeout: 90 seconds", flush=True)
 deadline = time.monotonic() + 90
 with (output / "launch.log").open("w") as log:
     launcher = subprocess.Popen(
-        ["open", "-n", "-W", str(app), "--args", str(result), run_id],
+        ["open", "-n", "-W", str(app), "--args", str(result), run_id, arch],
         stdout=log, stderr=subprocess.STDOUT,
     )
     try:
@@ -27,7 +29,7 @@ with (output / "launch.log").open("w") as log:
                 raise TimeoutError("Catalyst app produced no result within 90 seconds")
             time.sleep(1)
         data = json.loads(result.read_text())
-        if data.get("RunId") != run_id or data.get("Success") is not True or data.get("Architecture") != "Arm64":
+        if data.get("RunId") != run_id or data.get("Success") is not True or data.get("Architecture") != expected_architecture:
             raise RuntimeError(f"Catalyst smoke test failed: {data}")
         launcher.wait(timeout=max(1, deadline - time.monotonic()))
         if launcher.returncode != 0:

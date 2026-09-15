@@ -4,14 +4,15 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$root/tests/NativeCompressions.Catalyst.SmokeTests"
 output="$root/artifacts/catalyst-phase2"
 cache="$(cat "$output/package-cache-path.txt")"
+arch="${CATALYST_ARCH:-arm64}"
 for mode in direct meta transitive duplicate; do
   mkdir -p "$output/evidence/$mode"
-  dotnet build -c Release -p:SmokeReferenceMode="$mode" \
+  dotnet build -c Release -p:SmokeReferenceMode="$mode" -p:SmokeArchitecture="$arch" \
     -p:ArtifactsPath="$output/$mode" \
     -p:RestoreConfigFile="$output/NuGet.Config" -p:RestorePackagesPath="$cache" \
     -bl:"$output/evidence/$mode/app-build.binlog" \
     2>&1 | tee "$output/evidence/$mode/app-build.log"
-  python3 verify-assets.py "$output/$mode" "$output/evidence/$mode"
+  python3 verify-assets.py "$output/$mode" "$output/evidence/$mode" "$arch"
   app_root="$output/$mode/bin"
   evidence="$output/evidence/$mode"
   mkdir -p "$evidence"
@@ -37,5 +38,5 @@ for mode in direct meta transitive duplicate; do
   fi
   cat "$evidence/codesign.log"
   echo "Launching Catalyst LZ4 smoke test: $app"
-  python3 -u run-app.py "$app" "$evidence" 2>&1 | tee "$evidence/run-app.log"
+  python3 -u run-app.py "$app" "$evidence" "$arch" 2>&1 | tee "$evidence/run-app.log"
 done

@@ -17,14 +17,16 @@ def dependencies(name):
     assert groups, f"No dependency groups: {name}"
     return {item.attrib["id"] for group in groups for item in group}
 
-runtime = "NativeCompressions.LZ4.Runtime.maccatalyst-arm64"
-with package(runtime) as archive:
-    native = "runtimes/maccatalyst-arm64/native/liblz4.a"
-    targets = f"buildTransitive/{runtime}.targets"
-    assert native in archive.namelist() and targets in archive.namelist()
-    assert archive.read(native).startswith(b"!<arch>\n")
-    assert len([n for n in archive.namelist() if n.endswith(".a")]) == 1
-    assert archive.read(native) == (Path(__file__).resolve().parents[2] / "src" / "NativeCompressions.LZ4.Runtime" / native).read_bytes()
+for arch in ("arm64", "x64"):
+    runtime = f"NativeCompressions.LZ4.Runtime.maccatalyst-{arch}"
+    with package(runtime) as archive:
+        native = f"runtimes/maccatalyst-{arch}/native/liblz4.a"
+        targets = f"buildTransitive/{runtime}.targets"
+        assert native in archive.namelist() and targets in archive.namelist()
+        assert archive.read(native).startswith(b"!<arch>\n")
+        assert len([n for n in archive.namelist() if n.endswith(".a")]) == 1
+        assert archive.read(native) == (Path(__file__).resolve().parents[2] / "src" / "NativeCompressions.LZ4.Runtime" / native).read_bytes()
+    assert runtime in dependencies("NativeCompressions.LZ4.Runtime")
 with package("NativeCompressions.LZ4.Core") as archive:
     assert "lib/netstandard2.1/NativeCompressions.LZ4.Core.dll" in archive.namelist()
     assert any(n.startswith("lib/net10.0-maccatalyst") and n.endswith("NativeCompressions.LZ4.Core.dll") for n in archive.namelist())

@@ -32,13 +32,19 @@ public sealed class AppDelegate : UIApplicationDelegate
         try
         {
             var args = Program.Arguments;
-            if (args.Length != 2) throw new ArgumentException("Expected result path and run ID.");
+            if (args.Length != 3) throw new ArgumentException("Expected result path, run ID and architecture.");
             var resultPath = args[0];
             var result = new SmokeResult { RunId = args[1], Architecture = RuntimeInformation.ProcessArchitecture.ToString() };
             try
             {
-                if (!OperatingSystem.IsMacCatalyst() || RuntimeInformation.ProcessArchitecture != Architecture.Arm64)
-                    throw new InvalidOperationException("This smoke test requires a native ARM64 Catalyst process.");
+                var expectedArchitecture = args[2] switch
+                {
+                    "arm64" => Architecture.Arm64,
+                    "x64" => Architecture.X64,
+                    _ => throw new ArgumentException("Unsupported expected architecture.")
+                };
+                if (!OperatingSystem.IsMacCatalyst() || RuntimeInformation.ProcessArchitecture != expectedArchitecture)
+                    throw new InvalidOperationException($"Expected a {expectedArchitecture} Catalyst process.");
                 result.Version = LZ4.Version;
                 if (LZ4.VersionNumber <= 0) throw new InvalidOperationException("Invalid LZ4 version.");
 #if SMOKE_MIDDLE

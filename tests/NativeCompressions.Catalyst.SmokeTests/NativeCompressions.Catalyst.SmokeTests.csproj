@@ -4,7 +4,8 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>CatalystSmoke</AssemblyName>
     <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
-    <RuntimeIdentifier>maccatalyst-arm64</RuntimeIdentifier>
+    <SmokeArchitecture Condition="'$(SmokeArchitecture)' == ''">arm64</SmokeArchitecture>
+    <RuntimeIdentifier>maccatalyst-$(SmokeArchitecture)</RuntimeIdentifier>
     <ApplicationId>com.cysharp.nativecompressions.catalystsmoke</ApplicationId>
     <ApplicationTitle>NativeCompressions Catalyst Smoke</ApplicationTitle>
     <ApplicationVersion>1</ApplicationVersion>
@@ -20,7 +21,7 @@
   </PropertyGroup>
   <ItemGroup Condition="'$(SmokeReferenceMode)' == 'direct' or '$(SmokeReferenceMode)' == 'duplicate'">
     <PackageReference Include="NativeCompressions.LZ4.Core" Version="$(SmokePackageVersion)" />
-    <PackageReference Include="NativeCompressions.LZ4.Runtime.maccatalyst-arm64" Version="$(SmokePackageVersion)" />
+    <PackageReference Include="NativeCompressions.LZ4.Runtime.maccatalyst-$(SmokeArchitecture)" Version="$(SmokePackageVersion)" />
   </ItemGroup>
   <ItemGroup Condition="'$(SmokeReferenceMode)' == 'meta' or '$(SmokeReferenceMode)' == 'duplicate'">
     <PackageReference Include="NativeCompressions.LZ4" Version="$(SmokePackageVersion)" />
@@ -34,7 +35,7 @@
   <Target Name="VerifySmokeNativeReference" BeforeTargets="PrepareForBuild">
     <Error Condition="'@(NativeReference->Count())' != '1'" Text="Expected exactly one NuGet NativeReference, got @(NativeReference)." />
     <Error Condition="'%(NativeReference.Kind)' != 'Static'" Text="Expected static NativeReference." />
-    <Error Condition="$([System.String]::Copy('%(NativeReference.Identity)').Contains('maccatalyst-arm64')) != 'True'" Text="Expected Catalyst ARM64 archive: %(NativeReference.Identity)" />
+    <Error Condition="$([System.String]::Copy('%(NativeReference.Identity)').Contains('$(RuntimeIdentifier)')) != 'True'" Text="Expected $(RuntimeIdentifier) archive: %(NativeReference.Identity)" />
     <MakeDir Directories="$(IntermediateOutputPath)" />
     <WriteLinesToFile File="$(IntermediateOutputPath)native-references.txt" Lines="@(NativeReference->'%(FullPath)|%(Kind)')" Overwrite="true" />
   </Target>

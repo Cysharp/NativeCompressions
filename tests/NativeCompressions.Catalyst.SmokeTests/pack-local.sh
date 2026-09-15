@@ -6,7 +6,9 @@ output="$root/artifacts/catalyst-phase2"
 version=0.0.0-catalyst-phase2
 mkdir -p "$output/feed" "$output/evidence"
 # Always package the archive freshly built from this checkout in CI.
-cp "$root/artifacts/catalyst-phase1/native/liblz4.a" "$root/src/NativeCompressions.LZ4.Runtime/runtimes/maccatalyst-arm64/native/liblz4.a"
+for arch in arm64 x64; do
+  cp "$root/artifacts/catalyst-phase3/native/$arch/liblz4.a" "$root/src/NativeCompressions.LZ4.Runtime/runtimes/maccatalyst-$arch/native/liblz4.a"
+done
 # Scope the SDK 10 TFM override to standalone library/pack invocations, never the app.
 # Preserve quotes for MSBuild; %3B would escape the list separator and create one TFM.
 dotnet pack "$root/src/NativeCompressions.LZ4.Core/NativeCompressions.LZ4.Core.csproj" \
@@ -36,4 +38,6 @@ dotnet pack Middle/CatalystSmoke.Middle.csproj -c Release -p:PackageVersion="$ve
   -p:ArtifactsPath="$output/middle" -p:RestoreConfigFile="$output/NuGet.Config" \
   -p:RestorePackagesPath="$cache" -o "$output/feed"
 python3 verify-packages.py "$output/feed"
-python3 verify-targets.py "$output/feed" "$output/target-tests" 2>&1 | tee "$output/evidence/targets.log"
+for arch in arm64 x64; do
+  python3 verify-targets.py "$output/feed" "$output/target-tests/$arch" "$arch" 2>&1 | tee "$output/evidence/targets-$arch.log"
+done

@@ -4,12 +4,15 @@ import shutil
 import sys
 from pathlib import Path
 
-output, evidence = map(Path, sys.argv[1:])
+output, evidence = map(Path, sys.argv[1:3])
+arch = sys.argv[3] if len(sys.argv) > 3 else "arm64"
+assert arch in ("arm64", "x64")
+rid = f"maccatalyst-{arch}"
 files = list(output.rglob("project.assets.json"))
 assert len(files) == 1, files
 assets = json.loads(files[0].read_text(encoding="utf-8"))
 shutil.copy2(files[0], evidence / "project.assets.json")
-targets = [v for k, v in assets["targets"].items() if k.endswith("/maccatalyst-arm64")]
+targets = [v for k, v in assets["targets"].items() if k.endswith("/" + rid)]
 assert len(targets) == 1, assets["targets"].keys()
 target = targets[0]
 core = target["NativeCompressions.LZ4.Core/0.0.0-catalyst-phase2"]
@@ -17,7 +20,7 @@ for kind in ("compile", "runtime"):
     dlls = [p for p in core[kind] if p.endswith(".dll")]
     assert len(dlls) == 1 and dlls[0].startswith("lib/net10.0-maccatalyst"), dlls
 native = [p for lib in target.values() for p in lib.get("native", {}) if p.endswith((".a", ".dylib"))]
-assert native == ["runtimes/maccatalyst-arm64/native/liblz4.a"], native
+assert native == [f"runtimes/{rid}/native/liblz4.a"], native
 # Reject iOS fallback assets too: the Apple SDK automatically links native .a assets.
 (evidence / "native-asset-candidates.json").write_text(json.dumps(native, indent=2), encoding="utf-8")
 references = list(output.rglob("native-references.txt"))
@@ -25,7 +28,7 @@ assert len(references) == 1, references
 lines = references[0].read_text(encoding="utf-8-sig").splitlines()
 assert len(lines) == 1, lines
 archive, kind = lines[0].split("|")
-assert kind == "Static" and "/nativecompressions.lz4.runtime.maccatalyst-arm64/" in archive.replace("\\", "/").lower(), lines
+assert kind == "Static" and f"/nativecompressions.lz4.runtime.{rid}/" in archive.replace("\\", "/").lower(), lines
 assert Path(archive).is_file(), archive
 shutil.copy2(references[0], evidence / "native-references.txt")
 print("Catalyst Core DLL and native asset selection verified.")
