@@ -54,9 +54,14 @@ Its dependency and buildTransitive assets must propagate through NuGet to the
 app. Class libraries do not embed another native archive; the final Exe consumes
 one NativeReference. Each mode asserts exactly one static Catalyst ARM64 reference.
 `verify-assets.py` also checks that compile/runtime Core DLLs are Catalyst assets
-and that the archive path is inside the restored Catalyst package. Existing iOS
-packages can appear as RID fallback candidates in project.assets.json; they must
-not become NativeReference inputs. Candidate lists are retained for diagnosis.
+and that the archive path is inside the restored Catalyst package. The iOS Runtime packages contain empty `_._` native groups for both Catalyst
+RIDs to prevent NuGet from selecting iOS archives by RID fallback. The source
+marker is `src/NativeCompressions.LZ4.Runtime/packaging/_._`; only PackagePath
+places it in the two Catalyst native folders inside each iOS NuGet package. The Apple SDK
+can link resolved native assets independently of explicit NativeReference items,
+so both lists must exclude iOS archives. Windows restore tests verify Catalyst
+ARM64/x64 selection and preserve the existing iOS ARM64/x64 assets.
+
 
 ## What a passing run proves
 

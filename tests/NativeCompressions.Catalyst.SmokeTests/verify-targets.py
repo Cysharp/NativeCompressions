@@ -68,3 +68,22 @@ for mode, ids in {
     assert result.returncode == 0, result.stdout + result.stderr
     assert len(json.loads(result.stdout)["Items"]["NativeReference"]) == 1
     print(f"NuGet {mode}: one transitive NativeReference")
+
+# Verify NuGet's actual RID fallback, not only explicit NativeReference items.
+for rid, expected in {
+    "maccatalyst-arm64": ["runtimes/maccatalyst-arm64/native/liblz4.a"],
+    "maccatalyst-x64": [],  # x64 Catalyst archive is a later phase.
+    "ios-arm64": ["runtimes/ios-arm64/native/liblz4.a"],
+    "ios-x64": ["runtimes/ios-x64/native/liblz4.a"],
+}.items():
+    folder = output / f"rid-{rid}"
+    folder.mkdir(exist_ok=True)
+    project = folder / "Consumer.csproj"
+    project.write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>netstandard2.1</TargetFramework><EnableDefaultItems>false</EnableDefaultItems></PropertyGroup><ItemGroup><PackageReference Include="NativeCompressions.LZ4.Runtime" Version="0.0.0-catalyst-phase2" /></ItemGroup></Project>', encoding="utf-8")
+    result = subprocess.run(["dotnet", "restore", str(project), "-r", rid, "--source", str(feed), "--packages", str(folder / "cache"), "-p:NuGetAudit=false", f"-p:ArtifactsPath={folder / 'artifacts'}"], text=True, encoding="utf-8", errors="replace", capture_output=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assets = json.loads(next((folder / "artifacts").rglob("project.assets.json")).read_text(encoding="utf-8"))
+    target = next(v for k, v in assets["targets"].items() if k.endswith("/" + rid))
+    native = [p for lib in target.values() for p in lib.get("native", {}) if p.endswith(".a")]
+    assert native == expected, (rid, native)
+    print(f"{rid}: native assets {native}")

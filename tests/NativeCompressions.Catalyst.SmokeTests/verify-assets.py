@@ -17,9 +17,8 @@ for kind in ("compile", "runtime"):
     dlls = [p for p in core[kind] if p.endswith(".dll")]
     assert len(dlls) == 1 and dlls[0].startswith("lib/net10.0-maccatalyst"), dlls
 native = [p for lib in target.values() for p in lib.get("native", {}) if p.endswith((".a", ".dylib"))]
-assert "runtimes/maccatalyst-arm64/native/liblz4.a" in native, native
-# RID fallback may expose iOS assets from the existing aggregate packages.
-# The actual static linker input must come only from the Catalyst package.
+assert native == ["runtimes/maccatalyst-arm64/native/liblz4.a"], native
+# Reject iOS fallback assets too: the Apple SDK automatically links native .a assets.
 (evidence / "native-asset-candidates.json").write_text(json.dumps(native, indent=2), encoding="utf-8")
 references = list(output.rglob("native-references.txt"))
 assert len(references) == 1, references
