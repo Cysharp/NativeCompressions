@@ -49,7 +49,7 @@ jobs:
             10.0.x
             11.0.x
       # Core projects include iOS targets only on macOS.
-      - run: dotnet workload install ios
+      - run: dotnet workload install ios maccatalyst
         if: ${{ runner.os == 'macOS' }}
       # Build the complete solution on every OS; macOS also includes iOS targets.
       - run: dotnet build -c Release

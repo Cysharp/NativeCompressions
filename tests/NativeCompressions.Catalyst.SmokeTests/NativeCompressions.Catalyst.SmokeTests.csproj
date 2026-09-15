@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-maccatalyst</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>CatalystSmoke</AssemblyName>
+    <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+    <RuntimeIdentifier>maccatalyst-arm64</RuntimeIdentifier>
+    <ApplicationId>com.cysharp.nativecompressions.catalystsmoke</ApplicationId>
+    <ApplicationTitle>NativeCompressions Catalyst Smoke</ApplicationTitle>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <CodesignKey>-</CodesignKey>
+    <EnableCodeSigning>true</EnableCodeSigning>
+    <IsPackable>false</IsPackable>
+    <Lz4NativeArchive Condition="'$(Lz4NativeArchive)' == ''">$(MSBuildThisFileDirectory)../../artifacts/catalyst-phase1/native/liblz4.a</Lz4NativeArchive>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/NativeCompressions.LZ4.Core/NativeCompressions.LZ4.Core.csproj" />
+    <!-- Phase 1 uses an explicit static reference. NuGet integration is Phase 2. -->
+    <NativeReference Include="$(Lz4NativeArchive)">
+      <Kind>Static</Kind>
+    </NativeReference>
+  </ItemGroup>
+  <Target Name="CheckNativeArchive" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(Lz4NativeArchive)')" Text="Build the Catalyst LZ4 archive with build-native.sh before building this app." />
+  </Target>
+</Project>

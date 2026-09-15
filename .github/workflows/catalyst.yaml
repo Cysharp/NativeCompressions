@@ -5,8 +5,12 @@ on:
   push:
     branches: [catalyst]
     paths:
-      - .github/workflows/catalyst-phase0.yaml
+      - .github/workflows/catalyst.yaml
       - .github/docs/plans/collect-catalyst-environment.sh
+      - tests/NativeCompressions.Catalyst.SmokeTests/**
+      - src/NativeCompressions.LZ4.Core/**
+      - bindgen/liblz4/**
+      - lz4
 
 permissions:
   contents: read
@@ -93,5 +97,67 @@ jobs:
         with:
           name: catalyst-phase0-${{ matrix.arch }}
           path: ${{ runner.temp }}/catalyst-phase0/evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  lz4-arm64:
+    runs-on: macos-26
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: tests/NativeCompressions.Catalyst.SmokeTests
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+      - uses: Cysharp/Actions/.github/actions/setup-dotnet@main
+        with:
+          dotnet-version: 10.0.401
+      - name: Install pinned Apple workloads
+        run: |
+          test "$(dotnet --version)" = 10.0.401
+          test -d "$DEVELOPER_DIR"
+          dotnet workload install ios maccatalyst --version 10.0.401
+      - name: Record environment and native build
+        run: |
+          mkdir -p ../../artifacts/catalyst-phase1/evidence
+          {
+            git rev-parse HEAD
+            git -C ../../lz4 rev-parse HEAD
+            sw_vers
+            uname -m
+            dotnet --info
+            dotnet workload --info
+            xcodebuild -version
+            xcrun --sdk macosx --show-sdk-path
+          } > ../../artifacts/catalyst-phase1/evidence/environment.txt
+          bash build-native.sh 2>&1 | tee ../../artifacts/catalyst-phase1/evidence/native-build.log
+      - name: Build signed Catalyst app
+        run: |
+          # Scope this .NET 10 probe to one TFM, including restore of the Core reference.
+          # The production solution still builds all its targets using its own SDK.
+          dotnet build -c Release -p:TargetFrameworks=net10.0-maccatalyst \
+            -p:ArtifactsPath="$GITHUB_WORKSPACE/artifacts/catalyst-phase1/managed" \
+            2>&1 | tee ../../artifacts/catalyst-phase1/evidence/app-build.log
+      - name: Run LZ4 round trip inside Catalyst
+        run: |
+          app_root="$GITHUB_WORKSPACE/artifacts/catalyst-phase1/managed"
+          mapfile_path="$RUNNER_TEMP/catalyst-app-paths.txt"
+          find "$app_root" -type d -name CatalystSmoke.app -prune > "$mapfile_path"
+          test "$(wc -l < "$mapfile_path" | tr -d ' ')" = 1
+          app="$(cat "$mapfile_path")"
+          codesign --verify --deep --strict "$app"
+          python3 run-app.py "$app" ../../artifacts/catalyst-phase1/evidence
+      - name: Save diagnostics
+        if: always()
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: catalyst-phase1-arm64
+          path: |
+            artifacts/catalyst-phase1/evidence/
+            artifacts/catalyst-phase1/native/
           if-no-files-found: error
           retention-days: 30
