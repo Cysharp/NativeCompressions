@@ -1,62 +1,84 @@
-# Catalyst Phase 1: LZ4 ARM64
+# Catalyst Phase 2: LZ4 ARM64 through NuGet
 
-This standalone .NET 10 app checks the separately built LZ4 Core DLL with an explicit
-Catalyst static NativeReference. NuGet integration is Phase 2. It is intentionally
-outside the root solution so ordinary Windows/Linux builds do not need Apple workloads.
+This standalone .NET 10 app consumes packages from a local feed. It has no direct
+Core DLL reference or handwritten NativeReference. It stays outside the root
+solution so ordinary Windows/Linux builds do not require Apple workloads.
 
-## Run on CI
+## CI and reproduction
 
-`.github/workflows/catalyst.yaml` runs on changes pushed to the `catalyst`
-branch. Commit/push only when explicitly requested by the user. The workflow has
-not been executed merely by creating these files. `workflow_dispatch` requires
-the workflow to exist on the default branch before it can be used reliably.
+`.github/workflows/catalyst.yaml` runs on changes pushed to the `catalyst` branch.
+Commit/push only when explicitly requested. Creating these files does not run CI.
+The job pins SDK/workload set 10.0.401 and Xcode 26.6 on macos-26 ARM64.
 
-The job pins SDK/workload set 10.0.401 and Xcode 26.6, builds the pinned LZ4
-submodule without updating it, signs a Catalyst app ad hoc, and launches it via
-LaunchServices. It requires no App Store credentials or publication.
-
-Native input: lz4.c, lz4hc.c, lz4frame.c, xxhash.c; target
-arm64-apple-ios15.0-macabi; XXH_NAMESPACE=LZ4_. Build outputs are under
-`artifacts/catalyst-phase1/`, not the runtime package folders.
-
-The app checks the process platform/architecture, obtains LZ4's version,
-compresses 64 KiB, decompresses it and verifies every byte. It atomically writes
-JSON containing a unique run ID, version, architecture, success and exception.
-The runner requires that result and app termination within 90 seconds.
-
-## Manual macOS reproduction
-
-From this directory with Xcode 26.6 selected and SDK 10.0.401 installed:
+On a Mac, from this directory:
 
 ```sh
 export DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer
 dotnet workload install ios maccatalyst --version 10.0.401
 bash build-native.sh
-bash build-core.sh
-dotnet build -c Release
-python3 run-app.py "/absolute/path/to/NativeCompressions Catalyst Smoke.app" /absolute/path/to/results
+bash pack-local.sh
+bash test-packages.sh
 ```
 
-build-core.sh builds only net10.0-maccatalyst from the production Core project
-and places the DLL under artifacts/catalyst-phase1/core. The app uses an assembly
-Reference with HintPath, so its restore cannot traverse Core's net11.0 targets.
-AdditionalProperties on ProjectReference did not restrict NuGet restore in this
-configuration. The TargetFrameworks override is therefore confined to the separate
-Core library command, never passed to the app or its SDK-generated linker projects.
-This explicit DLL/native archive arrangement is Phase 1 only; Phase 2 will test
-NuGet dependency resolution. Core currently has no runtime PackageReference for
-this TFM (PolySharp is a private build-time dependency); reassess that if its
-dependencies change. MACCATALYST selects __Internal in generated code and bindgen.
-CI saves both core-build.binlog and app-build.binlog for diagnosis.
+`build-native.sh` uses the checked-out LZ4 submodule, the macOS SDK,
+arm64-apple-ios15.0-macabi and XXH_NAMESPACE=LZ4_. It checks every object's
+MACCATALYST platform, archive architecture and exported symbols. Native evidence
+remains in `artifacts/catalyst-phase1/native/`.
 
-No ForceLoad is enabled initially. If link/run testing reveals missing symbols,
-inspect the native linker output and add the smallest justified retention rule;
-do not treat a successful app build as proof of successful P/Invoke.
+`pack-local.sh` copies that fresh archive into the production Runtime directory,
+packs the real Core, every LZ4 Runtime project and the LZ4 meta project, then packs
+`CatalystSmoke.Middle`. All packages use the development-only version
+`0.0.0-catalyst-phase2`; nothing is published. The feed is under
+`artifacts/catalyst-phase2/feed/`. Each invocation creates a new package cache,
+and source mapping restricts NativeCompressions/CatalystSmoke packages to that
+feed. This prevents reuse of previously restored or public packages.
 
-Phase 1 is only complete after a successful CI run is recorded in the plan.
-Phase 7 will expand this development probe into maintained runtime validation.
+Core is packed with netstandard2.1 and net10.0-maccatalyst so the test can detect
+selection of a generic DLL. Metadata-only packages are restored at netstandard2.1
+and packed with --no-build. This preserves their production dependency graph
+without traversing net11.0 under SDK 10 or requiring unnecessary Core builds.
+The TFM override is never passed to the app or SDK-generated linker projects.
+These intentionally scoped packages are test inputs, not release packages.
 
-The .app bundle name follows ApplicationTitle, not AssemblyName. CI discovers
-bundles under the managed bin output, requires exactly one, and records candidates
-in app-paths.txt. Signature verification and launch diagnostics are saved to
-codesign.log, run-app.log and launch.log, with failures also visible in the job log.
+`test-packages.sh` builds and runs four separate configurations:
+
+| Mode | App reference |
+| --- | --- |
+| direct | Core + maccatalyst-arm64 Runtime |
+| meta | NativeCompressions.LZ4 |
+| transitive | CatalystSmoke.Middle -> NativeCompressions.LZ4 |
+| duplicate | All three paths together |
+
+The middle library exposes an LZ4 version call, exercised by the last two modes.
+Its dependency and buildTransitive assets must propagate through NuGet to the
+app. Class libraries do not embed another native archive; the final Exe consumes
+one NativeReference. Each mode asserts exactly one static Catalyst ARM64 reference.
+`verify-assets.py` also checks that compile/runtime Core DLLs are Catalyst assets
+and that the archive path is inside the restored Catalyst package. Existing iOS
+packages can appear as RID fallback candidates in project.assets.json; they must
+not become NativeReference inputs. Candidate lists are retained for diagnosis.
+
+## What a passing run proves
+
+For each mode: package restore and asset selection -> static linking -> ad-hoc
+signature verification -> LaunchServices launch -> native LZ4 version call ->
+64 KiB compression/decompression -> matching length and every byte -> a result
+with this run's unique ID and app termination within 90 seconds. No ForceLoad,
+App Store credentials or publication is required.
+
+The bundle name follows ApplicationTitle. The script discovers exactly one .app
+under each mode's bin directory. NuGet packages, environment/native evidence,
+per-mode assets, native references, binlogs, signature logs, launch logs and result
+JSON are uploaded as `catalyst-phase2-arm64`, including after failures.
+
+Windows can run the packaged condition tests without Apple workloads:
+
+```powershell
+python verify-targets.py /path/to/feed /path/to/evidence
+```
+
+These tests cover inactive platforms/RIDs, outer builds, Universal inner-RID
+selection, library exclusion and explicit failure on missing archives. They do
+not prove Catalyst execution. Phase 2 remains CI-pending until all four modes
+pass. Actual x64/Universal builds, other libraries, release packaging and publish
+validation belong to later phases in the implementation plan.

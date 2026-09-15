@@ -38,9 +38,13 @@ public sealed class AppDelegate : UIApplicationDelegate
             try
             {
                 if (!OperatingSystem.IsMacCatalyst() || RuntimeInformation.ProcessArchitecture != Architecture.Arm64)
-                    throw new InvalidOperationException("Phase 1 requires a native ARM64 Catalyst process.");
+                    throw new InvalidOperationException("This smoke test requires a native ARM64 Catalyst process.");
                 result.Version = LZ4.Version;
                 if (LZ4.VersionNumber <= 0) throw new InvalidOperationException("Invalid LZ4 version.");
+#if SMOKE_MIDDLE
+                if (Middle.Compression.VersionNumber != LZ4.VersionNumber)
+                    throw new InvalidOperationException("Middle library LZ4 version mismatch.");
+#endif
                 var source = Enumerable.Range(0, 65536).Select(i => (byte)(i % 251)).ToArray();
                 var compressed = LZ4.Compress(source);
                 var restored = new byte[source.Length];
