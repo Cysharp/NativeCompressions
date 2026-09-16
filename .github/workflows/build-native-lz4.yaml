@@ -75,6 +75,7 @@ jobs:
         with:
           name: lz4-win-${{ matrix.arch }}
           path: artifacts/win-${{ matrix.arch }}/*
+          if-no-files-found: error
 
   build-windows-arm64:
     needs: [check_new_release]
@@ -114,6 +115,7 @@ jobs:
         with:
           name: lz4-win-arm64
           path: artifacts/win-arm64/*
+          if-no-files-found: error
 
   build-linux:
     needs: [check_new_release]
@@ -164,6 +166,7 @@ jobs:
         with:
           name: lz4-linux-${{ matrix.arch }}
           path: artifacts/linux-${{ matrix.arch }}/*
+          if-no-files-found: error
 
   build-macos:
     needs: [check_new_release]
@@ -208,6 +211,7 @@ jobs:
         with:
           name: lz4-osx-${{ matrix.arch }}
           path: artifacts/osx-${{ matrix.arch }}/*
+          if-no-files-found: error
 
   build-ios:
     needs: [check_new_release]
@@ -262,6 +266,65 @@ jobs:
         with:
           name: lz4-ios-${{ matrix.arch }}
           path: artifacts/ios-${{ matrix.arch }}/*
+          if-no-files-found: error
+
+  build-catalyst:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+    runs-on: macos-26
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+        include:
+          - arch: arm64
+            clang-arch: arm64
+          - arch: x64
+            clang-arch: x86_64
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd lz4
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      - name: Build static library for Mac Catalyst
+        shell: bash
+        run: |
+          output="$GITHUB_WORKSPACE/lz4/lib"
+          sdk="$(xcrun --sdk macosx --show-sdk-path)"
+          for source in lz4 lz4hc lz4frame xxhash; do
+            xcrun --sdk macosx clang -target "${{ matrix.clang-arch }}-apple-ios15.0-macabi" -isysroot "$sdk" -O3 -DXXH_NAMESPACE=LZ4_ -c "lz4/lib/$source.c" -o "$output/$source.o"
+            xcrun vtool -show-build "$output/$source.o" | grep MACCATALYST
+          done
+          xcrun libtool -static -o "$output/liblz4.a" "$output/lz4.o" "$output/lz4hc.o" "$output/lz4frame.o" "$output/xxhash.o"
+          file "$output/liblz4.a"
+          lipo -info "$output/liblz4.a"
+          test "$(xcrun lipo -archs "$output/liblz4.a")" = "${{ matrix.clang-arch }}"
+          xcrun nm -gU "$output/liblz4.a" > "$output/symbols.txt"
+          grep ' _LZ4_versionNumber$' "$output/symbols.txt"
+          grep ' _LZ4F_compressFrame$' "$output/symbols.txt"
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/maccatalyst-${{ matrix.arch }}
+          cp lz4/lib/liblz4.a artifacts/maccatalyst-${{ matrix.arch }}/
+      - name: Upload Catalyst artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: lz4-maccatalyst-${{ matrix.arch }}
+          path: artifacts/maccatalyst-${{ matrix.arch }}/*
+          if-no-files-found: error
 
   build-android:
     needs: [check_new_release]
@@ -322,6 +385,7 @@ jobs:
         with:
           name: lz4-android-${{ matrix.arch }}
           path: artifacts/android-${{ matrix.arch }}/*
+          if-no-files-found: error
 
   package-all:
     needs:
@@ -332,6 +396,7 @@ jobs:
         build-linux,
         build-macos,
         build-ios,
+        build-catalyst,
         build-android,
       ]
     if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
@@ -351,6 +416,7 @@ jobs:
           mkdir -p release/runtimes/{osx-x64,osx-arm64}/native
           mkdir -p release/runtimes/{android-arm,android-arm64,android-x64}/native
           mkdir -p release/runtimes/{ios-arm64,ios-x64}/native
+          mkdir -p release/runtimes/{maccatalyst-arm64,maccatalyst-x64}/native
 
           # Windows
           if [ -f artifacts/lz4-win-x64/lz4.dll ]; then
@@ -384,6 +450,14 @@ jobs:
             cp artifacts/lz4-ios-x86_64/liblz4.a release/runtimes/ios-x64/native/
           fi
 
+          # Catalyst
+          if [ -f artifacts/lz4-maccatalyst-arm64/liblz4.a ]; then
+            cp artifacts/lz4-maccatalyst-arm64/liblz4.a release/runtimes/maccatalyst-arm64/native/
+          fi
+          if [ -f artifacts/lz4-maccatalyst-x64/liblz4.a ]; then
+            cp artifacts/lz4-maccatalyst-x64/liblz4.a release/runtimes/maccatalyst-x64/native/
+          fi
+
           # Android
           if [ -f artifacts/lz4-android-arm/liblz4.so ]; then
             cp artifacts/lz4-android-arm/liblz4.so release/runtimes/android-arm/native/
@@ -405,6 +479,7 @@ jobs:
           name: lz4-native-package
           path: |
             lz4-native-libraries.tar.gz
+          if-no-files-found: error
 
   create-pr:
     needs: [check_new_release, package-all]
@@ -449,7 +524,7 @@ jobs:
         run: |
           echo "Updated lz4 runtimes to ${LATEST_TAG}"
 
-          for arch in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64 ios-arm64 ios-x64 android-arm android-arm64 android-x64; do
+          for arch in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64 ios-arm64 ios-x64 maccatalyst-arm64 maccatalyst-x64 android-arm android-arm64 android-x64; do
             mkdir -p "${DEST_BASE_PATH}/${arch}/native"
           done
 
@@ -496,6 +571,14 @@ jobs:
               cp -f artifacts/lz4-ios-x86_64/liblz4.a "${DEST_BASE_PATH}/ios-x64/native/liblz4.a"
             fi
 
+            # Catalyst
+            if [ -f artifacts/lz4-maccatalyst-arm64/liblz4.a ]; then
+              cp -f artifacts/lz4-maccatalyst-arm64/liblz4.a "${DEST_BASE_PATH}/maccatalyst-arm64/native/liblz4.a"
+            fi
+            if [ -f artifacts/lz4-maccatalyst-x64/liblz4.a ]; then
+              cp -f artifacts/lz4-maccatalyst-x64/liblz4.a "${DEST_BASE_PATH}/maccatalyst-x64/native/liblz4.a"
+            fi
+
             # Android
             if [ -f artifacts/lz4-android-arm/liblz4.so ]; then
               cp -f artifacts/lz4-android-arm/liblz4.so "${DEST_BASE_PATH}/android-arm/native/liblz4.so"
@@ -534,9 +617,10 @@ jobs:
             - macOS x64/ARM64
             - Android ARM/ARM64/x64
             - iOS ARM64/x64 (device/simulator)
+            - Mac Catalyst ARM64/x64 (static libraries)
 
           ## Build artifacts
-          All native libraries have been built and tested in CI.
+          All native libraries have been built in CI. Catalyst archives are checked for architecture, platform and exported symbols.
 
           @neuecc
           EOF

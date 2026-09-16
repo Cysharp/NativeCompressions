@@ -98,3 +98,11 @@ The initial x64 archive is from run 34961447150, LZ4 commit
 Both CI runners rebuild both native archives before packing; committed binaries
 are not substituted for those fresh test inputs. The app and launch script both
 check the expected process architecture in addition to the LZ4 round trip.
+
+## Production native update integration
+
+`build-native-lz4.yaml` builds Catalyst ARM64/x64 using inline Bash, alongside
+its existing platform jobs. It copies the two required archives into the release
+package and update PR. Artifact copies use the same file-existence checks as the other platforms.
+The existing branch-based call to `build-debug.yaml` is preserved.
+This integration remains CI-pending; it adds no Python helper or new workflow.
