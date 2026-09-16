@@ -7,7 +7,7 @@ on:
     paths:
       - .github/workflows/catalyst.yaml
       - .github/docs/plans/collect-catalyst-environment.sh
-      - tests/NativeCompressions.Catalyst.SmokeTests/**
+      - sandbox/SmokeCatalyst/**
       - src/NativeCompressions.LZ4.Core/**
       - src/NativeCompressions.LZ4.Runtime/**
       - src/NativeCompressions.LZ4.csproj
@@ -119,7 +119,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: tests/NativeCompressions.Catalyst.SmokeTests
+        working-directory: sandbox/SmokeCatalyst
     env:
       CATALYST_ARCH: ${{ matrix.arch }}
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer

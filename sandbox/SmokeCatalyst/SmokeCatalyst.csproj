@@ -30,7 +30,7 @@
     <PackageReference Include="CatalystSmoke.Middle" Version="$(SmokePackageVersion)" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Remove="Middle/**" />
+    <Compile Remove="Middle/**;Tools/**" />
   </ItemGroup>
   <Target Name="VerifySmokeNativeReference" BeforeTargets="PrepareForBuild">
     <Error Condition="'@(NativeReference->Count())' != '1'" Text="Expected exactly one NuGet NativeReference, got @(NativeReference)." />

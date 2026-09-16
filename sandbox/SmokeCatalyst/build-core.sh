@@ -2,7 +2,7 @@
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 # Select the smoke app's pinned SDK, even when invoked from another directory.
-cd "$root/tests/NativeCompressions.Catalyst.SmokeTests"
+cd "$root/sandbox/SmokeCatalyst"
 mkdir -p "$root/artifacts/catalyst-phase1/evidence"
 # This global override belongs only to the Core library build, never the app build.
 dotnet build "$root/src/NativeCompressions.LZ4.Core/NativeCompressions.LZ4.Core.csproj" \

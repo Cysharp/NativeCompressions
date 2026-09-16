@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-cd "$root/tests/NativeCompressions.Catalyst.SmokeTests"
+cd "$root/sandbox/SmokeCatalyst"
 output="$root/artifacts/catalyst-phase2"
 version=0.0.0-catalyst-phase2
 mkdir -p "$output/feed" "$output/evidence"
@@ -37,7 +37,9 @@ printf '%s\n' "$cache" > "$output/package-cache-path.txt"
 dotnet pack Middle/CatalystSmoke.Middle.csproj -c Release -p:PackageVersion="$version" \
   -p:ArtifactsPath="$output/middle" -p:RestoreConfigFile="$output/NuGet.Config" \
   -p:RestorePackagesPath="$cache" -o "$output/feed"
-python3 verify-packages.py "$output/feed"
+dotnet build Tools/CatalystSmoke.Tools.csproj -c Release -o "$output/tools"
+dotnet "$output/tools/CatalystSmoke.Tools.dll" self-test
+dotnet "$output/tools/CatalystSmoke.Tools.dll" verify-packages "$output/feed" "$root"
 for arch in arm64 x64; do
-  python3 verify-targets.py "$output/feed" "$output/target-tests/$arch" "$arch" 2>&1 | tee "$output/evidence/targets-$arch.log"
+  dotnet "$output/tools/CatalystSmoke.Tools.dll" verify-targets "$output/feed" "$output/target-tests/$arch" "$arch" 2>&1 | tee "$output/evidence/targets-$arch.log"
 done

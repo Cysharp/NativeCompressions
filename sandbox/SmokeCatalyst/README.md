@@ -56,7 +56,7 @@ The middle library exposes an LZ4 version call, exercised by the last two modes.
 Its dependency and buildTransitive assets must propagate through NuGet to the
 app. Class libraries do not embed another native archive; the final Exe consumes
 one NativeReference. Each mode asserts exactly one static Catalyst reference matching the selected RID.
-`verify-assets.py` also checks that compile/runtime Core DLLs are Catalyst assets
+The C# tool's `verify-assets` command also checks that compile/runtime Core DLLs are Catalyst assets
 and that the archive path is inside the restored Catalyst package. The iOS Runtime packages contain empty `_._` native groups for both Catalyst
 RIDs to prevent NuGet from selecting iOS archives by RID fallback. The source
 marker is `src/NativeCompressions.LZ4.Runtime/packaging/_._`; only PackagePath
@@ -82,7 +82,7 @@ JSON are uploaded as `catalyst-phase3-lz4-<arch>`, including after failures.
 Windows can run the packaged condition tests without Apple workloads:
 
 ```powershell
-python verify-targets.py /path/to/feed /path/to/evidence x64
+dotnet ../../artifacts/catalyst-phase2/tools/CatalystSmoke.Tools.dll verify-targets /path/to/feed /path/to/evidence x64
 ```
 
 These tests cover inactive platforms/RIDs, outer builds, Universal inner-RID
@@ -107,3 +107,24 @@ package and update PR. Artifact copies use the same file-existence checks as the
 When generated files change, the workflow creates or updates a PR and calls
 `build-debug.yaml` with that update commit SHA. Unchanged output skips both.
 This integration remains CI-pending; it adds no Python helper or new workflow.
+
+## C# verification tool
+
+All launch and verification commands are implemented in `Tools/CatalystSmoke.Tools.csproj`
+(net10.0, no external packages). `pack-local.sh` builds it once, runs the launcher
+self-tests, then invokes `verify-packages` and `verify-targets`. `test-packages.sh`
+uses the same DLL for `verify-assets` and `run-app`. Python is not required.
+The tool's source is excluded from the Catalyst app's compilation.
+
+From the repository root on Windows (no Apple workload required):
+
+```powershell
+dotnet build sandbox/SmokeCatalyst/Tools/CatalystSmoke.Tools.csproj -c Release -o artifacts/catalyst-tools
+dotnet artifacts/catalyst-tools/CatalystSmoke.Tools.dll self-test
+dotnet artifacts/catalyst-tools/CatalystSmoke.Tools.dll verify-targets /path/to/feed /path/to/evidence x64
+```
+
+`self-test` uses child .NET processes to check ARM64/x64 results, stale IDs,
+wrong architectures, reported failures, malformed/missing results, nonzero exits
+and timeouts. It does not launch a Catalyst app; LaunchServices execution must
+still be verified by the macOS CI after this migration.
