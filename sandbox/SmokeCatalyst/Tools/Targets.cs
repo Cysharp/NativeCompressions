@@ -9,14 +9,14 @@ static class Targets
 {
     internal static async Task Verify(string feed, string output, string arch)
     {
-        foreach (var library in new[] { "LZ4", "Zstandard" })
+        foreach (var library in new[] { "LZ4", "Zstandard", "OpenZL" })
             await VerifyLibrary(feed, Path.Combine(output, library), arch, library);
     }
 
     static async Task VerifyLibrary(string feed, string output, string arch, string library)
     {
-        var archive = library == "LZ4" ? "liblz4.a" : "libzstd.a";
-        var targetName = library == "LZ4" ? "Lz4" : "Zstandard";
+        var archive = library switch { "LZ4" => "liblz4.a", "Zstandard" => "libzstd.a", _ => "libopenzl.a" };
+        var targetName = library == "LZ4" ? "Lz4" : library;
         feed = Path.GetFullPath(feed);
         output = Path.GetFullPath(output);
         Directory.CreateDirectory(output);
@@ -83,15 +83,18 @@ static class Targets
             Require(XDocument.Load(imports).Descendants().Count(e => e.Name.LocalName == "Import" && ((string?)e.Attribute("Project"))?.EndsWith(package + ".targets") == true) == 1, "Missing or repeated transitive import");
             var probe = Path.Combine(folder, "Evaluate.proj");
             Probe(probe, new(defaults) { ["TargetFramework"] = "netstandard2.1" }, Path.ChangeExtension(imports, ".props"), imports);
-            await Count(probe, 1);
-            Console.WriteLine($"NuGet {name}: one transitive NativeReference");
+            await Count(probe, library == "OpenZL" ? 3 : 1);
+            Console.WriteLine($"NuGet {library} {name}: expected transitive NativeReferences");
         }
         foreach (var rid in new[] { "maccatalyst-arm64", "maccatalyst-x64", "ios-arm64", "ios-x64" })
         {
             var artifacts = await Restore(Path.Combine(output, "rid-" + rid), [$"NativeCompressions.{library}.Runtime"], rid);
             var target = Packages.Target(ReadJson(Find(artifacts, "project.assets.json").Single()), rid);
             var native = Packages.NativeAssets(target);
-            Require(native.SequenceEqual([$"runtimes/{rid}/native/{archive}"]), $"Incorrect {rid} assets: {string.Join(", ", native)}");
+            var expected = library == "OpenZL" && rid.StartsWith("maccatalyst-")
+                ? new[] { $"runtimes/{rid}/native/libopenzl.a", $"runtimes/{rid}/native/liblz4.a", $"runtimes/{rid}/native/libzstd.a" }
+                : new[] { $"runtimes/{rid}/native/{archive}" };
+            Require(native.Order().SequenceEqual(expected.Order()), $"Incorrect {rid} assets: {string.Join(", ", native)}");
             Console.WriteLine($"{rid}: {string.Join(", ", native)}");
         }
     }

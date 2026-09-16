@@ -19,7 +19,7 @@ static class Packages
             Require(groups.Length > 0, $"No dependency groups: {name}");
             return groups.SelectMany(g => g.Elements()).Select(e => (string)e.Attribute("id")!).ToHashSet();
         }
-        foreach (var (library, archive) in new[] { ("LZ4", "liblz4.a"), ("Zstandard", "libzstd.a") })
+        foreach (var (library, archive) in new[] { ("LZ4", "liblz4.a"), ("Zstandard", "libzstd.a"), ("OpenZL", "libopenzl.a") })
         {
             foreach (var arch in new[] { "arm64", "x64" })
             {
@@ -34,6 +34,8 @@ static class Packages
                 Require(bytes.AsSpan().StartsWith("!<arch>\n"u8), $"Invalid archive: {native}");
                 Require(bytes.SequenceEqual(File.ReadAllBytes(Path.Combine(root, "src", $"NativeCompressions.{library}.Runtime", native))), $"Archive differs from checkout: {native}");
                 Require(Dependencies($"NativeCompressions.{library}.Runtime").Contains(runtime), $"Missing dependency: {runtime}");
+                if (library == "OpenZL")
+                    Require(Dependencies(runtime).IsSupersetOf([$"NativeCompressions.LZ4.Runtime.maccatalyst-{arch}", $"NativeCompressions.Zstandard.Runtime.maccatalyst-{arch}"]), "Missing OpenZL native dependencies");
             }
             using (var zip = Open($"NativeCompressions.{library}.Core"))
             {
@@ -55,7 +57,7 @@ static class Packages
         var file = Find(output, "project.assets.json").Single();
         File.Copy(file, Path.Combine(evidence, "project.assets.json"), true);
         var target = Target(ReadJson(file), rid);
-        foreach (var library in new[] { "LZ4", "Zstandard" })
+        foreach (var library in new[] { "LZ4", "Zstandard", "OpenZL" })
         {
             var core = target[$"NativeCompressions.{library}.Core/{PackageVersion}"]!;
             foreach (var kind in new[] { "compile", "runtime" })
@@ -65,12 +67,12 @@ static class Packages
             }
         }
         var native = NativeAssets(target);
-        Require(native.Order().SequenceEqual(new[] { $"runtimes/{rid}/native/liblz4.a", $"runtimes/{rid}/native/libzstd.a" }.Order()), $"Incorrect native assets: {string.Join(", ", native)}");
+        Require(native.Order().SequenceEqual(new[] { $"runtimes/{rid}/native/liblz4.a", $"runtimes/{rid}/native/libzstd.a", $"runtimes/{rid}/native/libopenzl.a" }.Order()), $"Incorrect native assets: {string.Join(", ", native)}");
         File.WriteAllText(Path.Combine(evidence, "native-asset-candidates.json"), JsonSerializer.Serialize(native));
         var references = Find(output, "native-references.txt").Single();
         var rows = File.ReadAllLines(references).Select(line => line.Split('|')).ToArray();
-        Require(rows.Length == 2, "Expected exactly two static references");
-        foreach (var (library, archive) in new[] { ("lz4", "liblz4.a"), ("zstandard", "libzstd.a") })
+        Require(rows.Length == 3, "Expected exactly three static references");
+        foreach (var (library, archive) in new[] { ("lz4", "liblz4.a"), ("zstandard", "libzstd.a"), ("openzl", "libopenzl.a") })
         {
             Require(rows.Count(fields => fields.Length == 2 && fields[1] == "Static"
                 && fields[0].Replace('\\', '/').ToLowerInvariant().Contains($"/nativecompressions.{library}.runtime.{rid}/")

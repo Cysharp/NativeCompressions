@@ -53,6 +53,8 @@
     <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.android-arm64.csproj" />
     <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.android-x64.csproj" />
     <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.csproj" />
+    <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.maccatalyst-arm64.csproj" />
+    <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.maccatalyst-x64.csproj" />
     <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.ios-arm64.csproj" />
     <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.ios-x64.csproj" />
     <Project Path="src/NativeCompressions.OpenZL.Runtime/NativeCompressions.OpenZL.Runtime.linux-arm64.csproj" />

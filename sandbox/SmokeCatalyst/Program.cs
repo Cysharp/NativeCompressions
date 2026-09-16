@@ -70,6 +70,11 @@ public sealed class AppDelegate : UIApplicationDelegate
                 var zstdLength = Zstandard.Decompress(zstdCompressed, zstdRestored);
                 if (zstdLength != zstdSource.Length || !zstdSource.AsSpan().SequenceEqual(zstdRestored))
                     throw new InvalidOperationException("Zstandard multithread round trip did not reproduce the original bytes.");
+                result.OpenZLEncodingVersion = OpenZLSmoke.Run();
+#if SMOKE_MIDDLE
+                if (Middle.Compression.OpenZLEncodingVersion != result.OpenZLEncodingVersion)
+                    throw new InvalidOperationException("Middle library OpenZL encoding version mismatch.");
+#endif
                 result.Success = true;
                 exitCode = 0;
             }
@@ -95,6 +100,7 @@ internal sealed class SmokeResult
     public string Architecture { get; set; } = "";
     public string? Version { get; set; }
     public string? ZstandardVersion { get; set; }
+    public uint OpenZLEncodingVersion { get; set; }
     public bool Success { get; set; }
     public string? Error { get; set; }
 }

@@ -12,7 +12,7 @@ namespace NativeCompressions.Interop
 {
     public static unsafe partial class OpenZLNativeMethods
     {
-#if __IOS__
+#if __IOS__ || MACCATALYST
         const string __DllName = "__Internal";
 #else
         const string __DllName = "libopenzl";

@@ -13,6 +13,11 @@ on:
       - src/NativeCompressions.Zstandard.csproj
       - bindgen/libzstd/**
       - zstd
+      - openzl
+      - bindgen/libopenzl/**
+      - src/NativeCompressions.OpenZL.Core/**
+      - src/NativeCompressions.OpenZL.Runtime/**
+      - src/NativeCompressions.OpenZL.csproj
       - src/NativeCompressions.LZ4.Core/**
       - src/NativeCompressions.LZ4.Runtime/**
       - src/NativeCompressions.LZ4.csproj
@@ -110,7 +115,7 @@ jobs:
           retention-days: 30
 
   libraries:
-    name: lz4-zstandard-${{ matrix.arch }}
+    name: lz4-zstandard-openzl-${{ matrix.arch }}
     strategy:
       fail-fast: false
       matrix:
@@ -159,6 +164,8 @@ jobs:
             CATALYST_ARCH="$arch" CATALYST_NATIVE_OUTPUT="$native" bash build-native.sh 2>&1 | tee "$native/build.log"
             mkdir -p "../../artifacts/catalyst-zstandard/$arch"
             CATALYST_ARCH="$arch" bash build-native-zstandard.sh 2>&1 | tee "../../artifacts/catalyst-zstandard/$arch/build.log"
+            mkdir -p "../../artifacts/catalyst-openzl/$arch"
+            CATALYST_ARCH="$arch" bash build-native-openzl.sh 2>&1 | tee "../../artifacts/catalyst-openzl/$arch/build.log"
           done
       - name: Pack local NuGet feed
         run: |
@@ -170,11 +177,12 @@ jobs:
         if: always()
         uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
-          name: catalyst-phase3-lz4-zstandard-${{ matrix.arch }}
+          name: catalyst-phase3-lz4-zstandard-openzl-${{ matrix.arch }}
           path: |
             artifacts/catalyst-phase1/evidence/
             artifacts/catalyst-phase3/native/
             artifacts/catalyst-zstandard/
+            artifacts/catalyst-openzl/
             artifacts/catalyst-phase2/evidence/
             artifacts/catalyst-phase2/feed/
           if-no-files-found: error
