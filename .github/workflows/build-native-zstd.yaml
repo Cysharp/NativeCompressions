@@ -316,7 +316,7 @@ jobs:
           output="$GITHUB_WORKSPACE/zstd/lib"
           sdk="$(xcrun --sdk macosx --show-sdk-path)"
           flags="-O3 -target ${{ matrix.clang-arch }}-apple-ios15.0-macabi -isysroot $sdk"
-          # Static-only lib-mt; no LTO, matching the validated Catalyst smoke build.
+          # Static-only lib-mt; no LTO
           make -C zstd/lib libzstd.a-mt \
             CC="$(xcrun --find clang)" AR="$(xcrun --find ar)" \
             CFLAGS="$flags" ASFLAGS="$flags" DEBUGFLAGS="" BUILD_DIR="$output/obj/catalyst" \
