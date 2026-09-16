@@ -104,5 +104,6 @@ check the expected process architecture in addition to the LZ4 round trip.
 `build-native-lz4.yaml` builds Catalyst ARM64/x64 using inline Bash, alongside
 its existing platform jobs. It copies the two required archives into the release
 package and update PR. Artifact copies use the same file-existence checks as the other platforms.
-The existing branch-based call to `build-debug.yaml` is preserved.
+When generated files change, the workflow creates or updates a PR and calls
+`build-debug.yaml` with that update commit SHA. Unchanged output skips both.
 This integration remains CI-pending; it adds no Python helper or new workflow.
