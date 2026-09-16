@@ -8,6 +8,9 @@ on:
       - .github/workflows/catalyst.yaml
       - .github/docs/plans/collect-catalyst-environment.sh
       - sandbox/SmokeCatalyst/**
+      - src/NativeCompressions.Zstandard.Core/**
+      - bindgen/libzstd/**
+      - zstd
       - src/NativeCompressions.LZ4.Core/**
       - src/NativeCompressions.LZ4.Runtime/**
       - src/NativeCompressions.LZ4.csproj
@@ -169,5 +172,39 @@ jobs:
             artifacts/catalyst-phase3/native/
             artifacts/catalyst-phase2/evidence/
             artifacts/catalyst-phase2/feed/
+          if-no-files-found: error
+          retention-days: 30
+
+  zstandard-native:
+    name: zstandard-native-${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-26
+            arch: arm64
+          - runner: macos-26-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      CATALYST_ARCH: ${{ matrix.arch }}
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Build and run Zstandard Catalyst native probe
+        shell: bash
+        run: |
+          mkdir -p artifacts/catalyst-zstandard/${{ matrix.arch }}
+          bash sandbox/SmokeCatalyst/build-native-zstandard.sh 2>&1 | tee artifacts/catalyst-zstandard/${{ matrix.arch }}/build.log
+      - name: Save Zstandard archive and evidence
+        if: always()
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: catalyst-zstandard-native-${{ matrix.arch }}
+          path: artifacts/catalyst-zstandard/${{ matrix.arch }}/
           if-no-files-found: error
           retention-days: 30

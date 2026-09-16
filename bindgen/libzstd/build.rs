@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .csharp_class_name("ZstandardNativeMethods")
         .csharp_namespace("NativeCompressions.Interop")
         .csharp_dll_name("libzstd")
-        .csharp_dll_name_if("__IOS__", "__Internal")
+        .csharp_dll_name_if("__IOS__ || MACCATALYST", "__Internal")
         .csharp_class_accessibility("public")
         .generate_csharp_file("../../src/NativeCompressions.Zstandard.Core/Interop/ZstandardNativeMethods.cs")?;
 
