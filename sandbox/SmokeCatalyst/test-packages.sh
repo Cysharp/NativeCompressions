@@ -37,6 +37,6 @@ for mode in direct meta transitive duplicate; do
     exit 1
   fi
   cat "$evidence/codesign.log"
-  echo "Launching Catalyst LZ4 smoke test: $app"
+  echo "Launching Catalyst LZ4 + Zstandard smoke test: $app"
   dotnet "$output/tools/CatalystSmoke.Tools.dll" run-app "$app" "$evidence" "$arch" 2>&1 | tee "$evidence/run-app.log"
 done

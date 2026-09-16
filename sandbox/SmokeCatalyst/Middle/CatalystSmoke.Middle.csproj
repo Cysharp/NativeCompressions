@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NativeCompressions.LZ4" Version="$(PackageVersion)" />
+    <PackageReference Include="NativeCompressions.Zstandard" Version="$(PackageVersion)" />
   </ItemGroup>
 </Project>

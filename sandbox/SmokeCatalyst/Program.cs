@@ -57,6 +57,19 @@ public sealed class AppDelegate : UIApplicationDelegate
                 var length = LZ4.Decompress(compressed, restored);
                 if (length != source.Length || !source.AsSpan().SequenceEqual(restored))
                     throw new InvalidOperationException("LZ4 round trip did not reproduce the original bytes.");
+                result.ZstandardVersion = Zstandard.Version;
+                if (Zstandard.VersionNumber == 0) throw new InvalidOperationException("Invalid Zstandard version.");
+#if SMOKE_MIDDLE
+                if (Middle.Compression.ZstandardVersionNumber != Zstandard.VersionNumber)
+                    throw new InvalidOperationException("Middle library Zstandard version mismatch.");
+#endif
+                var zstdSource = Enumerable.Range(0, 8 * 1024 * 1024).Select(i => (byte)(i % 251)).ToArray();
+                var options = new ZstandardCompressionOptions { NbWorkers = 2, JobSize = 1024 * 1024 };
+                var zstdCompressed = Zstandard.Compress(zstdSource, options);
+                var zstdRestored = new byte[zstdSource.Length];
+                var zstdLength = Zstandard.Decompress(zstdCompressed, zstdRestored);
+                if (zstdLength != zstdSource.Length || !zstdSource.AsSpan().SequenceEqual(zstdRestored))
+                    throw new InvalidOperationException("Zstandard multithread round trip did not reproduce the original bytes.");
                 result.Success = true;
                 exitCode = 0;
             }
@@ -81,6 +94,7 @@ internal sealed class SmokeResult
     public string RunId { get; set; } = "";
     public string Architecture { get; set; } = "";
     public string? Version { get; set; }
+    public string? ZstandardVersion { get; set; }
     public bool Success { get; set; }
     public string? Error { get; set; }
 }

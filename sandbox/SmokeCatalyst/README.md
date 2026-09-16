@@ -1,4 +1,4 @@
-# Catalyst: LZ4 ARM64 / x64 through NuGet
+# Catalyst: LZ4 and Zstandard ARM64 / x64 through NuGet
 
 This standalone .NET 10 app consumes packages from a local feed. It has no direct Core DLL reference or handwritten NativeReference. It stays outside the root solution so ordinary Windows/Linux builds do not require Apple workloads.
 
@@ -14,6 +14,9 @@ dotnet workload install ios maccatalyst --version 10.0.401
 for arch in arm64 x64; do
   CATALYST_ARCH="$arch" CATALYST_NATIVE_OUTPUT="$PWD/../../artifacts/catalyst-phase3/native/$arch" bash build-native.sh
 done
+for arch in arm64 x64; do
+  CATALYST_ARCH="$arch" bash build-native-zstandard.sh
+done
 bash pack-local.sh
 # Select the architecture of this Mac: arm64 or x64.
 CATALYST_ARCH=arm64 bash test-packages.sh
@@ -21,7 +24,7 @@ CATALYST_ARCH=arm64 bash test-packages.sh
 
 `build-native.sh` uses the checked-out LZ4 submodule, the macOS SDK, arm64-apple-ios15.0-macabi / x86_64-apple-ios15.0-macabi and XXH_NAMESPACE=LZ4_. It checks every object's MACCATALYST platform, archive architecture and exported symbols. Native evidence is saved in `artifacts/catalyst-phase3/native/<arch>/`.
 
-`pack-local.sh` copies both fresh archives into the production Runtime directory, packs the real Core, every LZ4 Runtime project and the LZ4 meta project, then packs `CatalystSmoke.Middle`. All packages use the development-only version `0.0.0-catalyst-phase2`; nothing is published. The feed is under `artifacts/catalyst-phase2/feed/`. Each invocation creates a new package cache, and source mapping restricts NativeCompressions/CatalystSmoke packages to that feed. This prevents reuse of previously restored or public packages.
+`pack-local.sh` copies both architectures of each library into their Runtime directories, packs both real Core projects, all LZ4/Zstandard Runtime projects and both meta projects, then packs `CatalystSmoke.Middle`. All packages use the development-only version `0.0.0-catalyst-phase2`; nothing is published. The feed is under `artifacts/catalyst-phase2/feed/`. Each invocation creates a new package cache, and source mapping restricts NativeCompressions/CatalystSmoke packages to that feed. This prevents reuse of previously restored or public packages.
 
 Core is packed with netstandard2.1 and net10.0-maccatalyst so the test can detect selection of a generic DLL. Metadata-only packages are restored at netstandard2.1 and packed with --no-build. This preserves their production dependency graph without traversing net11.0 under SDK 10 or requiring unnecessary Core builds. The TFM override is never passed to the app or SDK-generated linker projects. These intentionally scoped packages are test inputs, not release packages.
 
@@ -30,18 +33,18 @@ Core is packed with netstandard2.1 and net10.0-maccatalyst so the test can detec
 | Mode | App reference |
 | --- | --- |
 | direct | Core + Runtime matching CATALYST_ARCH |
-| meta | NativeCompressions.LZ4 |
-| transitive | CatalystSmoke.Middle -> NativeCompressions.LZ4 |
+| meta | NativeCompressions.LZ4 + NativeCompressions.Zstandard |
+| transitive | CatalystSmoke.Middle -> both meta packages |
 | duplicate | All three paths together |
 
-The middle library exposes an LZ4 version call, exercised by the last two modes. Its dependency and buildTransitive assets must propagate through NuGet to the app. Class libraries do not embed another native archive; the final Exe consumes one NativeReference. Each mode asserts exactly one static Catalyst reference matching the selected RID. The C# tool's `verify-assets` command also checks that compile/runtime Core DLLs are Catalyst assets and that the archive path is inside the restored Catalyst package. The iOS Runtime packages contain empty `_._` native groups for both Catalyst RIDs to prevent NuGet from selecting iOS archives by RID fallback. The source marker is `src/NativeCompressions.LZ4.Runtime/packaging/_._`; only PackagePath places it in the two Catalyst native folders inside each iOS NuGet package. The Apple SDK can link resolved native assets independently of explicit NativeReference items, so both lists must exclude iOS archives. Windows restore tests verify Catalyst ARM64/x64 selection and preserve the existing iOS ARM64/x64 assets.
+The middle library exposes LZ4 and Zstandard version calls, exercised by the last two modes. Its dependency and buildTransitive assets must propagate through NuGet to the app. Class libraries do not embed another native archive; the final Exe consumes two NativeReferences (one per library). Each mode asserts exactly one static Catalyst reference per library matching the selected RID. The C# tool's `verify-assets` command also checks that compile/runtime Core DLLs are Catalyst assets and that the archive path is inside the restored Catalyst package. The iOS Runtime packages contain empty `_._` native groups for both Catalyst RIDs to prevent NuGet from selecting iOS archives by RID fallback. Each Runtime directory owns its source marker at `packaging/_._`; only PackagePath places it in the two Catalyst native folders inside each iOS NuGet package. The Apple SDK can link resolved native assets independently of explicit NativeReference items, so both lists must exclude iOS archives. Windows restore tests verify Catalyst ARM64/x64 selection and preserve the existing iOS ARM64/x64 assets.
 
 
 ## What a passing run proves
 
-For each mode: package restore and asset selection -> static linking -> ad-hoc signature verification -> LaunchServices launch -> native LZ4 version call -> 64 KiB compression/decompression -> matching length and every byte -> a result with this run's unique ID and app termination within 90 seconds. No ForceLoad, App Store credentials or publication is required.
+For each mode: package restore and asset selection -> static linking -> ad-hoc signature verification -> LaunchServices launch -> native LZ4/Zstandard version calls -> LZ4 64 KiB and Zstandard 8 MiB two-worker compression/decompression -> matching length and every byte -> a result with this run's unique ID and app termination within 90 seconds. No ForceLoad, App Store credentials or publication is required.
 
-The bundle name follows ApplicationTitle. The script discovers exactly one .app under each mode's bin directory. NuGet packages, environment/native evidence, per-mode assets, native references, binlogs, signature logs, launch logs and result JSON are uploaded as `catalyst-phase3-lz4-<arch>`, including after failures.
+The bundle name follows ApplicationTitle. The script discovers exactly one .app under each mode's bin directory. NuGet packages, environment/native evidence, per-mode assets, native references, binlogs, signature logs, launch logs and result JSON are uploaded as `catalyst-phase3-lz4-zstandard-<arch>`, including after failures.
 
 Windows can run the packaged condition tests without Apple workloads:
 
@@ -49,7 +52,7 @@ Windows can run the packaged condition tests without Apple workloads:
 dotnet ../../artifacts/catalyst-phase2/tools/CatalystSmoke.Tools.dll verify-targets /path/to/feed /path/to/evidence x64
 ```
 
-These tests cover inactive platforms/RIDs, outer builds, Universal inner-RID selection, library exclusion and explicit failure on missing archives. They do not prove Catalyst execution. Phase 2 ARM64's four modes passed CI run 34960641568. Phase 3 x64 native compilation passed run 34961447150; the new x64 NuGet app execution remains CI-pending. Universal apps, other libraries, .NET 11 and publish validation remain separate work in the implementation plan.
+These tests cover inactive platforms/RIDs, outer builds, Universal inner-RID selection, library exclusion and explicit failure on missing archives. They do not prove Catalyst execution. Phase 2 ARM64's four modes passed CI run 34960641568. LZ4 ARM64/x64 NuGet app execution passed run 34962526312 and was reconfirmed in run 35065587857. Zstandard execution remains CI-pending. Universal apps, other libraries, .NET 11 and publish validation remain separate work in the implementation plan.
 
 The initial x64 archive is from run 34961447150, LZ4 commit `ebb370ca83af193212df4dcbadcc5d87bc0de2f0`, SHA256 `844995d7b7e0392e7b95e3cc103d058bd5a6d40c5908fb7a4dddb998d03530da`. Both CI runners rebuild both native archives before packing; committed binaries are not substituted for those fresh test inputs. The app and launch script both check the expected process architecture in addition to the LZ4 round trip.
 
@@ -69,19 +72,14 @@ dotnet artifacts/catalyst-tools/CatalystSmoke.Tools.dll self-test
 dotnet artifacts/catalyst-tools/CatalystSmoke.Tools.dll verify-targets /path/to/feed /path/to/evidence x64
 ```
 
-`self-test` uses child .NET processes to check ARM64/x64 results, stale IDs, wrong architectures, reported failures, malformed/missing results, nonzero exits and timeouts. It does not launch a Catalyst app; LaunchServices execution must still be verified by the macOS CI after this migration.
+`self-test` uses child .NET processes to check ARM64/x64 results, stale IDs, wrong architectures, reported failures, malformed/missing results, nonzero exits and timeouts. It does not launch a Catalyst app; LaunchServices execution was verified for LZ4 in run 35065587857; the expanded Zstandard app still requires macOS CI.
 
-## Zstandard Catalyst bootstrap
+## Zstandard integration status
 
-The `zstandard-native` job in the existing `catalyst.yaml` builds `libzstd.a` for ARM64 and x64 on matching macOS runners. To reproduce on a Mac:
+The existing `catalyst.yaml` now builds both LZ4 and Zstandard archives for ARM64/x64 before packing the local feed. The native Zstandard script compiles for iOS 15 macabi with `libzstd.a-mt`, retaining multithreading, with LTO disabled to avoid LLVM bitcode coupling. C and assembly use the same compiler target. It checks object platforms, CPU architecture and symbols; the matching host also runs the native two-worker round trip. Cross-compiled executables are not run on the wrong CPU.
 
-```sh
-export DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer
-CATALYST_ARCH=arm64 bash build-native-zstandard.sh
-```
+Both libraries are consumed together in every NuGet reference mode. The C# app checks Zstandard's version and compresses/decompresses 8 MiB with `NbWorkers=2` and a 1 MiB job size, then compares every byte. Errors, including unsupported multithreading, fail the app result. `ZstandardVersion` is included in the result JSON. The tools require both Catalyst Core DLLs and exactly one package-provided static reference per library, reject iOS/native dylib fallback, and run the same package-target condition and restore tests for both libraries.
 
-Use `x64` on an Intel runner. The script uses the checked-out `zstd` submodule, `libzstd.a-mt` (the static-only equivalent of `lib-mt`), and the iOS 15 macabi compiler target for both C and assembly. Multithreading is enabled. LTO is initially disabled so archive objects remain directly inspectable and do not couple consumers to a particular LLVM bitcode version.
+The initial Zstandard Catalyst archives were obtained from successful run [35068961870](https://github.com/Cysharp/NativeCompressions/actions/runs/35068961870) and placed in both Runtime RID directories. Zstandard revision `f8745da6ff1ad1e7bab384bd1f9d742439278e99` matches the checkout. SHA256: ARM64 `eff38e5bb9c296ca294a8bd1b58aa2b54b5130887e41d0d4d980bc4143bf65da`, x64 `1404e772baa5aee3146ae88d2aa80134f8fce07829d56b60f7e66b95a61414f5`. Both native two-worker probes passed with Xcode 26.6, and both real Runtime packages were packed on Windows. CI continues to generate and copy fresh archives before packing. This run predates the expanded managed app, whose NuGet execution remains CI-pending.
 
-It verifies the architecture, each object's MACCATALYST platform, and exported Zstandard symbols. A native Catalyst executable requests two compression workers, compresses 8 MiB, decompresses it, and compares the length and every byte. An unsupported worker setting or any Zstandard error fails the job. The archive, build log, platform checks, source revisions, Xcode version, SHA256, and probe result are uploaded as `catalyst-zstandard-native-<arch>` from `artifacts/catalyst-zstandard/<arch>/`.
-
-This is the initial native bootstrap, not yet the managed NuGet smoke test. Zstandard Core now includes net10.0-maccatalyst on macOS and uses `__Internal` for its static imports; the binding generator preserves that condition. After both CI runs pass, use those real archives to add the two Runtime packages, buildTransitive static linking, and iOS RID fallback markers, following LZ4. Then extend the C# app and package checks to exercise Zstandard through the four NuGet reference paths and alongside LZ4. Production native-update integration, .NET 11, Universal and publish checks remain subsequent work.
+After the expanded Zstandard NuGet app CI passes, its .NET 10 basic NuGet path can be marked complete. OpenZL, three-library simultaneous linking and .NET 11 remain Phase 3 work. Production Zstandard native-update integration, Universal and publish are subsequent phases.

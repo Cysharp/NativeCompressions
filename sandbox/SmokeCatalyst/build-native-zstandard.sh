@@ -42,4 +42,6 @@ xcrun --sdk macosx clang -target "$clang_arch-apple-ios15.0-macabi" \
   "$root/sandbox/SmokeCatalyst/zstandard-native-smoke.c" "$output/libzstd.a" \
   -pthread -o "$output/zstandard-native-smoke"
 codesign --force --sign - "$output/zstandard-native-smoke"
-"$output/zstandard-native-smoke" | tee "$output/result.txt"
+if [ "$(uname -m)" = "$clang_arch" ]; then
+  "$output/zstandard-native-smoke" | tee "$output/result.txt"
+fi

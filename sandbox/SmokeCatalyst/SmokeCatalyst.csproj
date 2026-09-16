@@ -22,9 +22,12 @@
   <ItemGroup Condition="'$(SmokeReferenceMode)' == 'direct' or '$(SmokeReferenceMode)' == 'duplicate'">
     <PackageReference Include="NativeCompressions.LZ4.Core" Version="$(SmokePackageVersion)" />
     <PackageReference Include="NativeCompressions.LZ4.Runtime.maccatalyst-$(SmokeArchitecture)" Version="$(SmokePackageVersion)" />
+    <PackageReference Include="NativeCompressions.Zstandard.Core" Version="$(SmokePackageVersion)" />
+    <PackageReference Include="NativeCompressions.Zstandard.Runtime.maccatalyst-$(SmokeArchitecture)" Version="$(SmokePackageVersion)" />
   </ItemGroup>
   <ItemGroup Condition="'$(SmokeReferenceMode)' == 'meta' or '$(SmokeReferenceMode)' == 'duplicate'">
     <PackageReference Include="NativeCompressions.LZ4" Version="$(SmokePackageVersion)" />
+    <PackageReference Include="NativeCompressions.Zstandard" Version="$(SmokePackageVersion)" />
   </ItemGroup>
   <ItemGroup Condition="'$(SmokeReferenceMode)' == 'transitive' or '$(SmokeReferenceMode)' == 'duplicate'">
     <PackageReference Include="CatalystSmoke.Middle" Version="$(SmokePackageVersion)" />
@@ -33,7 +36,7 @@
     <Compile Remove="Middle/**;Tools/**" />
   </ItemGroup>
   <Target Name="VerifySmokeNativeReference" BeforeTargets="PrepareForBuild">
-    <Error Condition="'@(NativeReference->Count())' != '1'" Text="Expected exactly one NuGet NativeReference, got @(NativeReference)." />
+    <Error Condition="'@(NativeReference->Count())' != '2'" Text="Expected two NuGet NativeReferences (LZ4 and Zstandard), got @(NativeReference)." />
     <Error Condition="'%(NativeReference.Kind)' != 'Static'" Text="Expected static NativeReference." />
     <Error Condition="$([System.String]::Copy('%(NativeReference.Identity)').Contains('$(RuntimeIdentifier)')) != 'True'" Text="Expected $(RuntimeIdentifier) archive: %(NativeReference.Identity)" />
     <MakeDir Directories="$(IntermediateOutputPath)" />

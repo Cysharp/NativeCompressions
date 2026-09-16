@@ -1,4 +1,4 @@
-// Native bootstrap probe. Managed NuGet/app validation follows after the first CI archive.
+// Native multithread probe; the managed NuGet app verifies both libraries together.
 #include <TargetConditionals.h>
 #if !TARGET_OS_MACCATALYST
 #error Expected a Mac Catalyst executable

@@ -9,11 +9,19 @@ static class Targets
 {
     internal static async Task Verify(string feed, string output, string arch)
     {
+        foreach (var library in new[] { "LZ4", "Zstandard" })
+            await VerifyLibrary(feed, Path.Combine(output, library), arch, library);
+    }
+
+    static async Task VerifyLibrary(string feed, string output, string arch, string library)
+    {
+        var archive = library == "LZ4" ? "liblz4.a" : "libzstd.a";
+        var targetName = library == "LZ4" ? "Lz4" : "Zstandard";
         feed = Path.GetFullPath(feed);
         output = Path.GetFullPath(output);
         Directory.CreateDirectory(output);
-        var package = $"NativeCompressions.LZ4.Runtime.maccatalyst-{arch}";
-        var check = "CheckNativeCompressionsLz4Catalyst" + (arch == "arm64" ? "Arm64" : "X64");
+        var package = $"NativeCompressions.{library}.Runtime.maccatalyst-{arch}";
+        var check = "CheckNativeCompressions" + targetName + "Catalyst" + (arch == "arm64" ? "Arm64" : "X64");
         ZipFile.ExtractToDirectory(Path.Combine(feed, $"{package}.{PackageVersion}.nupkg"), Path.Combine(output, "package"), true);
         var targets = Path.Combine(output, "package", "buildTransitive", package + ".targets");
         var defaults = new Dictionary<string, string> { ["TargetFramework"] = "net10.0-maccatalyst", ["TargetPlatformIdentifier"] = "maccatalyst", ["RuntimeIdentifier"] = $"maccatalyst-{arch}", ["OutputType"] = "Exe" };
@@ -67,7 +75,7 @@ static class Targets
             await Dotnet(args.ToArray());
             return Path.Combine(folder, "artifacts");
         }
-        foreach (var (name, ids) in new (string, string[])[] { ("direct", [package]), ("aggregate", ["NativeCompressions.LZ4.Runtime"]), ("duplicate", [package, "NativeCompressions.LZ4.Runtime"]) })
+        foreach (var (name, ids) in new (string, string[])[] { ("direct", [package]), ("aggregate", [$"NativeCompressions.{library}.Runtime"]), ("duplicate", [package, $"NativeCompressions.{library}.Runtime"]) })
         {
             var folder = Path.Combine(output, "restore-" + name);
             var artifacts = await Restore(folder, ids);
@@ -80,10 +88,10 @@ static class Targets
         }
         foreach (var rid in new[] { "maccatalyst-arm64", "maccatalyst-x64", "ios-arm64", "ios-x64" })
         {
-            var artifacts = await Restore(Path.Combine(output, "rid-" + rid), ["NativeCompressions.LZ4.Runtime"], rid);
+            var artifacts = await Restore(Path.Combine(output, "rid-" + rid), [$"NativeCompressions.{library}.Runtime"], rid);
             var target = Packages.Target(ReadJson(Find(artifacts, "project.assets.json").Single()), rid);
             var native = Packages.NativeAssets(target);
-            Require(native.SequenceEqual([$"runtimes/{rid}/native/liblz4.a"]), $"Incorrect {rid} assets: {string.Join(", ", native)}");
+            Require(native.SequenceEqual([$"runtimes/{rid}/native/{archive}"]), $"Incorrect {rid} assets: {string.Join(", ", native)}");
             Console.WriteLine($"{rid}: {string.Join(", ", native)}");
         }
     }

@@ -38,6 +38,8 @@
     <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.android-arm64.csproj" />
     <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.android-x64.csproj" />
     <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.maccatalyst-arm64.csproj" />
+    <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.maccatalyst-x64.csproj" />
     <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.ios-arm64.csproj" />
     <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.ios-x64.csproj" />
     <Project Path="src/NativeCompressions.Zstandard.Runtime/NativeCompressions.Zstandard.Runtime.linux-arm64.csproj" />
