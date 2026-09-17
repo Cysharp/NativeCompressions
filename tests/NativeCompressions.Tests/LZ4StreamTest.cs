@@ -371,15 +371,107 @@ public class LZ4StreamTest
     }
 
     [Fact]
-    public void Read_TruncatedInput_StopsAtAvailableData()
+    public void ExternalDecoder_StartedFrame_EmptyRemainderThrows()
     {
         var compressed = LZ4.Compress(Data);
-        var truncated = compressed.AsSpan(0, compressed.Length / 2).ToArray();
-        using var reader = new LZ4Stream(new MemoryStream(truncated), CompressionMode.Decompress);
-        var ms = new MemoryStream();
-        reader.CopyTo(ms);
-        Assert.True(ms.Length < Data.Length);
-        Assert.Equal(Data.AsSpan(0, (int)ms.Length).ToArray(), ms.ToArray());
+        using var decoder = new LZ4Decoder();
+        _ = decoder.GetFrameInfo(compressed, out _);
+
+        using var reader = new LZ4Stream(new MemoryStream(), decoder, leaveOpen: true);
+        Assert.Throws<InvalidOperationException>(() => reader.CopyTo(Stream.Null));
+        Assert.False(decoder.IsDisposed);
+    }
+
+    [Fact]
+    public async Task ExternalDecoder_StartedFrame_EmptyRemainderThrowsAsync()
+    {
+        var compressed = LZ4.Compress(Data);
+        using var decoder = new LZ4Decoder();
+        _ = decoder.GetFrameInfo(compressed, out _);
+
+        await using var reader = new LZ4Stream(new MemoryStream(), decoder, leaveOpen: true);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => reader.CopyToAsync(Stream.Null, TestContext.Current.CancellationToken));
+        Assert.False(decoder.IsDisposed);
+    }
+
+    [Fact]
+    public void ExternalDecoder_FreshOrCompletedFrame_EmptyInputIsCleanEof()
+    {
+        using var freshDecoder = new LZ4Decoder();
+        using (var freshReader = new LZ4Stream(new MemoryStream(), freshDecoder, leaveOpen: true))
+        {
+            Assert.Equal(0, freshReader.Read(new byte[1]));
+        }
+
+        var compressed = LZ4.Compress(Data);
+        using var completedDecoder = new LZ4Decoder();
+        var destination = new byte[Data.Length];
+        Assert.Equal(
+            OperationStatus.Done,
+            completedDecoder.Decompress(compressed, destination, out _, out _));
+
+        using var completedReader = new LZ4Stream(new MemoryStream(), completedDecoder, leaveOpen: true);
+        Assert.Equal(0, completedReader.Read(new byte[1]));
+    }
+
+    [Fact]
+    public void Read_TruncatedInput_Throws()
+    {
+        var compressed = LZ4.Compress(Data);
+
+        foreach (var truncated in new[]
+        {
+            compressed.AsSpan(0, compressed.Length / 2).ToArray(),
+            compressed.AsSpan(0, compressed.Length - 1).ToArray(),
+        })
+        {
+            using var reader = new LZ4Stream(new MemoryStream(truncated), CompressionMode.Decompress);
+            Assert.Throws<InvalidOperationException>(() => reader.CopyTo(Stream.Null));
+        }
+    }
+
+    [Fact]
+    public async Task ReadAsync_TruncatedInput_Throws()
+    {
+        var compressed = LZ4.Compress(Data, LZ4CompressionOptions.Default with
+        {
+            ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled,
+        });
+
+        foreach (var truncated in new[]
+        {
+            compressed.AsSpan(0, compressed.Length / 2).ToArray(),
+            compressed.AsSpan(0, compressed.Length - 1).ToArray(),
+        })
+        {
+            await using var reader = new LZ4Stream(new MemoryStream(truncated), CompressionMode.Decompress);
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => reader.CopyToAsync(Stream.Null, TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Fact]
+    public void Read_CompleteFrameFollowedByTruncatedFrame_Throws()
+    {
+        var complete = LZ4.Compress(Data);
+        var next = LZ4.Compress(Utf8("next frame"));
+        var input = complete.Concat(next.Take(next.Length / 2)).ToArray();
+
+        using var reader = new LZ4Stream(new MemoryStream(input), CompressionMode.Decompress);
+        Assert.Throws<InvalidOperationException>(() => reader.CopyTo(Stream.Null));
+    }
+
+    [Fact]
+    public async Task ReadAsync_CompleteFrameFollowedByTruncatedFrame_Throws()
+    {
+        var complete = LZ4.Compress(Data);
+        var next = LZ4.Compress(Utf8("next frame"));
+        var input = complete.Concat(next.Take(next.Length / 2)).ToArray();
+
+        await using var reader = new LZ4Stream(new MemoryStream(input), CompressionMode.Decompress);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => reader.CopyToAsync(Stream.Null, TestContext.Current.CancellationToken));
     }
 
     [Fact]
