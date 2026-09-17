@@ -6,6 +6,7 @@ name: Build-Native-LZ4
 # 2". If changes exist, update submodule after checkout in each build job, build and upload artifacts
 # 3.  Upload packages to GitHub Actions summary
 # 4.  If the submodule or generated binaries differ, create or update the release's PR.
+#     Binary-only differences (submodule unchanged) only open a PR on a workflow_dispatch run, to avoid Windows hosted runner changes affecting the binaries.
 #     PR includes following changes.
 #     - Commit that updates the submodule
 #     - Commit that lz4 dynamic lib artifacts placed in src/NativeCompressions.LZ4.Runtime/runtimes/{platform_name}/native/{lib}
@@ -600,6 +601,7 @@ jobs:
         id: changes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           git add lz4 src/NativeCompressions.LZ4.Runtime/runtimes
           if git diff --cached --quiet; then
@@ -612,12 +614,31 @@ jobs:
           REMOTE_SHA=$(git ls-remote origin "refs/heads/$NEW_BRANCH_NAME" | cut -f1)
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
           echo "remote_sha=$REMOTE_SHA" >> "$GITHUB_OUTPUT"
+
+          # Compare against the open PR branch when there is one, otherwise against main.
+          BASE_REF="HEAD"
           if [ -n "$PR_URL" ]; then
             git fetch origin "$REMOTE_SHA"
-            if git diff --cached --quiet "$REMOTE_SHA" -- lz4 src/NativeCompressions.LZ4.Runtime/runtimes; then
+            BASE_REF="$REMOTE_SHA"
+            if git diff --cached --quiet "$BASE_REF" -- lz4 src/NativeCompressions.LZ4.Runtime/runtimes; then
               echo "Existing PR already contains these LZ4 binaries: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
+          fi
+
+          # Binaries differing while the submodule stays put is usually the hosted runner
+          # toolchain moving under us (MSVC/VC++, Xcode, NDK bumps), not anything upstream.
+          # Only a manual run turns that into a PR; scheduled runs just report it.
+          if [ "$EVENT_NAME" != "workflow_dispatch" ] && git diff --cached --quiet "$BASE_REF" -- lz4; then
+            {
+              echo '### LZ4 binary-only changes (no PR)'
+              echo 'The lz4 submodule is unchanged, so these bytes come from the build environment.'
+              echo 'Run this workflow manually (workflow_dispatch) to turn them into a PR.'
+              echo '```text'
+              git diff --cached --stat "$BASE_REF" -- src/NativeCompressions.LZ4.Runtime/runtimes
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
 
           git diff --cached --stat | tee artifacts/lz4-changes.txt
