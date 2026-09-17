@@ -172,7 +172,7 @@ public class LZ4EncoderDecoderLifecycleTest
         var garbage = new byte[4096];
         new Random(1).NextBytes(garbage);
         using var reader = new LZ4Stream(new MemoryStream(garbage), CompressionMode.Decompress);
-        Assert.Throws<InvalidOperationException>(() => reader.CopyTo(Stream.Null));
+        Assert.Throws<LZ4Exception>(() => reader.CopyTo(Stream.Null));
     }
 
     [Fact]

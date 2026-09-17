@@ -378,7 +378,7 @@ public class LZ4StreamTest
         _ = decoder.GetFrameInfo(compressed, out _);
 
         using var reader = new LZ4Stream(new MemoryStream(), decoder, leaveOpen: true);
-        Assert.Throws<InvalidOperationException>(() => reader.CopyTo(Stream.Null));
+        Assert.Throws<LZ4Exception>(() => reader.CopyTo(Stream.Null));
         Assert.False(decoder.IsDisposed);
     }
 
@@ -390,7 +390,7 @@ public class LZ4StreamTest
         _ = decoder.GetFrameInfo(compressed, out _);
 
         await using var reader = new LZ4Stream(new MemoryStream(), decoder, leaveOpen: true);
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<LZ4Exception>(
             () => reader.CopyToAsync(Stream.Null, TestContext.Current.CancellationToken));
         Assert.False(decoder.IsDisposed);
     }
@@ -427,7 +427,7 @@ public class LZ4StreamTest
         })
         {
             using var reader = new LZ4Stream(new MemoryStream(truncated), CompressionMode.Decompress);
-            Assert.Throws<InvalidOperationException>(() => reader.CopyTo(Stream.Null));
+            Assert.Throws<LZ4Exception>(() => reader.CopyTo(Stream.Null));
         }
     }
 
@@ -446,7 +446,7 @@ public class LZ4StreamTest
         })
         {
             await using var reader = new LZ4Stream(new MemoryStream(truncated), CompressionMode.Decompress);
-            await Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<LZ4Exception>(
                 () => reader.CopyToAsync(Stream.Null, TestContext.Current.CancellationToken));
         }
     }
@@ -459,7 +459,7 @@ public class LZ4StreamTest
         var input = complete.Concat(next.Take(next.Length / 2)).ToArray();
 
         using var reader = new LZ4Stream(new MemoryStream(input), CompressionMode.Decompress);
-        Assert.Throws<InvalidOperationException>(() => reader.CopyTo(Stream.Null));
+        Assert.Throws<LZ4Exception>(() => reader.CopyTo(Stream.Null));
     }
 
     [Fact]
@@ -470,7 +470,7 @@ public class LZ4StreamTest
         var input = complete.Concat(next.Take(next.Length / 2)).ToArray();
 
         await using var reader = new LZ4Stream(new MemoryStream(input), CompressionMode.Decompress);
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<LZ4Exception>(
             () => reader.CopyToAsync(Stream.Null, TestContext.Current.CancellationToken));
     }
 
@@ -480,11 +480,11 @@ public class LZ4StreamTest
         var garbage = new byte[4096];
         new Random(1).NextBytes(garbage);
         using var reader = new LZ4Stream(new MemoryStream(garbage), CompressionMode.Decompress);
-        Assert.Throws<InvalidOperationException>(() => reader.CopyTo(Stream.Null));
+        Assert.Throws<LZ4Exception>(() => reader.CopyTo(Stream.Null));
 
         var compressed = LZ4.Compress(Data, LZ4CompressionOptions.Default with { BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled });
         compressed[compressed.Length / 2] ^= 0xFF;
         using var reader2 = new LZ4Stream(new MemoryStream(compressed), CompressionMode.Decompress);
-        Assert.Throws<InvalidOperationException>(() => reader2.CopyTo(Stream.Null));
+        Assert.Throws<LZ4Exception>(() => reader2.CopyTo(Stream.Null));
     }
 }

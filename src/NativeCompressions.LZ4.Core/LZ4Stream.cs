@@ -330,7 +330,7 @@ public sealed class LZ4Stream : Stream
             switch (status)
             {
                 case OperationStatus.InvalidData:
-                    throw new InvalidOperationException("Decompression failed: the input is not valid LZ4 frame data.");
+                    throw new LZ4Exception("Invalid LZ4 frame.");
 
                 case OperationStatus.Done:
                     // Frame completed, there might be another frame so continue
@@ -365,7 +365,7 @@ public sealed class LZ4Stream : Stream
                         {
                             if (frameInProgress)
                             {
-                                throw new InvalidOperationException("Decompression failed: the input ends inside an LZ4 frame.");
+                                throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
                             }
 
                             return totalRead;
@@ -390,7 +390,7 @@ public sealed class LZ4Stream : Stream
 
                         if (bytesRead == 0)
                         {
-                            throw new InvalidOperationException("Decompression failed: the input ends inside an LZ4 frame.");
+                            throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
                         }
                     }
                     break;
@@ -453,7 +453,7 @@ public sealed class LZ4Stream : Stream
             switch (status)
             {
                 case OperationStatus.InvalidData:
-                    throw new InvalidOperationException("Decompression failed: the input is not valid LZ4 frame data.");
+                    throw new LZ4Exception("Invalid LZ4 frame.");
 
                 case OperationStatus.Done:
                     // Frame completed, there might be another frame so continue
@@ -489,7 +489,7 @@ public sealed class LZ4Stream : Stream
                         {
                             if (frameInProgress)
                             {
-                                throw new InvalidOperationException("Decompression failed: the input ends inside an LZ4 frame.");
+                                throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
                             }
 
                             return totalRead;
@@ -516,7 +516,7 @@ public sealed class LZ4Stream : Stream
 
                         if (bytesRead == 0)
                         {
-                            throw new InvalidOperationException("Decompression failed: the input ends inside an LZ4 frame.");
+                            throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
                         }
                     }
                     break;
