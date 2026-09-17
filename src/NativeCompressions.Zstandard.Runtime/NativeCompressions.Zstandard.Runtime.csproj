@@ -27,6 +27,8 @@
     <ProjectReference Include="NativeCompressions.Zstandard.Runtime.android-arm.csproj" />
     <ProjectReference Include="NativeCompressions.Zstandard.Runtime.android-arm64.csproj" />
     <ProjectReference Include="NativeCompressions.Zstandard.Runtime.android-x64.csproj" />
+    <ProjectReference Include="NativeCompressions.Zstandard.Runtime.maccatalyst-arm64.csproj" />
+    <ProjectReference Include="NativeCompressions.Zstandard.Runtime.maccatalyst-x64.csproj" />
     <ProjectReference Include="NativeCompressions.Zstandard.Runtime.ios-arm64.csproj" />
     <ProjectReference Include="NativeCompressions.Zstandard.Runtime.ios-x64.csproj" />
   </ItemGroup>

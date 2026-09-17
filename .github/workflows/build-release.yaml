@@ -29,7 +29,7 @@ jobs:
             10.0.x
             11.0.x
       # Core projects include iOS targets only on macOS; pack here to include all target frameworks.
-      - run: dotnet workload install ios
+      - run: dotnet workload install ios maccatalyst
       - run: dotnet build -c Release -p:Version=${{ inputs.tag }}
       # runs the test project on net8.0, net9.0 and net11.0 against the matching library builds
       - run: dotnet test -c Release --no-build
