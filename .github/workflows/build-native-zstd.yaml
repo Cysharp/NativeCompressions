@@ -122,18 +122,45 @@ jobs:
     if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: read
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
     strategy:
       matrix:
         arch: [x64, arm64]
+        glibc: ["2.31"]
+        cc: [gcc-10]
         include:
           - arch: x64
-            cc: gcc
+            runner: ubuntu-24.04
           - arch: arm64
-            cc: aarch64-linux-gnu-gcc
-            packages: gcc-aarch64-linux-gnu
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    # Pin glibc to matrix.glibc by building inside Ubuntu 20.04 (glibc 2.31) instead of letting the hosted runner image decide it.
+    container:
+      image: ubuntu:20.04@sha256:8feb4d8ca5354def3d8fce243717141ce31e2c428701f6682bd2fafe15388214
+    timeout-minutes: 15
+    env:
+      CC: ${{ matrix.cc }}
+      GLIBC_VERSION: ${{ matrix.glibc }}
     steps:
+      - name: Verify container glibc
+        run: |
+          actual="$(ldd --version | head -1 | awk '{ print $NF }')"
+          if [ "${actual}" != "${GLIBC_VERSION}" ]; then
+            echo "::error::container glibc is ${actual}, but matrix.glibc is ${GLIBC_VERSION}"
+            exit 1
+          fi
+      # git must be present before checkout, otherwise actions/checkout falls back to the tarball API and skips submodules.
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            file \
+            "${CC}" \
+            git \
+            make
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
           submodules: recursive
@@ -146,17 +173,20 @@ jobs:
             git checkout ${{ needs.check_new_release.outputs.latest_tag }}
           cd ..
           echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
-      - name: Install ARM64 cross-compiler
-        if: ${{ matrix.arch == 'arm64' }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ${{ matrix.packages }}
       - name: Build shared library
         run: |
           cd zstd/lib
-          make lib-release CC="${{ matrix.cc }}" MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j "$(nproc)"
+          make lib-release CC="${CC}" MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j "$(nproc)"
           ls -la ./*.so*
           file libzstd.so*
+      - name: Verify glibc requirement
+        run: |
+          max_glibc="$(objdump -T zstd/lib/libzstd.so | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)"
+          echo "libzstd.so requires glibc ${max_glibc} or newer"
+          if [ "$(printf '%s\n%s\n' "${max_glibc}" "${GLIBC_VERSION}" | sort -V | tail -1)" != "${GLIBC_VERSION}" ]; then
+            echo "::error::libzstd.so requires glibc ${max_glibc}, above matrix.glibc (${GLIBC_VERSION})"
+            exit 1
+          fi
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/linux-${{ matrix.arch }}
