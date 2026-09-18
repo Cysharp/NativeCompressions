@@ -87,7 +87,7 @@ jobs:
           make_openzl "-static-libgcc -Wl,--output-def,nc-static/all.def"
           {
             echo EXPORTS
-            awk '$1 ~ /^(ZL|ZS2)_/ { print "    " $1 ($0 ~ / DATA/ ? " DATA" : "") }' nc-static/all.def
+            awk '$1 ~ /^(ZL|ZS2)_[A-Za-z0-9_]*$/ { print "    " $1 ($0 ~ / DATA/ ? " DATA" : "") }' nc-static/all.def
           } > nc-static/exports.def
           make_openzl "-static-libgcc nc-static/exports.def"
           ls -la libopenzl.so
@@ -160,10 +160,12 @@ jobs:
           }
           # MinGW takes no export wildcards: link once exporting everything to learn the names,
           # then relink with a .def of only OpenZL's API (an explicit .def turns auto-export off).
+          # Keep plain identifiers only: GCC LTO promotes cross-partition statics to globals named like
+          # ZL_foo.lto_priv.0, which are not API, and GNU ld's .def parser rejects '.' in a name.
           make_openzl "-Wl,--output-def,nc-static/all.def"
           {
             echo EXPORTS
-            awk '$1 ~ /^(ZL|ZS2)_/ { print "    " $1 ($0 ~ / DATA/ ? " DATA" : "") }' nc-static/all.def
+            awk '$1 ~ /^(ZL|ZS2)_[A-Za-z0-9_]*$/ { print "    " $1 ($0 ~ / DATA/ ? " DATA" : "") }' nc-static/all.def
           } > nc-static/exports.def
           make_openzl "nc-static/exports.def"
           llvm-objdump -p libopenzl.so > nc-static/headers.txt
