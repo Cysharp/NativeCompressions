@@ -126,21 +126,30 @@ jobs:
     strategy:
       matrix:
         arch: [x64, arm64]
+        glibc: ["2.31"]
+        cc: [gcc-10]
         include:
           - arch: x64
             runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    # Pin glibc to 2.31 by building inside Ubuntu 20.04 instead of letting the hosted runner image decide it.
-    # A binary linked against a newer glibc refuses to load on older distros, so the floor is part of the contract.
-    # Both architectures build natively: the pinned digest is a multi-arch index that resolves per runner.
+    # Pin glibc to matrix.glibc by building inside Ubuntu 20.04 (glibc 2.31) instead of letting the hosted runner image decide it.
     container:
       image: ubuntu:20.04@sha256:8feb4d8ca5354def3d8fce243717141ce31e2c428701f6682bd2fafe15388214
     timeout-minutes: 15
+    env:
+      CC: ${{ matrix.cc }}
+      GLIBC_VERSION: ${{ matrix.glibc }}
     steps:
+      - name: Verify container glibc
+        run: |
+          actual="$(ldd --version | head -1 | awk '{ print $NF }')"
+          if [ "${actual}" != "${GLIBC_VERSION}" ]; then
+            echo "::error::container glibc is ${actual}, but matrix.glibc is ${GLIBC_VERSION}"
+            exit 1
+          fi
       # git must be present before checkout, otherwise actions/checkout falls back to the tarball API and skips submodules.
-      # gcc-10 is the newest gcc in focal's official archive; the default gcc 9 cannot LTO-link zstd/openzl.
       - name: Install build dependencies
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -150,7 +159,7 @@ jobs:
             build-essential \
             ca-certificates \
             file \
-            gcc-10 \
+            "${CC}" \
             git \
             make
       - uses: Cysharp/Actions/.github/actions/checkout@main
@@ -168,15 +177,15 @@ jobs:
       - name: Build shared library
         run: |
           cd lz4/lib
-          make BUILD_STATIC=no BUILD_SHARED=yes CC=gcc-10 SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
+          make BUILD_STATIC=no BUILD_SHARED=yes CC="${CC}" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
           ls -la ./*.so*
           file liblz4.so*
       - name: Verify glibc requirement
         run: |
           max_glibc="$(objdump -T lz4/lib/liblz4.so | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)"
           echo "liblz4.so requires glibc ${max_glibc} or newer"
-          if [ "$(printf '%s\n2.31\n' "${max_glibc}" | sort -V | tail -1)" != "2.31" ]; then
-            echo "::error::liblz4.so requires glibc ${max_glibc}, above the Ubuntu 20.04 baseline (2.31)"
+          if [ "$(printf '%s\n%s\n' "${max_glibc}" "${GLIBC_VERSION}" | sort -V | tail -1)" != "${GLIBC_VERSION}" ]; then
+            echo "::error::liblz4.so requires glibc ${max_glibc}, above matrix.glibc (${GLIBC_VERSION})"
             exit 1
           fi
       - name: Prepare artifacts
