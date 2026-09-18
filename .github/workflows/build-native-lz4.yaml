@@ -61,6 +61,8 @@ jobs:
             make
       - name: Build DLL
         shell: msys2 {0}
+        env:
+          LDFLAGS: -Wl,--no-insert-timestamp
         run: |
           cd lz4/lib
           make BUILD_STATIC=no BUILD_SHARED=yes SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
@@ -99,7 +101,7 @@ jobs:
           echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build using Docker
         run: |
-          docker run --rm -v "$PWD:/work" \
+          docker run --rm -v "$PWD:/work" -e LDFLAGS=-Wl,--no-insert-timestamp \
             mstorsjo/llvm-mingw:latest \
             bash -c "cd /work/lz4/lib && \
               make BUILD_STATIC=no BUILD_SHARED=yes \
@@ -278,6 +280,8 @@ jobs:
           cd ..
           echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build static library for iOS
+        env:
+          ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
         run: |
           SDK_PATH=$(xcrun --sdk ${{ matrix.sdk }} --show-sdk-path)
 
@@ -331,6 +335,8 @@ jobs:
           cd ..
           echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build static library for Mac Catalyst
+        env:
+          ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
         shell: bash
         run: |
           output="$GITHUB_WORKSPACE/lz4/lib"

@@ -80,7 +80,7 @@ jobs:
             make libopenzl.so BUILD_TYPE=OPT OS=Windows_NT CC=gcc MOREFLAGS="-flto" \
               LIBZSTD_SO=nc-static/libzstd.a LIBLZ4_SO=nc-static/liblz4.a \
               -o nc-static/libzstd.a -o nc-static/liblz4.a \
-              LDFLAGS="$1" -j "$(nproc)"
+              LDFLAGS="-Wl,--no-insert-timestamp $1" -j "$(nproc)"
           }
           # MinGW takes no export wildcards: link once exporting everything to learn the names,
           # then relink with a .def of only OpenZL's API (an explicit .def turns auto-export off).
@@ -156,7 +156,7 @@ jobs:
             make libopenzl.so BUILD_TYPE=OPT OS=Windows_NT CC="$CC" MOREFLAGS="-flto" \
               LIBZSTD_SO=nc-static/libzstd.a LIBLZ4_SO=nc-static/liblz4.a \
               -o nc-static/libzstd.a -o nc-static/liblz4.a \
-              LDFLAGS="$1" -j "$(nproc)"
+              LDFLAGS="-Wl,--no-insert-timestamp $1" -j "$(nproc)"
           }
           # MinGW takes no export wildcards: link once exporting everything to learn the names,
           # then relink with a .def of only OpenZL's API (an explicit .def turns auto-export off).
@@ -429,6 +429,8 @@ jobs:
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build static library for iOS
+        env:
+          ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
         run: |
           SDK_PATH=$(xcrun --sdk ${{ matrix.sdk }} --show-sdk-path)
 
@@ -482,6 +484,8 @@ jobs:
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build static library for Mac Catalyst
+        env:
+          ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
         shell: bash
         run: |
           root="$GITHUB_WORKSPACE"
