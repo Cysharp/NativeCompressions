@@ -37,7 +37,7 @@ jobs:
     permissions:
       contents: read
     runs-on: windows-2025
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
@@ -60,13 +60,55 @@ jobs:
             ${{ matrix.arch == 'x64' && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-make' || 'mingw-w64-clang-aarch64-gcc mingw-w64-clang-aarch64-make' }}
             make
       # TODO: Currently, the build artifact extension is .so even on Windows. OpenZL may update the Makefile in the future to create .dll files for Windows, which could cause CI errors. Please update the file extensions accordingly if this change occurs.
+      # OpenZL uses zstd/lz4 *_STATIC_LINKING_ONLY APIs, which have no stable ABI. Link the versions it pins
+      # (openzl/deps) statically and export only OpenZL's API (ZL_*, ZS2_*), like upstream's Python wheel
+      # (openzl/py/pyproject.toml). Upstream `make libopenzl.so` links its shared deps/ builds instead,
+      # which the Runtime package does not ship.
+      # -static-libgcc: the Runtime package does not ship MinGW's libgcc_s_seh-1.dll either.
       - name: Build DLL
         shell: msys2 {0}
+        working-directory: openzl
+        env:
+          SOURCE_DATE_EPOCH: "0" # deterministic build: BUILD_TYPE=OPT runs GNU strip, keep timestamps consistent across builds
         run: |
-          cd openzl
-          make libopenzl.so BUILD_TYPE=OPT OS=Windows_NT MOREFLAGS="-flto" -j "$(nproc)"
+          CFLAGS="-O3" make -C deps/zstd/lib libzstd.a CC=gcc -j "$(nproc)"
+          CFLAGS="-O3" make -C deps/lz4/lib liblz4.a CC=gcc -j "$(nproc)"
+          mkdir -p nc-static
+          cp deps/zstd/lib/libzstd.a deps/lz4/lib/liblz4.a nc-static/
+
+          # LIBZSTD_SO/LIBLZ4_SO are the link inputs of the libopenzl.so rule; -o keeps make from rebuilding them.
+          # LDFLAGS goes on the command line because OpenZL's zldefs.make appends an environment LDFLAGS twice.
+          make_openzl() {
+            make libopenzl.so BUILD_TYPE=OPT OS=Windows_NT CC=gcc MOREFLAGS="-flto" \
+              LIBZSTD_SO=nc-static/libzstd.a LIBLZ4_SO=nc-static/liblz4.a \
+              -o nc-static/libzstd.a -o nc-static/liblz4.a \
+              LDFLAGS="-Wl,--no-insert-timestamp $1" -j "$(nproc)"
+          }
+          # MinGW takes no export wildcards: link once exporting everything to learn the names,
+          # then relink with a .def of only OpenZL's API (an explicit .def turns auto-export off).
+          make_openzl "-static-libgcc -Wl,--output-def,nc-static/all.def"
+          {
+            echo EXPORTS
+            awk '$1 ~ /^(ZL|ZS2)_[A-Za-z0-9_]*$/ { print "    " $1 ($0 ~ / DATA/ ? " DATA" : "") }' nc-static/all.def
+          } > nc-static/exports.def
+          make_openzl "-static-libgcc nc-static/exports.def"
           ls -la libopenzl.so
           file -L libopenzl.so
+      - name: Verify self-contained DLL
+        shell: msys2 {0}
+        working-directory: openzl
+        run: |
+          objdump -p libopenzl.so > nc-static/headers.txt
+          grep 'DLL Name' nc-static/headers.txt
+          if grep 'DLL Name' nc-static/headers.txt | grep -iE 'zstd|lz4|libgcc|winpthread'; then
+            echo "::error::libopenzl.dll depends on a DLL the Runtime package does not ship"
+            exit 1
+          fi
+          grep -q ' ZL_CCtx_compress$' nc-static/headers.txt
+          if grep -E ' (ZSTD|ZDICT|LZ4|XXH|HUF|FSE)_' nc-static/headers.txt; then
+            echo "::error::libopenzl.dll exports bundled zstd/lz4 symbols"
+            exit 1
+          fi
       - name: Prepare artifacts
         shell: bash
         run: |
@@ -85,7 +127,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
@@ -99,26 +141,51 @@ jobs:
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       # TODO: Currently, the build artifact extension is .so even on Windows. OpenZL may update the Makefile in the future to create .dll files for Windows, which could cause CI errors. Please update the file extensions accordingly if this change occurs.
+      # zstd/lz4 are linked statically and only OpenZL's API is exported, same as the build-windows job.
       - name: Build using Docker
         run: |
-          docker run --rm -v "$PWD:/work" \
-            mstorsjo/llvm-mingw:latest \
-            bash -c "
-              git config --global --add safe.directory /work/openzl && \
-              cd /work/openzl && \
-              export CC=aarch64-w64-mingw32-gcc && \
-              export WINDRES=aarch64-w64-mingw32-windres && \
-              export TARGET_OS=MINGW64 && \
-              export TARGET_SYSTEM=Windows_NT && \
-              make libopenzl.so BUILD_TYPE=OPT OS=Windows_NT \
-                CC=aarch64-w64-mingw32-gcc \
-                MOREFLAGS='-flto'"
-          # NOTE: Environment exports (CC, WINDRES, TARGET_OS, TARGET_SYSTEM) propagate to
-          # dependency sub-makes (lz4, zstd) whose MAKEOVERRIDES is cleared by OpenZL's Makefile.
-          # Command-line CC= is also needed for the parent make (highest priority in GNU Make).
-          # TARGET_OS=MINGW64 (not Windows_NT) is required because lz4's Makefile.inc produces
-          # 'liblz4.dll' for MINGW% but 'liblz4-1.dll' for Windows%, and OpenZL expects the former.
+          docker run --rm -i -v "$PWD:/work" -w /work/openzl mstorsjo/llvm-mingw:latest bash -euo pipefail -s <<'EOF'
+          git config --global --add safe.directory '*'
+          CC=aarch64-w64-mingw32-gcc
+          CFLAGS="-O3" make -C deps/zstd/lib libzstd.a CC="$CC" AR=llvm-ar -j "$(nproc)"
+          CFLAGS="-O3" make -C deps/lz4/lib liblz4.a CC="$CC" AR=llvm-ar -j "$(nproc)"
+          mkdir -p nc-static
+          cp deps/zstd/lib/libzstd.a deps/lz4/lib/liblz4.a nc-static/
+
+          # LIBZSTD_SO/LIBLZ4_SO are the link inputs of the libopenzl.so rule; -o keeps make from rebuilding them.
+          # LDFLAGS goes on the command line because OpenZL's zldefs.make appends an environment LDFLAGS twice.
+          make_openzl() {
+            make libopenzl.so BUILD_TYPE=OPT OS=Windows_NT CC="$CC" MOREFLAGS="-flto" \
+              LIBZSTD_SO=nc-static/libzstd.a LIBLZ4_SO=nc-static/liblz4.a \
+              -o nc-static/libzstd.a -o nc-static/liblz4.a \
+              LDFLAGS="-Wl,--no-insert-timestamp $1" -j "$(nproc)"
+          }
+          # MinGW takes no export wildcards: link once exporting everything to learn the names,
+          # then relink with a .def of only OpenZL's API (an explicit .def turns auto-export off).
+          # Keep plain identifiers only: GCC LTO promotes cross-partition statics to globals named like
+          # ZL_foo.lto_priv.0, which are not API, and GNU ld's .def parser rejects '.' in a name.
+          make_openzl "-Wl,--output-def,nc-static/all.def"
+          {
+            echo EXPORTS
+            awk '$1 ~ /^(ZL|ZS2)_[A-Za-z0-9_]*$/ { print "    " $1 ($0 ~ / DATA/ ? " DATA" : "") }' nc-static/all.def
+          } > nc-static/exports.def
+          make_openzl "nc-static/exports.def"
+          llvm-objdump -p libopenzl.so > nc-static/headers.txt
+          EOF
           file -L openzl/libopenzl.so
+      - name: Verify self-contained DLL
+        working-directory: openzl
+        run: |
+          grep 'DLL Name' nc-static/headers.txt
+          if grep 'DLL Name' nc-static/headers.txt | grep -iE 'zstd|lz4|libgcc|winpthread|libunwind|libc\+\+'; then
+            echo "::error::libopenzl.dll depends on a DLL the Runtime package does not ship"
+            exit 1
+          fi
+          grep -q ' ZL_CCtx_compress$' nc-static/headers.txt
+          if grep -E ' (ZSTD|ZDICT|LZ4|XXH|HUF|FSE)_' nc-static/headers.txt; then
+            echo "::error::libopenzl.dll exports bundled zstd/lz4 symbols"
+            exit 1
+          fi
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/win-arm64
@@ -135,18 +202,45 @@ jobs:
     if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: read
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
     strategy:
       matrix:
         arch: [x64, arm64]
+        glibc: ["2.31"]
+        cc: [gcc-10]
         include:
           - arch: x64
-            cc: gcc
+            runner: ubuntu-24.04
           - arch: arm64
-            cc: aarch64-linux-gnu-gcc
-            packages: gcc-aarch64-linux-gnu
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    # Pin glibc to matrix.glibc by building inside Ubuntu 20.04 (glibc 2.31) instead of letting the hosted runner image decide it.
+    container:
+      image: ubuntu:20.04@sha256:8feb4d8ca5354def3d8fce243717141ce31e2c428701f6682bd2fafe15388214
+    timeout-minutes: 15
+    env:
+      CC: ${{ matrix.cc }}
+      GLIBC_VERSION: ${{ matrix.glibc }}
     steps:
+      - name: Verify container glibc
+        run: |
+          actual="$(ldd --version | head -1 | awk '{ print $NF }')"
+          if [ "${actual}" != "${GLIBC_VERSION}" ]; then
+            echo "::error::container glibc is ${actual}, but matrix.glibc is ${GLIBC_VERSION}"
+            exit 1
+          fi
+      # git must be present before checkout, otherwise actions/checkout falls back to the tarball API and skips submodules.
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            file \
+            "${CC}" \
+            git \
+            make
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
           submodules: recursive
@@ -159,17 +253,50 @@ jobs:
             git checkout ${{ needs.check_new_release.outputs.latest_tag }}
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
-      - name: Install ARM64 cross-compiler
-        if: ${{ matrix.arch == 'arm64' }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ${{ matrix.packages }}
+      # OpenZL uses zstd/lz4 *_STATIC_LINKING_ONLY APIs, which have no stable ABI. Link the versions it pins
+      # (openzl/deps) statically and export only OpenZL's API (ZL_*, ZS2_*), like upstream's Python wheel
+      # (openzl/py/pyproject.toml). Upstream `make libopenzl.so` links its shared deps/ builds instead,
+      # which the Runtime package does not ship.
       - name: Build shared library
+        working-directory: openzl
         run: |
-          cd openzl
-          make libopenzl.so BUILD_TYPE=OPT CC="${{ matrix.cc }}" MOREFLAGS="-flto" -j "$(nproc)"
+          CFLAGS="-O3 -fPIC" make -C deps/zstd/lib libzstd.a CC="${CC}" -j "$(nproc)"
+          CFLAGS="-O3 -fPIC" make -C deps/lz4/lib liblz4.a CC="${CC}" -j "$(nproc)"
+          mkdir -p nc-static
+          cp deps/zstd/lib/libzstd.a deps/lz4/lib/liblz4.a nc-static/
+          printf '{\n  global: ZL_*; ZS2_*;\n  local: *;\n};\n' > nc-static/exports.map
+
+          # LIBZSTD_SO/LIBLZ4_SO are the link inputs of the libopenzl.so rule; -o keeps make from rebuilding them.
+          # LDFLAGS goes on the command line because OpenZL's zldefs.make appends an environment LDFLAGS twice.
+          make libopenzl.so BUILD_TYPE=OPT CC="${CC}" MOREFLAGS="-flto" \
+            LIBZSTD_SO=nc-static/libzstd.a LIBLZ4_SO=nc-static/liblz4.a \
+            -o nc-static/libzstd.a -o nc-static/liblz4.a \
+            LDFLAGS="-Wl,--version-script=nc-static/exports.map -Wl,-soname,libopenzl.so -Wl,--no-undefined" \
+            -j "$(nproc)"
           ls -la ./*.so*
           file -L libopenzl.so*
+      - name: Verify self-contained library
+        working-directory: openzl
+        run: |
+          readelf -d libopenzl.so | grep NEEDED
+          if readelf -d libopenzl.so | grep NEEDED | grep -E 'zstd|lz4'; then
+            echo "::error::libopenzl.so depends on a library the Runtime package does not ship"
+            exit 1
+          fi
+          nm -D --defined-only libopenzl.so > nc-static/exports.txt
+          grep -q ' ZL_CCtx_compress$' nc-static/exports.txt
+          if grep -E ' (ZSTD|ZDICT|LZ4|XXH|HUF|FSE)_' nc-static/exports.txt; then
+            echo "::error::libopenzl.so exports bundled zstd/lz4 symbols"
+            exit 1
+          fi
+      - name: Verify glibc requirement
+        run: |
+          max_glibc="$(objdump -T openzl/libopenzl.so | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)"
+          echo "libopenzl.so requires glibc ${max_glibc} or newer"
+          if [ "$(printf '%s\n%s\n' "${max_glibc}" "${GLIBC_VERSION}" | sort -V | tail -1)" != "${GLIBC_VERSION}" ]; then
+            echo "::error::libopenzl.so requires glibc ${max_glibc}, above matrix.glibc (${GLIBC_VERSION})"
+            exit 1
+          fi
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/linux-${{ matrix.arch }}
@@ -195,7 +322,7 @@ jobs:
           - arch: arm64
             flags: "-arch arm64"
     runs-on: macos-15
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
@@ -209,23 +336,56 @@ jobs:
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       # TODO: Currently, the build artifact extension is .so even on macOS. OpenZL may update the Makefile in the future to create .dylib files for macOS, which could cause CI errors. Please update the file extensions accordingly if this change occurs.
-      # NOTE: Arch flags must reach dependency sub-makes (lz4, zstd) whose MAKEOVERRIDES is
-      # cleared by OpenZL's Makefile. CC with embedded arch is the most robust method because
-      # zstd uses SET_CACHE_DIRECTORY which re-invokes make and may not preserve env CFLAGS.
+      # OpenZL uses zstd/lz4 *_STATIC_LINKING_ONLY APIs, which have no stable ABI. Link the versions it pins
+      # (openzl/deps) statically and export only OpenZL's API (ZL_*, ZS2_*), like upstream's Python wheel
+      # (openzl/py/pyproject.toml). Upstream `make libopenzl.so` links its shared deps/ builds instead,
+      # which the Runtime package does not ship (and records their /usr/local/lib install names).
+      # NOTE: CC carries the arch so it reaches the zstd/lz4 builds too; zstd's
+      # SET_CACHE_DIRECTORY re-invokes make, and CC is the most robust carrier for it.
       # CXXFLAGS is needed because OpenZL's addTargetAsmObject macro uses $(CC) $(CXXFLAGS)
-      # for .S files (not CFLAGS). MOREFLAGS only carries -flto for the parent make.
+      # for .S files (not CFLAGS).
       - name: Build dynamic library
+        working-directory: openzl
         env:
           CC: "clang ${{ matrix.flags }}"
           CFLAGS: ${{ matrix.flags }}
           CXXFLAGS: ${{ matrix.flags }}
-          LDFLAGS: ${{ matrix.flags }}
+          ARCH_FLAGS: ${{ matrix.flags }}
         run: |
-          cd openzl
-          make libopenzl.so BUILD_TYPE=OPT MOREFLAGS="-flto" -j "$(sysctl -n hw.ncpu)"
+          CFLAGS="-O3" make -C deps/zstd/lib libzstd.a CC="${CC}" -j "$(sysctl -n hw.ncpu)"
+          CFLAGS="-O3" make -C deps/lz4/lib liblz4.a CC="${CC}" -j "$(sysctl -n hw.ncpu)"
+          mkdir -p nc-static
+          cp deps/zstd/lib/libzstd.a deps/lz4/lib/liblz4.a nc-static/
+          printf '_ZL_*\n_ZS2_*\n' > nc-static/exports.txt
+
+          # LIBZSTD_SO/LIBLZ4_SO are the link inputs of the libopenzl.so rule; -o keeps make from rebuilding them.
+          # LDFLAGS goes on the command line because OpenZL's zldefs.make appends an environment LDFLAGS twice.
+
+          # No -flto here, unlike the other platforms: Xcode 16.4's clang (macos-15) miscompiles OpenZL v0.2.0 under LTO. The inlined decompressTrID passes a constant 0 as the element count to checkedBitpackDecode32, so every standard transform ID decodes as 0 and ZL_DCtx_decompress fails with "Transform 0 is not supported in formatVersion 24"
+          # make libopenzl.so BUILD_TYPE=OPT CC="${CC}" MOREFLAGS="-flto" \
+
+          make libopenzl.so BUILD_TYPE=OPT CC="${CC}" \
+            LIBZSTD_SO=nc-static/libzstd.a LIBLZ4_SO=nc-static/liblz4.a \
+            -o nc-static/libzstd.a -o nc-static/liblz4.a \
+            LDFLAGS="${ARCH_FLAGS} -Wl,-exported_symbols_list,nc-static/exports.txt -Wl,-install_name,@rpath/libopenzl.dylib" \
+            -j "$(sysctl -n hw.ncpu)"
           ls -la
           lipo -info libopenzl.so
           file -L libopenzl.so
+      - name: Verify self-contained library
+        working-directory: openzl
+        run: |
+          otool -L libopenzl.so
+          if otool -L libopenzl.so | grep -E 'zstd|lz4'; then
+            echo "::error::libopenzl.dylib depends on a library the Runtime package does not ship"
+            exit 1
+          fi
+          nm -gU libopenzl.so > nc-static/exports-actual.txt
+          grep -q ' _ZL_CCtx_compress$' nc-static/exports-actual.txt
+          if grep -E ' _(ZSTD|ZDICT|LZ4|XXH|HUF|FSE)_' nc-static/exports-actual.txt; then
+            echo "::error::libopenzl.dylib exports bundled zstd/lz4 symbols"
+            exit 1
+          fi
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/osx-${{ matrix.arch }}
@@ -271,6 +431,8 @@ jobs:
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build static library for iOS
+        env:
+          ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
         run: |
           SDK_PATH=$(xcrun --sdk ${{ matrix.sdk }} --show-sdk-path)
 
@@ -324,6 +486,8 @@ jobs:
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build static library for Mac Catalyst
+        env:
+          ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
         shell: bash
         run: |
           root="$GITHUB_WORKSPACE"
@@ -414,14 +578,45 @@ jobs:
         with:
           ndk-version: r26d
           add-to-path: false
+      # zstd/lz4 are linked statically and only OpenZL's API is exported, same as the build-linux job.
       - name: Build shared library for Android
+        working-directory: openzl
+        env:
+          CC: ${{ matrix.cc }}
         run: |
           export PATH="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
 
-          cd openzl
-          make libopenzl.so BUILD_TYPE=OPT CC="${{ matrix.cc }}" MOREFRAGS="-flto" -j "$(nproc)"
+          CFLAGS="-O3 -fPIC" make -C deps/zstd/lib libzstd.a CC="${CC}" AR=llvm-ar -j "$(nproc)"
+          CFLAGS="-O3 -fPIC" make -C deps/lz4/lib liblz4.a CC="${CC}" AR=llvm-ar -j "$(nproc)"
+          mkdir -p nc-static
+          cp deps/zstd/lib/libzstd.a deps/lz4/lib/liblz4.a nc-static/
+          printf '{\n  global: ZL_*; ZS2_*;\n  local: *;\n};\n' > nc-static/exports.map
+
+          # LIBZSTD_SO/LIBLZ4_SO are the link inputs of the libopenzl.so rule; -o keeps make from rebuilding them.
+          # LDFLAGS goes on the command line because OpenZL's zldefs.make appends an environment LDFLAGS twice.
+          make libopenzl.so BUILD_TYPE=OPT CC="${CC}" STRIP=llvm-strip MOREFLAGS="-flto" \
+            LIBZSTD_SO=nc-static/libzstd.a LIBLZ4_SO=nc-static/liblz4.a \
+            -o nc-static/libzstd.a -o nc-static/liblz4.a \
+            LDFLAGS="-Wl,--version-script=nc-static/exports.map -Wl,-soname,libopenzl.so -Wl,--no-undefined" \
+            -j "$(nproc)"
           ls -la libopenzl.so
           file -L libopenzl.so
+      - name: Verify self-contained library
+        working-directory: openzl
+        run: |
+          export PATH="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+
+          llvm-readelf -d libopenzl.so | grep NEEDED
+          if llvm-readelf -d libopenzl.so | grep NEEDED | grep -E 'zstd|lz4'; then
+            echo "::error::libopenzl.so depends on a library the Runtime package does not ship"
+            exit 1
+          fi
+          llvm-nm -D --defined-only libopenzl.so > nc-static/exports.txt
+          grep -q ' ZL_CCtx_compress$' nc-static/exports.txt
+          if grep -E ' (ZSTD|ZDICT|LZ4|XXH|HUF|FSE)_' nc-static/exports.txt; then
+            echo "::error::libopenzl.so exports bundled zstd/lz4 symbols"
+            exit 1
+          fi
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/android-${{ matrix.arch }}
