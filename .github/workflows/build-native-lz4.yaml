@@ -15,6 +15,10 @@ on:
   schedule:
     - cron: "0 3 * * *" # Every day at 3:00 AM (UTC)
 
+# deterministic builds
+env:
+  ZERO_AR_DATE: "1"
+
 jobs:
   check_new_release:
     permissions:
@@ -61,6 +65,8 @@ jobs:
             make
       - name: Build DLL
         shell: msys2 {0}
+        env:
+          LDFLAGS: -Wl,--no-insert-timestamp
         run: |
           cd lz4/lib
           make BUILD_STATIC=no BUILD_SHARED=yes SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
@@ -99,7 +105,7 @@ jobs:
           echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build using Docker
         run: |
-          docker run --rm -v "$PWD:/work" \
+          docker run --rm -v "$PWD:/work" -e LDFLAGS=-Wl,--no-insert-timestamp \
             mstorsjo/llvm-mingw:latest \
             bash -c "cd /work/lz4/lib && \
               make BUILD_STATIC=no BUILD_SHARED=yes \

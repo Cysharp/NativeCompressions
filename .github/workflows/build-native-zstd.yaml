@@ -15,6 +15,10 @@ on:
   schedule:
     - cron: "0 3 * * *" # Every day at 3:00 AM (UTC)
 
+# deterministic builds
+env:
+  ZERO_AR_DATE: "1"
+
 jobs:
   check_new_release:
     permissions:
@@ -63,6 +67,8 @@ jobs:
       # `-fPIC` is not needed on Windows
       - name: Build DLL
         shell: msys2 {0}
+        env:
+          LDFLAGS: -Wl,--no-insert-timestamp
         run: |
           cd zstd/lib
           make lib-release TARGET_SYSTEM=Windows CC=gcc MOREFLAGS="-DZSTD_MULTITHREAD" -j "$(nproc)"
@@ -101,7 +107,7 @@ jobs:
       # `-fPIC` is not needed on Windows
       - name: Build using Docker
         run: |
-          docker run --rm -v "$PWD:/work" \
+          docker run --rm -v "$PWD:/work" -e LDFLAGS=-Wl,--no-insert-timestamp \
             mstorsjo/llvm-mingw:latest \
             bash -c "cd /work/zstd/lib && \
               make lib-release TARGET_SYSTEM=Windows CC=aarch64-w64-mingw32-gcc MOREFLAGS='-DZSTD_MULTITHREAD'"

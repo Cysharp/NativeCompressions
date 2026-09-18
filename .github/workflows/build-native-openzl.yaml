@@ -15,6 +15,10 @@ on:
   schedule:
     - cron: "0 3 * * *" # Every day at 3:00 AM (UTC)
 
+# deterministic builds
+env:
+  ZERO_AR_DATE: "1"
+
 jobs:
   check_new_release:
     permissions:
@@ -80,7 +84,7 @@ jobs:
             make libopenzl.so BUILD_TYPE=OPT OS=Windows_NT CC=gcc MOREFLAGS="-flto" \
               LIBZSTD_SO=nc-static/libzstd.a LIBLZ4_SO=nc-static/liblz4.a \
               -o nc-static/libzstd.a -o nc-static/liblz4.a \
-              LDFLAGS="$1" -j "$(nproc)"
+              LDFLAGS="-Wl,--no-insert-timestamp $1" -j "$(nproc)"
           }
           # MinGW takes no export wildcards: link once exporting everything to learn the names,
           # then relink with a .def of only OpenZL's API (an explicit .def turns auto-export off).
@@ -156,7 +160,7 @@ jobs:
             make libopenzl.so BUILD_TYPE=OPT OS=Windows_NT CC="$CC" MOREFLAGS="-flto" \
               LIBZSTD_SO=nc-static/libzstd.a LIBLZ4_SO=nc-static/liblz4.a \
               -o nc-static/libzstd.a -o nc-static/liblz4.a \
-              LDFLAGS="$1" -j "$(nproc)"
+              LDFLAGS="-Wl,--no-insert-timestamp $1" -j "$(nproc)"
           }
           # MinGW takes no export wildcards: link once exporting everything to learn the names,
           # then relink with a .def of only OpenZL's API (an explicit .def turns auto-export off).
