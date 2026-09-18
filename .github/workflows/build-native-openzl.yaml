@@ -15,10 +15,6 @@ on:
   schedule:
     - cron: "0 3 * * *" # Every day at 3:00 AM (UTC)
 
-# deterministic builds
-env:
-  ZERO_AR_DATE: "1"
-
 jobs:
   check_new_release:
     permissions:
@@ -433,6 +429,8 @@ jobs:
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build static library for iOS
+        env:
+          ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
         run: |
           SDK_PATH=$(xcrun --sdk ${{ matrix.sdk }} --show-sdk-path)
 
@@ -486,6 +484,8 @@ jobs:
           cd ..
           echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build static library for Mac Catalyst
+        env:
+          ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
         shell: bash
         run: |
           root="$GITHUB_WORKSPACE"
