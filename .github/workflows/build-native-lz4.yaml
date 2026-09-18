@@ -140,30 +140,17 @@ jobs:
     timeout-minutes: 15
     steps:
       # git must be present before checkout, otherwise actions/checkout falls back to the tarball API and skips submodules.
-      # Only glibc comes from focal. gcc-13 comes from ppa:ubuntu-toolchain-r/test to keep the codegen of the previous
-      # ubuntu-24.04 builds (focal's gcc-10 decompresses zstd 2-7% slower, and gcc-9 cannot LTO-link zstd/openzl).
+      # gcc-10 is the newest gcc in focal's official archive; the default gcc 9 cannot LTO-link zstd/openzl.
       - name: Install build dependencies
         env:
           DEBIAN_FRONTEND: noninteractive
-          # Launchpad signing key of ppa:ubuntu-toolchain-r/test; the import fails if the keyserver returns anything else.
-          PPA_KEY_FINGERPRINT: C8EC952E2A0E1FBDC5090F6A2C277A0A352154E5
         run: |
-          apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl gnupg
-          curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${PPA_KEY_FINGERPRINT}" \
-            | gpg --dearmor -o /usr/share/keyrings/ubuntu-toolchain-r.gpg
-          actual="$(gpg --show-keys --with-colons /usr/share/keyrings/ubuntu-toolchain-r.gpg | awk -F: '$1 == "fpr" { print $10; exit }')"
-          if [ "${actual}" != "${PPA_KEY_FINGERPRINT}" ]; then
-            echo "::error::ppa:ubuntu-toolchain-r/test key fingerprint mismatch: ${actual}"
-            exit 1
-          fi
-          echo "deb [signed-by=/usr/share/keyrings/ubuntu-toolchain-r.gpg] https://ppa.launchpadcontent.net/ubuntu-toolchain-r/test/ubuntu focal main" \
-            > /etc/apt/sources.list.d/ubuntu-toolchain-r.list
           apt-get update
           apt-get install -y --no-install-recommends \
             build-essential \
+            ca-certificates \
             file \
-            gcc-13 \
+            gcc-10 \
             git \
             make
       - uses: Cysharp/Actions/.github/actions/checkout@main
@@ -181,7 +168,7 @@ jobs:
       - name: Build shared library
         run: |
           cd lz4/lib
-          make BUILD_STATIC=no BUILD_SHARED=yes CC=gcc-13 SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
+          make BUILD_STATIC=no BUILD_SHARED=yes CC=gcc-10 SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
           ls -la ./*.so*
           file liblz4.so*
       - name: Verify glibc requirement
