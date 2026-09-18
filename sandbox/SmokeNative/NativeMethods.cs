@@ -78,7 +78,15 @@ static unsafe class OpenZLNative
     [DllImport(Lib)] public static extern ZL_Report ZL_CCtx_refCompressor(void* cctx, void* compressor);
     [DllImport(Lib)] public static extern ZL_Report ZL_CCtx_compress(void* cctx, byte* dst, nuint dstCapacity, byte* src, nuint srcSize);
     [DllImport(Lib)] public static extern ZL_Report ZL_getDecompressedSize(byte* compressed, nuint cSize);
-    [DllImport(Lib)] public static extern ZL_Report ZL_decompress(byte* dst, nuint dstCapacity, byte* src, nuint srcSize);
+    [DllImport(Lib)] public static extern void* ZL_DCtx_create();
+    [DllImport(Lib)] public static extern void ZL_DCtx_free(void* dctx);
+    [DllImport(Lib)] public static extern ZL_Report ZL_DCtx_decompress(void* dctx, byte* dst, nuint dstCapacity, byte* src, nuint srcSize);
+
+    // Diagnostics: the error name, and the detailed message kept by the context that produced the error.
+    [DllImport(Lib)] public static extern byte* ZL_ErrorCode_toString(int code);
+    [DllImport(Lib)] public static extern byte* ZL_Compressor_getErrorContextString(void* compressor, ZL_Report report);
+    [DllImport(Lib)] public static extern byte* ZL_CCtx_getErrorContextString(void* cctx, ZL_Report report);
+    [DllImport(Lib)] public static extern byte* ZL_DCtx_getErrorContextString(void* dctx, ZL_Report report);
 }
 
 // Native modules actually mapped into this process, to prove which file a dependency was resolved to.

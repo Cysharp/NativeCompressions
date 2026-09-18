@@ -377,24 +377,26 @@ sealed class SmokeRunner(SmokeOptions options)
                 {
                     var cctx = OpenZLNative.ZL_CCtx_create();
                     var compressor = OpenZLNative.ZL_Compressor_create();
+                    var dctx = OpenZLNative.ZL_DCtx_create();
                     try
                     {
-                        ZL(OpenZLNative.ZL_Compressor_setParameter(compressor, OpenZLNative.ZL_CParam_formatVersion, (int)version));
-                        ZL(OpenZLNative.ZL_Compressor_selectStartingGraphID(compressor, new OpenZLNative.ZL_GraphID { Gid = graph }));
-                        ZL(OpenZLNative.ZL_CCtx_refCompressor(cctx, compressor));
+                        ZL("ZL_Compressor_setParameter", OpenZLNative.ZL_Compressor_setParameter(compressor, OpenZLNative.ZL_CParam_formatVersion, (int)version), r => (IntPtr)OpenZLNative.ZL_Compressor_getErrorContextString(compressor, r));
+                        ZL("ZL_Compressor_selectStartingGraphID", OpenZLNative.ZL_Compressor_selectStartingGraphID(compressor, new OpenZLNative.ZL_GraphID { Gid = graph }), r => (IntPtr)OpenZLNative.ZL_Compressor_getErrorContextString(compressor, r));
+                        ZL("ZL_CCtx_refCompressor", OpenZLNative.ZL_CCtx_refCompressor(cctx, compressor), r => (IntPtr)OpenZLNative.ZL_CCtx_getErrorContextString(cctx, r));
 
                         // ZL_compressBound is ZL_INLINE (not exported); twice the input is far above it.
                         var compressed = Buf(checked((int)(data.Bytes.Length * 2 + 1024)));
-                        var size = ZL(OpenZLNative.ZL_CCtx_compress(cctx, Ptr(compressed), (nuint)compressed.Length, Ptr(data.Bytes), (nuint)data.Bytes.Length));
+                        var size = ZL("ZL_CCtx_compress", OpenZLNative.ZL_CCtx_compress(cctx, Ptr(compressed), (nuint)compressed.Length, Ptr(data.Bytes), (nuint)data.Bytes.Length), r => (IntPtr)OpenZLNative.ZL_CCtx_getErrorContextString(cctx, r));
 
-                        var contentSize = ZL(OpenZLNative.ZL_getDecompressedSize(Ptr(compressed), size));
+                        var contentSize = ZL("ZL_getDecompressedSize", OpenZLNative.ZL_getDecompressedSize(Ptr(compressed), size), null);
                         if (contentSize != (nuint)data.Bytes.Length) throw new InvalidDataException($"ZL_getDecompressedSize returned {contentSize}, expected {data.Bytes.Length}");
                         var decompressed = Buf(checked((int)(data.Bytes.Length)));
-                        var written = ZL(OpenZLNative.ZL_decompress(Ptr(decompressed), (nuint)decompressed.Length, Ptr(compressed), size));
+                        var written = ZL("ZL_DCtx_decompress", OpenZLNative.ZL_DCtx_decompress(dctx, Ptr(decompressed), (nuint)decompressed.Length, Ptr(compressed), size), r => (IntPtr)OpenZLNative.ZL_DCtx_getErrorContextString(dctx, r));
                         return AssertEqual(data.Bytes, decompressed.AsSpan(0, (int)written), (int)size);
                     }
                     finally
                     {
+                        OpenZLNative.ZL_DCtx_free(dctx);
                         OpenZLNative.ZL_Compressor_free(compressor);
                         OpenZLNative.ZL_CCtx_free(cctx);
                     }
@@ -402,7 +404,13 @@ sealed class SmokeRunner(SmokeOptions options)
             }
         }
 
-        static nuint ZL(OpenZLNative.ZL_Report r) => r.Code != 0 ? throw new InvalidOperationException($"OpenZL error code {r.Code}") : r.Value;
+        // On failure, report the call, the error name and the context's detailed message (e.g. which transform rejected which format version).
+        static nuint ZL(string call, OpenZLNative.ZL_Report r, Func<OpenZLNative.ZL_Report, IntPtr>? context)
+        {
+            if (r.Code == 0) return r.Value;
+            var detail = context is null ? "" : Marshal.PtrToStringUTF8(context(r)) ?? "";
+            throw new InvalidOperationException($"{call} failed: {Str(OpenZLNative.ZL_ErrorCode_toString(r.Code))} (code {r.Code}){(detail.Length == 0 ? "" : $"\n{detail}")}");
+        }
     }
 
     // Every buffer passed to native code is allocated on the pinned object heap (Buf / TestData), so a raw pointer stays valid.
