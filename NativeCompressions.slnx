@@ -6,6 +6,7 @@
     <Project Path="sandbox/Benchmark/Benchmark.csproj" />
     <Project Path="sandbox/ConsoleApplication/ConsoleApplication.csproj" />
     <Project Path="sandbox/Profiling/Profiling.csproj" />
+    <Project Path="sandbox/SmokeNative/SmokeNative.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/NativeCompressions.BenchmarkHelper/NativeCompressions.BenchmarkHelper.csproj" />
