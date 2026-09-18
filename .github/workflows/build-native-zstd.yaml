@@ -122,18 +122,49 @@ jobs:
     if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: read
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
     strategy:
       matrix:
         arch: [x64, arm64]
         include:
           - arch: x64
-            cc: gcc
+            runner: ubuntu-24.04
           - arch: arm64
-            cc: aarch64-linux-gnu-gcc
-            packages: gcc-aarch64-linux-gnu
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    # Pin glibc to 2.31 by building inside Ubuntu 20.04 instead of letting the hosted runner image decide it.
+    # A binary linked against a newer glibc refuses to load on older distros, so the floor is part of the contract.
+    # Both architectures build natively: the pinned digest is a multi-arch index that resolves per runner.
+    container:
+      image: ubuntu:20.04@sha256:8feb4d8ca5354def3d8fce243717141ce31e2c428701f6682bd2fafe15388214
+    timeout-minutes: 15
     steps:
+      # git must be present before checkout, otherwise actions/checkout falls back to the tarball API and skips submodules.
+      # Only glibc comes from focal. gcc-13 comes from ppa:ubuntu-toolchain-r/test to keep the codegen of the previous
+      # ubuntu-24.04 builds (focal's gcc-10 decompresses zstd 2-7% slower, and gcc-9 cannot LTO-link zstd/openzl).
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          # Launchpad signing key of ppa:ubuntu-toolchain-r/test; the import fails if the keyserver returns anything else.
+          PPA_KEY_FINGERPRINT: C8EC952E2A0E1FBDC5090F6A2C277A0A352154E5
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl gnupg
+          curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${PPA_KEY_FINGERPRINT}" \
+            | gpg --dearmor -o /usr/share/keyrings/ubuntu-toolchain-r.gpg
+          actual="$(gpg --show-keys --with-colons /usr/share/keyrings/ubuntu-toolchain-r.gpg | awk -F: '$1 == "fpr" { print $10; exit }')"
+          if [ "${actual}" != "${PPA_KEY_FINGERPRINT}" ]; then
+            echo "::error::ppa:ubuntu-toolchain-r/test key fingerprint mismatch: ${actual}"
+            exit 1
+          fi
+          echo "deb [signed-by=/usr/share/keyrings/ubuntu-toolchain-r.gpg] https://ppa.launchpadcontent.net/ubuntu-toolchain-r/test/ubuntu focal main" \
+            > /etc/apt/sources.list.d/ubuntu-toolchain-r.list
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            file \
+            gcc-13 \
+            git \
+            make
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
           submodules: recursive
@@ -146,17 +177,20 @@ jobs:
             git checkout ${{ needs.check_new_release.outputs.latest_tag }}
           cd ..
           echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
-      - name: Install ARM64 cross-compiler
-        if: ${{ matrix.arch == 'arm64' }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ${{ matrix.packages }}
       - name: Build shared library
         run: |
           cd zstd/lib
-          make lib-release CC="${{ matrix.cc }}" MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j "$(nproc)"
+          make lib-release CC=gcc-13 MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j "$(nproc)"
           ls -la ./*.so*
           file libzstd.so*
+      - name: Verify glibc requirement
+        run: |
+          max_glibc="$(objdump -T zstd/lib/libzstd.so | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)"
+          echo "libzstd.so requires glibc ${max_glibc} or newer"
+          if [ "$(printf '%s\n2.31\n' "${max_glibc}" | sort -V | tail -1)" != "2.31" ]; then
+            echo "::error::libzstd.so requires glibc ${max_glibc}, above the Ubuntu 20.04 baseline (2.31)"
+            exit 1
+          fi
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/linux-${{ matrix.arch }}
