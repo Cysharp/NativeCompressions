@@ -341,7 +341,7 @@ jobs:
       # NOTE: CC carries the arch so it reaches the zstd/lz4 builds too; zstd's
       # SET_CACHE_DIRECTORY re-invokes make, and CC is the most robust carrier for it.
       # CXXFLAGS is needed because OpenZL's addTargetAsmObject macro uses $(CC) $(CXXFLAGS)
-      # for .S files (not CFLAGS). MOREFLAGS only carries -flto for OpenZL itself.
+      # for .S files (not CFLAGS).
       - name: Build dynamic library
         working-directory: openzl
         env:
@@ -358,7 +358,11 @@ jobs:
 
           # LIBZSTD_SO/LIBLZ4_SO are the link inputs of the libopenzl.so rule; -o keeps make from rebuilding them.
           # LDFLAGS goes on the command line because OpenZL's zldefs.make appends an environment LDFLAGS twice.
-          make libopenzl.so BUILD_TYPE=OPT CC="${CC}" MOREFLAGS="-flto" \
+
+          # No -flto here, unlike the other platforms: Xcode 16.4's clang (macos-15) miscompiles OpenZL v0.2.0 under LTO. The inlined decompressTrID passes a constant 0 as the element count to checkedBitpackDecode32, so every standard transform ID decodes as 0 and ZL_DCtx_decompress fails with "Transform 0 is not supported in formatVersion 24"
+          # make libopenzl.so BUILD_TYPE=OPT CC="${CC}" MOREFLAGS="-flto" \
+
+          make libopenzl.so BUILD_TYPE=OPT CC="${CC}" \
             LIBZSTD_SO=nc-static/libzstd.a LIBLZ4_SO=nc-static/liblz4.a \
             -o nc-static/libzstd.a -o nc-static/liblz4.a \
             LDFLAGS="${ARCH_FLAGS} -Wl,-exported_symbols_list,nc-static/exports.txt -Wl,-install_name,@rpath/libopenzl.dylib" \
