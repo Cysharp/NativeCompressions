@@ -56,6 +56,8 @@ jobs:
       # Run net8.0, net9.0 and net11.0 against the matching library builds on every OS.
       - run: dotnet test -c Release --no-build
         working-directory: tests/NativeCompressions.Tests
+      # Smoke the native binaries directly via P/Invoke, without NativeCompressions.
+      - run: dotnet run --project sandbox/SmokeNative -c Release --no-build
       - run: dotnet pack -c Release --no-build -p:IncludeSymbols=true
       # Exercise the netstandard2.1-specific library code paths on every OS too.
       - run: dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.1
