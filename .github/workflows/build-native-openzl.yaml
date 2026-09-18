@@ -68,6 +68,8 @@ jobs:
       - name: Build DLL
         shell: msys2 {0}
         working-directory: openzl
+        env:
+          SOURCE_DATE_EPOCH: "0" # deterministic build: BUILD_TYPE=OPT runs GNU strip, keep timestamps consistent across builds
         run: |
           CFLAGS="-O3" make -C deps/zstd/lib libzstd.a CC=gcc -j "$(nproc)"
           CFLAGS="-O3" make -C deps/lz4/lib liblz4.a CC=gcc -j "$(nproc)"
