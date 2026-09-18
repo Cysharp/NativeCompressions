@@ -299,6 +299,37 @@ public class LZ4StreamTest
     }
 
     [Fact]
+    public async Task SmallSyncAndAsyncWritesAndReads_RoundTrip()
+    {
+        var data = Data.AsSpan(0, 4096).ToArray();
+        var compressed = new MemoryStream();
+        await using (var writer = new LZ4Stream(compressed, CompressionMode.Compress, leaveOpen: true))
+        {
+            writer.Write(data.AsSpan(0, 1));
+            await writer.WriteAsync(data.AsMemory(1, 31));
+            writer.Write(data.AsSpan(32, 64));
+            await writer.WriteAsync(data.AsMemory(96));
+        }
+
+        await using var reader = new LZ4Stream(new MemoryStream(compressed.ToArray()), CompressionMode.Decompress);
+        var restored = new MemoryStream();
+        var buffer = new byte[31];
+        var useAsync = false;
+        while (true)
+        {
+            var read = useAsync
+                ? await reader.ReadAsync(buffer)
+                : reader.Read(buffer);
+            if (read == 0) break;
+
+            restored.Write(buffer, 0, read);
+            useAsync = !useAsync;
+        }
+
+        Assert.Equal(data, restored.ToArray());
+    }
+
+    [Fact]
     public async Task WriteAsync_CancelledToken()
     {
         await using var zs = new LZ4Stream(new MemoryStream(), CompressionMode.Compress);

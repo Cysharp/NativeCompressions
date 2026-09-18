@@ -10,7 +10,9 @@ namespace NativeCompressions;
 
 public sealed class LZ4Stream : Stream
 {
-    const int DecoderBufferSize = 65536;
+    const int EncoderBufferSize = 8192;
+    const int DecoderInputBufferSize = 65536;
+    const int DecoderOutputBufferSize = 8192;
 
     LZ4Encoder? encoder;
     LZ4Decoder? decoder;
@@ -22,8 +24,13 @@ public sealed class LZ4Stream : Stream
     bool isDisposed;
 
     byte[]? buffer; // both compress and decompress
+    byte[]? writeBuffer; // coalesces small writes before crossing the native boundary
+    int writeBufferCount;
     int readBufferOffset; // for decompress
     int readBufferCount; // for decompress
+    byte[]? decompressedBuffer; // serves small reads without repeatedly entering native code
+    int decompressedBufferOffset;
+    int decompressedBufferCount;
 
     public LZ4Stream(Stream stream, CompressionMode mode, bool leaveOpen = false)
     {
@@ -142,6 +149,7 @@ public sealed class LZ4Stream : Stream
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
 
+        FlushWriteBuffer();
         if (buffer == null) return;
 
         // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
@@ -158,6 +166,7 @@ public sealed class LZ4Stream : Stream
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
+        await FlushWriteBufferAsync(cancellationToken);
         if (buffer == null) return;
 
         // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
@@ -175,9 +184,42 @@ public sealed class LZ4Stream : Stream
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
 
-        // Adding headers and footers all the time is redundant, but we prioritize simplicity of implementation.
-        var maxDest = encoder!.GetMaxCompressedLength(source.Length);
+        if (source.IsEmpty || buffer == null)
+        {
+            CompressCore(source);
+            return;
+        }
 
+        if (writeBufferCount > 0)
+        {
+            var copied = Math.Min(source.Length, EncoderBufferSize - writeBufferCount);
+            source[..copied].CopyTo(writeBuffer.AsSpan(writeBufferCount));
+            writeBufferCount += copied;
+            source = source[copied..];
+
+            if (writeBufferCount == EncoderBufferSize)
+            {
+                FlushWriteBuffer();
+            }
+        }
+
+        if (source.Length >= EncoderBufferSize)
+        {
+            CompressCore(source);
+            return;
+        }
+
+        if (!source.IsEmpty)
+        {
+            writeBuffer ??= ArrayPool<byte>.Shared.Rent(EncoderBufferSize);
+            source.CopyTo(writeBuffer);
+            writeBufferCount = source.Length;
+        }
+    }
+
+    void CompressCore(ReadOnlySpan<byte> source)
+    {
+        var maxDest = encoder!.GetMaxCompressedLength(source.Length);
         var dest = buffer;
         if (dest == null)
         {
@@ -189,12 +231,19 @@ public sealed class LZ4Stream : Stream
             dest = buffer = ArrayPool<byte>.Shared.Rent(maxDest);
         }
 
-        var written = encoder!.Compress(source, dest);
-
-        if (written > 0)
+        var written = encoder.Compress(source, dest);
+        if (written != 0)
         {
             stream.Write(dest, 0, written);
         }
+    }
+
+    void FlushWriteBuffer()
+    {
+        if (writeBufferCount == 0) return;
+
+        CompressCore(writeBuffer.AsSpan(0, writeBufferCount));
+        writeBufferCount = 0;
     }
 
     async ValueTask WriteCoreAsync(ReadOnlyMemory<byte> source, CancellationToken cancellationToken)
@@ -205,9 +254,42 @@ public sealed class LZ4Stream : Stream
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
 
-        // Adding headers and footers all the time is redundant, but we prioritize simplicity of implementation.
-        var maxDest = encoder!.GetMaxCompressedLength(source.Length);
+        if (source.IsEmpty || buffer == null)
+        {
+            await CompressCoreAsync(source, cancellationToken);
+            return;
+        }
 
+        if (writeBufferCount > 0)
+        {
+            var copied = Math.Min(source.Length, EncoderBufferSize - writeBufferCount);
+            source.Span[..copied].CopyTo(writeBuffer.AsSpan(writeBufferCount));
+            writeBufferCount += copied;
+            source = source[copied..];
+
+            if (writeBufferCount == EncoderBufferSize)
+            {
+                await FlushWriteBufferAsync(cancellationToken);
+            }
+        }
+
+        if (source.Length >= EncoderBufferSize)
+        {
+            await CompressCoreAsync(source, cancellationToken);
+            return;
+        }
+
+        if (!source.IsEmpty)
+        {
+            writeBuffer ??= ArrayPool<byte>.Shared.Rent(EncoderBufferSize);
+            source.Span.CopyTo(writeBuffer);
+            writeBufferCount = source.Length;
+        }
+    }
+
+    async ValueTask CompressCoreAsync(ReadOnlyMemory<byte> source, CancellationToken cancellationToken)
+    {
+        var maxDest = encoder!.GetMaxCompressedLength(source.Length);
         var dest = buffer;
         if (dest == null)
         {
@@ -219,12 +301,19 @@ public sealed class LZ4Stream : Stream
             dest = buffer = ArrayPool<byte>.Shared.Rent(maxDest);
         }
 
-        var written = encoder!.Compress(source.Span, dest);
-
-        if (written > 0)
+        var written = encoder.Compress(source.Span, dest);
+        if (written != 0)
         {
             await stream.WriteAsync(dest.AsMemory(0, written), cancellationToken);
         }
+    }
+
+    async ValueTask FlushWriteBufferAsync(CancellationToken cancellationToken)
+    {
+        if (writeBufferCount == 0) return;
+
+        await CompressCoreAsync(writeBuffer.AsMemory(0, writeBufferCount), cancellationToken);
+        writeBufferCount = 0;
     }
 
     #endregion
@@ -283,7 +372,36 @@ public sealed class LZ4Stream : Stream
             throw new InvalidOperationException("Read operation must be Decompress mode.");
         }
 
-        buffer ??= ArrayPool<byte>.Shared.Rent(DecoderBufferSize);
+        var totalRead = CopyDecompressedBuffer(destination);
+        if (totalRead != 0) return totalRead;
+
+        if (destination.Length >= DecoderOutputBufferSize)
+        {
+            return ReadDecompressedCore(destination, returnAfterOutput: false);
+        }
+
+        decompressedBuffer ??= ArrayPool<byte>.Shared.Rent(DecoderOutputBufferSize);
+        decompressedBufferCount = ReadDecompressedCore(decompressedBuffer, returnAfterOutput: true);
+        decompressedBufferOffset = 0;
+
+        var copied = CopyDecompressedBuffer(destination);
+        return copied;
+    }
+
+    int CopyDecompressedBuffer(Span<byte> destination)
+    {
+        var copied = Math.Min(destination.Length, decompressedBufferCount);
+        if (copied == 0) return 0;
+
+        decompressedBuffer.AsSpan(decompressedBufferOffset, copied).CopyTo(destination);
+        decompressedBufferOffset += copied;
+        decompressedBufferCount -= copied;
+        return copied;
+    }
+
+    int ReadDecompressedCore(Span<byte> destination, bool returnAfterOutput)
+    {
+        buffer ??= ArrayPool<byte>.Shared.Rent(DecoderInputBufferSize);
         var totalRead = 0;
 
         while (destination.Length > 0)
@@ -342,6 +460,11 @@ public sealed class LZ4Stream : Stream
                         break;
                     }
 
+                    if (returnAfterOutput && totalRead > 0)
+                    {
+                        return totalRead;
+                    }
+
                     // Only consider reading new data when written == 0
                     if (readBufferCount == 0)
                     {
@@ -395,7 +518,25 @@ public sealed class LZ4Stream : Stream
             throw new InvalidOperationException("Read operation must be Decompress mode.");
         }
 
-        buffer ??= ArrayPool<byte>.Shared.Rent(DecoderBufferSize);
+        var totalRead = CopyDecompressedBuffer(destination.Span);
+        if (totalRead != 0) return totalRead;
+
+        if (destination.Length >= DecoderOutputBufferSize)
+        {
+            return await ReadDecompressedCoreAsync(destination, cancellationToken, returnAfterOutput: false);
+        }
+
+        decompressedBuffer ??= ArrayPool<byte>.Shared.Rent(DecoderOutputBufferSize);
+        decompressedBufferCount = await ReadDecompressedCoreAsync(decompressedBuffer, cancellationToken, returnAfterOutput: true);
+        decompressedBufferOffset = 0;
+
+        var copied = CopyDecompressedBuffer(destination.Span);
+        return copied;
+    }
+
+    async ValueTask<int> ReadDecompressedCoreAsync(Memory<byte> destination, CancellationToken cancellationToken, bool returnAfterOutput)
+    {
+        buffer ??= ArrayPool<byte>.Shared.Rent(DecoderInputBufferSize);
         var totalRead = 0;
 
         while (destination.Length > 0)
@@ -452,6 +593,11 @@ public sealed class LZ4Stream : Stream
                         // Decoder produced output, retry in next loop
                         // Don't read additional data
                         break;
+                    }
+
+                    if (returnAfterOutput && totalRead > 0)
+                    {
+                        return totalRead;
                     }
 
                     // Only consider reading new data when written == 0
@@ -512,12 +658,16 @@ public sealed class LZ4Stream : Stream
         Exception? closeFailure = null;
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            if (mode == CompressionMode.Compress)
             {
                 try
                 {
-                    var written = encoder!.Close(buffer);
-                    stream.Write(buffer, 0, written);
+                    FlushWriteBuffer();
+                    if (buffer != null)
+                    {
+                        var written = encoder!.Close(buffer);
+                        stream.Write(buffer, 0, written);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -535,6 +685,14 @@ public sealed class LZ4Stream : Stream
             if (buffer != null)
             {
                 ArrayPool<byte>.Shared.Return(buffer);
+            }
+            if (writeBuffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(writeBuffer);
+            }
+            if (decompressedBuffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(decompressedBuffer);
             }
 
             if (needDisposeNativeCompressor)
@@ -560,12 +718,16 @@ public sealed class LZ4Stream : Stream
         Exception? closeFailure = null;
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            if (mode == CompressionMode.Compress)
             {
                 try
                 {
-                    var written = encoder!.Close(buffer);
-                    await stream.WriteAsync(buffer.AsMemory(0, written));
+                    await FlushWriteBufferAsync(CancellationToken.None);
+                    if (buffer != null)
+                    {
+                        var written = encoder!.Close(buffer);
+                        await stream.WriteAsync(buffer.AsMemory(0, written));
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -583,6 +745,14 @@ public sealed class LZ4Stream : Stream
             if (buffer != null)
             {
                 ArrayPool<byte>.Shared.Return(buffer);
+            }
+            if (writeBuffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(writeBuffer);
+            }
+            if (decompressedBuffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(decompressedBuffer);
             }
 
             if (needDisposeNativeCompressor)
@@ -609,4 +779,3 @@ public sealed class LZ4Stream : Stream
         }
     }
 }
-
