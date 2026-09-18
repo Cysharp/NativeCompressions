@@ -64,6 +64,17 @@ public sealed unsafe class LZ4Decoder : IDisposable
     /// </summary>
     public bool IsDisposed => dctx == null;
 
+    internal bool IsFrameInProgress
+    {
+        get
+        {
+            var context = GetContext();
+            var inProgress = context->dStage != dStage_t.dstage_getFrameHeader;
+            GC.KeepAlive(this);
+            return inProgress;
+        }
+    }
+
     /// <summary>
     /// Determines the size of an LZ4 frame header from the beginning of a compressed stream.
     /// </summary>

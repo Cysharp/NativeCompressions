@@ -156,7 +156,7 @@ public static class FuzzTargets
             }
             Check(zs.Read(buffer, 0, buffer.Length) == 0, "stream did not stay at EOF");
         }
-        catch (InvalidOperationException)
+        catch (LZ4Exception)
         {
             // invalid data
         }
