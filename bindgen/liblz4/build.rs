@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .csharp_class_name("LZ4NativeMethods")
         .csharp_namespace("NativeCompressions.Interop")
         .csharp_dll_name("lz4")
-        .csharp_dll_name_if("__IOS__", "__Internal")
+        .csharp_dll_name_if("__IOS__ || MACCATALYST", "__Internal")
         .csharp_class_accessibility("public")
         // .csharp_generate_const_filter(|x| x.starts_with("LZ4_"))
         .generate_csharp_file("../../src/NativeCompressions.LZ4.Core/Interop/LZ4NativeMethods.cs")?;

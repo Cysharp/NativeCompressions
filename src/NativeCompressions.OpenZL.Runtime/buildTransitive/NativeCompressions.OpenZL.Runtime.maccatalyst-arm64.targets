@@ -1,0 +1,17 @@
+<Project>
+  <!-- Select the target RID, never the host architecture. Libraries propagate this
+       target to the app instead of embedding another copy of the static archive. -->
+  <PropertyGroup Condition="'$(TargetFramework)' != '' and '$(IsCrossTargetingBuild)' != 'true' and '$(TargetPlatformIdentifier)' == 'maccatalyst' and '$(RuntimeIdentifier)' == 'maccatalyst-arm64' and '$(OutputType)' == 'Exe'">
+    <_NativeCompressionsOpenZLCatalystArm64Archive>$(MSBuildThisFileDirectory)../runtimes/maccatalyst-arm64/native/libopenzl.a</_NativeCompressionsOpenZLCatalystArm64Archive>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(_NativeCompressionsOpenZLCatalystArm64Archive)' != ''">
+    <NativeReference Include="$(_NativeCompressionsOpenZLCatalystArm64Archive)">
+      <Kind>Static</Kind>
+    </NativeReference>
+  </ItemGroup>
+  <Target Name="CheckNativeCompressionsOpenZLCatalystArm64" BeforeTargets="PrepareForBuild"
+          Condition="'$(_NativeCompressionsOpenZLCatalystArm64Archive)' != ''">
+    <Error Condition="!Exists('$(_NativeCompressionsOpenZLCatalystArm64Archive)')"
+           Text="NativeCompressions.OpenZL.Runtime.maccatalyst-arm64 is missing its Catalyst archive: $(_NativeCompressionsOpenZLCatalystArm64Archive). Restore the package again." />
+  </Target>
+</Project>

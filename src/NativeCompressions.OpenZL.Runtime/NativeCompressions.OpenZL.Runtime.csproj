@@ -26,6 +26,8 @@
     <!--<ProjectReference Include="NativeCompressions.OpenZL.Runtime.android-arm.csproj" />-->
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.android-arm64.csproj" />
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.android-x64.csproj" />
+    <ProjectReference Include="NativeCompressions.OpenZL.Runtime.maccatalyst-arm64.csproj" />
+    <ProjectReference Include="NativeCompressions.OpenZL.Runtime.maccatalyst-x64.csproj" />
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.ios-arm64.csproj" />
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.ios-x64.csproj" />
   </ItemGroup>

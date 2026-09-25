@@ -18,6 +18,8 @@
     <None Include="runtimes\ios-x64\native\liblz4.a" PackagePath="runtimes\ios-x64\native\" Pack="true">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <!-- Normally Catalyst fallback to iOS, but this package must not fall back to this package's iOS static archive. Use dummy files instead. -->
+    <None Update="packaging/_._" Pack="true" PackagePath="runtimes/maccatalyst-arm64/native/_._;runtimes/maccatalyst-x64/native/_._" />
   </ItemGroup>
 
 </Project>

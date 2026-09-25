@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IncludeContentInPack>true</IncludeContentInPack>
+    <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
+    <Description>LZ4 static native runtime for Mac Catalyst ARM64.</Description>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Remove="runtimes/**;buildTransitive/**" />
+    <None Include="runtimes/maccatalyst-arm64/native/liblz4.a" Pack="true" PackagePath="runtimes/maccatalyst-arm64/native/" />
+    <None Include="buildTransitive/NativeCompressions.LZ4.Runtime.maccatalyst-arm64.targets" Pack="true" PackagePath="buildTransitive/" />
+  </ItemGroup>
+</Project>

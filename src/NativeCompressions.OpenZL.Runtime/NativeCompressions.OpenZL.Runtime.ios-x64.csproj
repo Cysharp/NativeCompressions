@@ -16,6 +16,8 @@
     <None Include="runtimes\ios-x64\native\libopenzl.a" PackagePath="runtimes\ios-x64\native\" Pack="true">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <!-- Block Catalyst fallback to the iOS static archive. -->
+    <None Update="packaging/_._" Pack="true" PackagePath="runtimes/maccatalyst-arm64/native/_._;runtimes/maccatalyst-x64/native/_._" />
   </ItemGroup>
 
 </Project>

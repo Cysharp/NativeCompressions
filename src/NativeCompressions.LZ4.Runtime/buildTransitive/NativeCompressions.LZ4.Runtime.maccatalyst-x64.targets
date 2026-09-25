@@ -1,0 +1,17 @@
+<Project>
+  <!-- Select the target RID, never the host architecture. Libraries propagate this
+       target to the app instead of embedding another copy of the static archive. -->
+  <PropertyGroup Condition="'$(TargetFramework)' != '' and '$(IsCrossTargetingBuild)' != 'true' and '$(TargetPlatformIdentifier)' == 'maccatalyst' and '$(RuntimeIdentifier)' == 'maccatalyst-x64' and '$(OutputType)' == 'Exe'">
+    <_NativeCompressionsLz4CatalystX64Archive>$(MSBuildThisFileDirectory)../runtimes/maccatalyst-x64/native/liblz4.a</_NativeCompressionsLz4CatalystX64Archive>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(_NativeCompressionsLz4CatalystX64Archive)' != ''">
+    <NativeReference Include="$(_NativeCompressionsLz4CatalystX64Archive)">
+      <Kind>Static</Kind>
+    </NativeReference>
+  </ItemGroup>
+  <Target Name="CheckNativeCompressionsLz4CatalystX64" BeforeTargets="PrepareForBuild"
+          Condition="'$(_NativeCompressionsLz4CatalystX64Archive)' != ''">
+    <Error Condition="!Exists('$(_NativeCompressionsLz4CatalystX64Archive)')"
+           Text="NativeCompressions.LZ4.Runtime.maccatalyst-x64 is missing its Catalyst archive: $(_NativeCompressionsLz4CatalystX64Archive). Restore the package again." />
+  </Target>
+</Project>
