@@ -1,6 +1,8 @@
-﻿#if NETSTANDARD2_1
+﻿#if NETSTANDARD
 
 using Microsoft.Win32.SafeHandles;
+using System.Buffers;
+using System.Runtime.CompilerServices;
 
 namespace NativeCompressions.Internal
 {
@@ -37,6 +39,19 @@ namespace NativeCompressions.Internal
                 ThreadPool.QueueUserWorkItem(_ => workItem.Execute());
             }
         }
+
+#if NETSTANDARD2_0
+        extension(RuntimeHelpers)
+        {
+            // conservative, primitives are the only types known not to hold references
+            public static bool IsReferenceOrContainsReferences<T>() => !typeof(T).IsPrimitive;
+        }
+
+        extension<T>(ReadOnlySequence<T> sequence)
+        {
+            public ReadOnlySpan<T> FirstSpan => sequence.First.Span;
+        }
+#endif
     }
 }
 

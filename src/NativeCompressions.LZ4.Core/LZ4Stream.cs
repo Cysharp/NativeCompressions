@@ -9,6 +9,9 @@ using System.Runtime.InteropServices;
 namespace NativeCompressions;
 
 public sealed class LZ4Stream : Stream
+#if NETSTANDARD2_0
+    , IAsyncDisposable // netstandard2.0 Stream does not implement it
+#endif
 {
     const int DecoderBufferSize = 65536;
 
@@ -94,7 +97,11 @@ public sealed class LZ4Stream : Stream
         WriteCore(new ReadOnlySpan<byte>(buffer, offset, count));
     }
 
+#if NETSTANDARD2_0
+    public void Write(ReadOnlySpan<byte> buffer) // not virtual on netstandard2.0 Stream
+#else
     public override void Write(ReadOnlySpan<byte> buffer)
+#endif
     {
         ValidateDisposed();
         WriteCore(buffer);
@@ -126,7 +133,11 @@ public sealed class LZ4Stream : Stream
         return WriteAsync(new ReadOnlyMemory<byte>(buffer, offset, count), cancellationToken).AsTask();
     }
 
+#if NETSTANDARD2_0
+    public ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) // not virtual on netstandard2.0 Stream
+#else
     public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+#endif
     {
         ValidateDisposed();
         return cancellationToken.IsCancellationRequested
@@ -240,12 +251,16 @@ public sealed class LZ4Stream : Stream
     public override int ReadByte()
     {
         ValidateDisposed();
-        byte b = default;
-        var read = Read(MemoryMarshal.CreateSpan(ref b, 1));
-        return read != 0 ? b : -1;
+        Span<byte> span = stackalloc byte[1];
+        var read = Read(span);
+        return read != 0 ? span[0] : -1;
     }
 
+#if NETSTANDARD2_0
+    public int Read(Span<byte> buffer) // not virtual on netstandard2.0 Stream
+#else
     public override int Read(Span<byte> buffer)
+#endif
     {
         ValidateDisposed();
         return ReadCore(buffer);
@@ -269,7 +284,11 @@ public sealed class LZ4Stream : Stream
         return ReadCoreAsync(new Memory<byte>(buffer, offset, count), cancellationToken).AsTask();
     }
 
+#if NETSTANDARD2_0
+    public ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) // not virtual on netstandard2.0 Stream
+#else
     public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+#endif
     {
         ValidateDisposed();
         return ReadCoreAsync(buffer, cancellationToken);
@@ -553,7 +572,11 @@ public sealed class LZ4Stream : Stream
         }
     }
 
+#if NETSTANDARD2_0
+    public async ValueTask DisposeAsync() // not virtual on netstandard2.0 Stream
+#else
     public override async ValueTask DisposeAsync()
+#endif
     {
         if (isDisposed) return;
 

@@ -3,8 +3,9 @@
   <!--
     Runs on every runtime the library targets. The BCL Zstandard oracle tests and the fuzz harness need .NET 11.
 
-    To exercise the netstandard2.1 build of the library (the Unity / older runtime code paths) instead of the
-    runtime specific build, pass TestCoreTfm:
+    To exercise the netstandard2.0 or netstandard2.1 build of the library (the Unity / .NET Framework code paths)
+    instead of the runtime specific build, pass TestCoreTfm:
+      dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.0
       dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.1
   -->
 
@@ -24,6 +25,10 @@
     <!-- transitive references would resolve the Core projects for this project's own framework again -->
     <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
   </PropertyGroup>
+  <ItemGroup Condition="'$(TestCoreTfm)' != ''">
+    <!-- read by CoreTargetFrameworkTest to check the right build is under test -->
+    <AssemblyMetadata Include="TestCoreTfm" Value="$(TestCoreTfm)" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="xunit.v3" Version="4.0.0" />
@@ -43,7 +48,10 @@
     <ProjectReference Include="..\..\src\NativeCompressions.LZ4.Runtime\NativeCompressions.LZ4.Runtime.csproj" />
     <ProjectReference Include="..\..\src\NativeCompressions.Zstandard.Runtime\NativeCompressions.Zstandard.Runtime.csproj" />
     <ProjectReference Include="..\..\src\NativeCompressions.OpenZL.Runtime\NativeCompressions.OpenZL.Runtime.csproj" />
-    <!-- restore negotiates package dependencies for this project's own framework, so the netstandard2.1 build's packages must be listed here -->
+    <!-- restore negotiates package dependencies for this project's own framework, so the netstandard builds' packages must be listed here -->
+    <PackageReference Include="System.Memory" Version="4.6.3" />
+    <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.8" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
     <PackageReference Include="System.IO.Pipelines" Version="9.0.8" />
     <PackageReference Include="System.Threading.Channels" Version="9.0.8" />

@@ -14,6 +14,9 @@ public readonly record struct ZstandardCompressionOptions
     {
         get
         {
+#if NETSTANDARD2_0
+            return Equals(Default); // no MemoryMarshal.CreateReadOnlySpan, the generated field-wise comparison is fine here
+#else
             var thisSpan = MemoryMarshal.CreateReadOnlySpan(
                 ref Unsafe.As<ZstandardCompressionOptions, byte>(ref Unsafe.AsRef(in this)),
                 Unsafe.SizeOf<ZstandardCompressionOptions>());
@@ -23,6 +26,7 @@ public readonly record struct ZstandardCompressionOptions
                 Unsafe.SizeOf<ZstandardCompressionOptions>());
 
             return thisSpan.SequenceEqual(defaultSpan);
+#endif
         }
     }
 

@@ -120,7 +120,7 @@ public static partial class Zstandard
 
     public static async ValueTask CompressAsync(SafeFileHandle source, long offset, PipeWriter destination, ZstandardEncoder encoder, CancellationToken cancellationToken = default)
     {
-#if NETSTANDARD2_1
+#if NETSTANDARD
         var fs = NonOwningFileStream.Open(source, offset); // not disposed, it does not own the handle
         await CompressAsync(fs, destination, encoder, cancellationToken);
 #else
@@ -220,7 +220,7 @@ public static partial class Zstandard
             return;
         }
 
-#if !NETSTANDARD2_1
+#if !NETSTANDARD
         if (source is FileStream fs && fs.CanSeek)
         {
             await CompressAsync(fs.SafeFileHandle, fs.Position, destination, encoder, cancellationToken);

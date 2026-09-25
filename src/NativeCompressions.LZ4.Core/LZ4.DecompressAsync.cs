@@ -39,7 +39,7 @@ public static partial class LZ4
 
     public static async ValueTask DecompressAsync(SafeFileHandle source, long offset, PipeWriter destination, LZ4DecompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
     {
-#if NETSTANDARD2_1
+#if NETSTANDARD
         var stream = NonOwningFileStream.Open(source, offset); // not disposed, it does not own the handle
 #else
         var stream = new RandomAccessReadStream(source, offset);
@@ -66,7 +66,7 @@ public static partial class LZ4
             return;
         }
 
-#if !NETSTANDARD2_1
+#if !NETSTANDARD
         if (source is FileStream fs && fs.CanSeek)
         {
             await DecompressAsync(fs.SafeFileHandle, fs.Position, destination, options, maxDegreeOfParallelism, cancellationToken);

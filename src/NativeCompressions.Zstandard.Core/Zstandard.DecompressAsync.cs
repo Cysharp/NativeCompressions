@@ -61,7 +61,7 @@ public static partial class Zstandard
 
     public static async ValueTask DecompressAsync(SafeFileHandle source, long offset, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
-#if NETSTANDARD2_1
+#if NETSTANDARD
         var fs = NonOwningFileStream.Open(source, offset); // not disposed, it does not own the handle
         await DecompressAsync(fs, destination, decoder, cancellationToken);
 #else
@@ -115,7 +115,7 @@ public static partial class Zstandard
             return;
         }
 
-#if !NETSTANDARD2_1
+#if !NETSTANDARD
         if (source is FileStream fs && fs.CanSeek)
         {
             await DecompressAsync(fs.SafeFileHandle, fs.Position, destination, decoder, cancellationToken);

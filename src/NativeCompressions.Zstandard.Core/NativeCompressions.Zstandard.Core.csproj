@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.1;net8.0;net9.0;net11.0;net10.0-ios;net11.0-ios</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0;net9.0;net11.0;net10.0-ios;net11.0-ios</TargetFrameworks>
     <RootNamespace>NativeCompressions</RootNamespace>
     <Description>Core binding of native Zstandard high-performance streaming compression for .NET.</Description>
 
@@ -20,6 +20,8 @@
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\SegmentedArrayProvider.cs" Link="Internal\SegmentedArrayProvider.cs" />
     <!-- netstandard2.1 polyfills: Array.MaxLength, GC.AllocateUninitializedArray, ValueTask.FromCanceled, File.OpenHandle -->
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Polyfill\StaticExtensions.cs" Link="Internal\Polyfill\StaticExtensions.cs" />
+    <!-- netstandard2.0 polyfills: Stream Span / Memory overloads and DisposeAsync -->
+    <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Polyfill\StreamExtensions.cs" Link="Internal\Polyfill\StreamExtensions.cs" />
     <!-- pre .NET 8 polyfill for Stream.BeginRead / BeginWrite -->
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Polyfill\TaskToAsyncResult.cs" Link="Internal\Polyfill\TaskToAsyncResult.cs" />
     <!-- netstandard2.1 reads a SafeFileHandle through a FileStream without taking ownership of the handle -->
@@ -33,7 +35,13 @@
     </PackageReference>
   </ItemGroup>
 
-  <ItemGroup Condition="$(TargetFramework) == 'netstandard2.1'">
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="System.Memory" Version="4.6.3" />
+    <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.8" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' or '$(TargetFramework)' == 'netstandard2.1'">
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
     <PackageReference Include="System.IO.Pipelines" Version="9.0.8" />
     <PackageReference Include="System.Threading.Channels" Version="9.0.8" />

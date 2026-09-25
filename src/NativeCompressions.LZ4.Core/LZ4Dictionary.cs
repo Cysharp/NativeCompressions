@@ -1,6 +1,7 @@
 using NativeCompressions.Internal;
 using NativeCompressions.Interop;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using static NativeCompressions.Interop.LZ4NativeMethods;
 
 namespace NativeCompressions;
@@ -19,11 +20,15 @@ public sealed unsafe class LZ4Dictionary : IDisposable
     // Released by Dispose or the finalizer.
     LZ4F_CDict_s* cdict;
 
+    // Decompression hands the raw bytes to lz4frame, which keeps that address for the whole frame.
+    // The array is pinned for the lifetime of this instance so the address never changes.
     readonly byte[] data;
+    GCHandle pin;
 
-    LZ4Dictionary(byte[] data, uint dictionaryId, LZ4F_CDict_s* cdict)
+    LZ4Dictionary(byte[] data, GCHandle pin, uint dictionaryId, LZ4F_CDict_s* cdict)
     {
         this.data = data;
+        this.pin = pin;
         this.DictionaryId = dictionaryId;
         this.cdict = cdict;
     }
@@ -35,6 +40,10 @@ public sealed unsafe class LZ4Dictionary : IDisposable
         {
             cdict = null;
             LZ4F_freeCDict(handle);
+        }
+        if (pin.IsAllocated)
+        {
+            pin.Free();
         }
     }
 
@@ -48,13 +57,15 @@ public sealed unsafe class LZ4Dictionary : IDisposable
         if (data.IsEmpty) throw new ArgumentException("Dictionary data cannot be empty.", nameof(data));
 
         var copy = data.ToArray();
-        fixed (byte* p = copy)
+        var pin = GCHandle.Alloc(copy, GCHandleType.Pinned);
+        var cdict = LZ4F_createCDict((byte*)pin.AddrOfPinnedObject(), (nuint)copy.Length);
+        if (cdict == null)
         {
-            var cdict = LZ4F_createCDict(p, (nuint)copy.Length);
-            if (cdict == null) throw new LZ4Exception("Failed to create compression dictionary");
-
-            return new LZ4Dictionary(copy, dictionaryId, cdict);
+            pin.Free();
+            throw new LZ4Exception("Failed to create compression dictionary");
         }
+
+        return new LZ4Dictionary(copy, pin, dictionaryId, cdict);
     }
 
     /// <summary>
@@ -72,15 +83,17 @@ public sealed unsafe class LZ4Dictionary : IDisposable
     /// </summary>
     public bool IsDisposed => cdict == null;
 
-    // for decompression, LZ4F reads the raw bytes directly
-    internal ReadOnlySpan<byte> RawDictionary
+    // for decompression, LZ4F reads the raw bytes directly and remembers this address until the frame ends
+    internal byte* RawDictionaryPointer
     {
         get
         {
             ThrowIfDisposed();
-            return data;
+            return (byte*)pin.AddrOfPinnedObject();
         }
     }
+
+    internal int RawDictionaryLength => data.Length;
 
     internal LZ4F_CDict_s* Handle
     {
@@ -108,6 +121,7 @@ public sealed unsafe class LZ4Dictionary : IDisposable
         if (handle != null)
         {
             LZ4F_freeCDict(handle);
+            pin.Free();
         }
         GC.SuppressFinalize(this);
     }

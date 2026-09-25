@@ -56,10 +56,8 @@ public static partial class LZ4
                 }
                 else
                 {
-                    fixed (byte* dict = dictionary.RawDictionary)
-                    {
-                        nb = LZ4_decompress_safe_usingDict(src, dest, source.Length, destination.Length, dict, dictionary.RawDictionary.Length);
-                    }
+                    nb = LZ4_decompress_safe_usingDict(src, dest, source.Length, destination.Length, dictionary.RawDictionaryPointer, dictionary.RawDictionaryLength);
+                    GC.KeepAlive(dictionary); // the pointer stays valid only while the dictionary is alive
                 }
 
                 if (nb < 0)

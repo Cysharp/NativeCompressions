@@ -20,8 +20,18 @@ public class CoreTargetFrameworkTest
         Assert.Equal(lz4, zstd);
 
 #if TEST_CORE_TFM_OVERRIDE
-        // dotnet test -p:TestCoreTfm=netstandard2.1
-        Assert.Equal(".NETStandard,Version=v2.1", lz4);
+        // dotnet test -p:TestCoreTfm=netstandard2.0 (or netstandard2.1)
+        var testCoreTfm = typeof(CoreTargetFrameworkTest).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .OfType<System.Reflection.AssemblyMetadataAttribute>()
+            .Single(x => x.Key == "TestCoreTfm").Value;
+        var expected = testCoreTfm switch
+        {
+            "netstandard2.0" => ".NETStandard,Version=v2.0",
+            "netstandard2.1" => ".NETStandard,Version=v2.1",
+            _ => throw new InvalidOperationException($"Unexpected TestCoreTfm: {testCoreTfm}"),
+        };
+        Assert.Equal(expected, lz4);
 #else
         // the runtime specific build that matches the test process
         var expected = TargetFrameworkOf(typeof(CoreTargetFrameworkTest));

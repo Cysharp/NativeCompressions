@@ -3397,7 +3397,11 @@ namespace NativeCompressions.Interop
         ///  OpenZL once the opaque pointer has been registered.
         ///  If freeFn is NULL, then it is not called.
         /// </summary>
+#if NETSTANDARD2_0
+        public void* freeFn; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, void*, void> freeFn;
+#endif
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -3683,35 +3687,127 @@ namespace NativeCompressions.Interop
     public unsafe partial struct ZL_CompressIntrospectionHooks_s
     {
         public void* opaque;
+#if NETSTANDARD2_0
+        public void* on_segmenterEncode_start; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Segmenter_s*, void*, void> on_segmenterEncode_start;
+#endif
+#if NETSTANDARD2_0
+        public void* on_segmenterEncode_end; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Segmenter_s*, ZL_Result_size_t_u, void> on_segmenterEncode_end;
+#endif
+#if NETSTANDARD2_0
+        public void* on_ZL_Segmenter_processChunk_start; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Segmenter_s*, nuint*, nuint, ZL_GraphID, ZL_GraphParameters_s*, void> on_ZL_Segmenter_processChunk_start;
+#endif
+#if NETSTANDARD2_0
+        public void* on_ZL_Segmenter_processChunk_end; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Segmenter_s*, ZL_Result_size_t_u, void> on_ZL_Segmenter_processChunk_end;
+#endif
+#if NETSTANDARD2_0
+        public void* on_ZL_Encoder_getScratchSpace; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Encoder_s*, nuint, void> on_ZL_Encoder_getScratchSpace;
+#endif
+#if NETSTANDARD2_0
+        public void* on_ZL_Encoder_sendCodecHeader; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Encoder_s*, void*, nuint, void> on_ZL_Encoder_sendCodecHeader;
+#endif
+#if NETSTANDARD2_0
+        public void* on_ZL_Encoder_createTypedStream; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Encoder_s*, int, nuint, nuint, ZL_Output_s*, void> on_ZL_Encoder_createTypedStream;
+#endif
+#if NETSTANDARD2_0
+        public void* on_ZL_Graph_getScratchSpace; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Graph_s*, nuint, void> on_ZL_Graph_getScratchSpace;
+#endif
+#if NETSTANDARD2_0
+        public void* on_ZL_Edge_setMultiInputDestination_wParams; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Graph_s*, ZL_Edge_s**, nuint, ZL_GraphID, ZL_LocalParams*, void> on_ZL_Edge_setMultiInputDestination_wParams;
+#endif
+#if NETSTANDARD2_0
+        public void* on_migraphEncode_start; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Graph_s*, ZL_Compressor_s*, ZL_GraphID, ZL_Edge_s**, nuint, void> on_migraphEncode_start;
+#endif
+#if NETSTANDARD2_0
+        public void* on_migraphEncode_end; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Graph_s*, ZL_GraphID*, nuint, ZL_Result_size_t_u, void> on_migraphEncode_end;
+#endif
+#if NETSTANDARD2_0
+        public void* on_codecEncode_start; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Encoder_s*, ZL_Compressor_s*, ZL_NodeID, ZL_Input_s**, nuint, void> on_codecEncode_start;
+#endif
+#if NETSTANDARD2_0
+        public void* on_codecEncode_end; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Encoder_s*, ZL_Output_s**, nuint, ZL_Result_size_t_u, void> on_codecEncode_end;
+#endif
+#if NETSTANDARD2_0
+        public void* on_cctx_convertOneInput; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_CCtx_s*, Stream_s*, ZL_Type, ZL_Type, ZL_Result_size_t_u, void> on_cctx_convertOneInput;
+#endif
+#if NETSTANDARD2_0
+        public void* on_ZL_CCtx_compressMultiTypedRef_start; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_CCtx_s*, void*, nuint, ZL_Input_s**, nuint, void> on_ZL_CCtx_compressMultiTypedRef_start;
+#endif
+#if NETSTANDARD2_0
+        public void* on_ZL_CCtx_compressMultiTypedRef_end; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_CCtx_s*, ZL_Result_size_t_u, void> on_ZL_CCtx_compressMultiTypedRef_end;
+#endif
     }
 
     [StructLayout(LayoutKind.Sequential)]
     public unsafe partial struct ZL_DecompressIntrospectionHooks_s
     {
         public void* opaque;
+#if NETSTANDARD2_0
+        public void* on_ZL_DCtx_decompressMultiTBuffer_start; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_DCtx_s*, nuint, void*, nuint, void> on_ZL_DCtx_decompressMultiTBuffer_start;
+#endif
+#if NETSTANDARD2_0
+        public void* on_ZL_DCtx_decompressMultiTBuffer_end; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_DCtx_s*, ZL_Result_size_t_u, void> on_ZL_DCtx_decompressMultiTBuffer_end;
+#endif
+#if NETSTANDARD2_0
+        public void* on_decompressChunk_start; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_DCtx_s*, nuint, void> on_decompressChunk_start;
+#endif
+#if NETSTANDARD2_0
+        public void* on_decompressChunk_end; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_DCtx_s*, ZL_Result_size_t_u, void> on_decompressChunk_end;
+#endif
+#if NETSTANDARD2_0
+        public void* on_ZL_Decoder_getCodecHeader; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Decoder_s*, void*, nuint, void> on_ZL_Decoder_getCodecHeader;
+#endif
+#if NETSTANDARD2_0
+        public void* on_codecDecode_start; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Decoder_s*, Stream_s**, nuint, void> on_codecDecode_start;
+#endif
+#if NETSTANDARD2_0
+        public void* on_codecDecode_end; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, ZL_Decoder_s*, Stream_s**, nuint, ZL_Result_size_t_u, void> on_codecDecode_end;
+#endif
     }
 
     /// <summary>
@@ -3767,7 +3863,11 @@ namespace NativeCompressions.Interop
         ///  the function declares a result scope with ZL_RESULT_DECLARE_SCOPE or you
         ///  will get a compiler error.
         /// </summary>
+#if NETSTANDARD2_0
+        public void* materializeFn; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Materializer_s*, ZL_LocalParams*, ZL_Result_ZL_VoidPtr_u> materializeFn;
+#endif
         /// <summary>
         ///  @brief A custom function that destructs a materialized object.
         /// 
@@ -3775,7 +3875,11 @@ namespace NativeCompressions.Interop
         ///  resources. As a convenience, if there are no resources or memory to free,
         ///  you may use ZL_NOOP_DEMATERIALIZE as a placeholder.
         /// </summary>
+#if NETSTANDARD2_0
+        public void* dematerializeFn; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Materializer_s*, void*, void> dematerializeFn;
+#endif
         /// <summary>
         ///  The paramId to use for the materialized param. If there is an existing
         ///  param that uses this paramId, the registration will fail.
@@ -3837,7 +3941,11 @@ namespace NativeCompressions.Interop
         ///  the function declares a result scope with ZL_RESULT_DECLARE_SCOPE or you
         ///  will get a compiler error.
         /// </summary>
+#if NETSTANDARD2_0
+        public void* materializeFn; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Materializer_s*, void*, nuint, ZL_Result_ZL_VoidPtr_u> materializeFn;
+#endif
         /// <summary>
         ///  @brief A custom function that destructs a materialized object.
         /// 
@@ -3845,7 +3953,11 @@ namespace NativeCompressions.Interop
         ///  resources. As a convenience, if there are no resources or memory to free,
         ///  you may use ZL_NOOP_DEMATERIALIZE as a placeholder.
         /// </summary>
+#if NETSTANDARD2_0
+        public void* dematerializeFn; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Materializer_s*, void*, void> dematerializeFn;
+#endif
         /// <summary>
         ///  Optionally an opaque pointer that can be queried with
         ///  ZL_Materializer_getOpaquePtr().
@@ -3872,8 +3984,16 @@ namespace NativeCompressions.Interop
     public unsafe partial struct ZL_FunctionGraphDesc
     {
         public byte* name;
+#if NETSTANDARD2_0
+        public void* graph_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Graph_s*, ZL_Edge_s**, nuint, ZL_Result_size_t_u> graph_f;
+#endif
+#if NETSTANDARD2_0
+        public void* validate_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Compressor_s*, ZL_FunctionGraphDesc*, int> validate_f;
+#endif
         public ZL_Type* inputTypeMasks;
         public nuint nbInputs;
         public int lastInputIsVariable;
@@ -4217,8 +4337,16 @@ namespace NativeCompressions.Interop
     public unsafe partial struct ZL_PipeEncoderDesc
     {
         public uint CTid;
+#if NETSTANDARD2_0
+        public void* transform_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, nuint, void*, nuint, nuint> transform_f;
+#endif
+#if NETSTANDARD2_0
+        public void* dstBound_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, nuint, nuint> dstBound_f;
+#endif
         public byte* name;
     }
 
@@ -4226,7 +4354,11 @@ namespace NativeCompressions.Interop
     public unsafe partial struct ZL_SplitEncoderDesc
     {
         public uint CTid;
+#if NETSTANDARD2_0
+        public void* transform_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Encoder_s*, nuint*, void*, nuint, ZL_Result_size_t_u> transform_f;
+#endif
         public nuint nbOutputStreams;
         public ZL_LocalParams localParams;
         public byte* name;
@@ -4235,7 +4367,11 @@ namespace NativeCompressions.Interop
     [StructLayout(LayoutKind.Sequential)]
     public unsafe partial struct ZL_SerialSelectorDesc
     {
+#if NETSTANDARD2_0
+        public void* selector_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, nuint, ZL_GraphID*, nuint, ZL_GraphID> selector_f;
+#endif
         public ZL_GraphID* customGraphs;
         public nuint nbCustomGraphs;
         public byte* name;
@@ -4244,7 +4380,11 @@ namespace NativeCompressions.Interop
     [StructLayout(LayoutKind.Sequential)]
     public unsafe partial struct ZL_SelectorDesc
     {
+#if NETSTANDARD2_0
+        public void* selector_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Selector_s*, ZL_Input_s*, ZL_GraphID*, nuint, ZL_GraphID> selector_f;
+#endif
         /// <summary>
         ///  Selectors optionally support multiple input types,
         ///  using bitmap masking (ex: ZL_Type_struct | ZL_Type_string).
@@ -4286,8 +4426,16 @@ namespace NativeCompressions.Interop
     [StructLayout(LayoutKind.Sequential)]
     public unsafe partial struct ZL_CodecStateManager
     {
+#if NETSTANDARD2_0
+        public void* stateAlloc; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*> stateAlloc;
+#endif
+#if NETSTANDARD2_0
+        public void* stateFree; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, void> stateFree;
+#endif
         public nuint optionalStateID;
     }
 
@@ -4304,7 +4452,11 @@ namespace NativeCompressions.Interop
     public unsafe partial struct ZL_TypedEncoderDesc
     {
         public ZL_TypedGraphDesc gd;
+#if NETSTANDARD2_0
+        public void* transform_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Encoder_s*, ZL_Input_s*, ZL_Result_size_t_u> transform_f;
+#endif
         public ZL_LocalParams localParams;
         public byte* name;
         public ZL_CodecStateManager trStateMgr;
@@ -4332,7 +4484,11 @@ namespace NativeCompressions.Interop
     public unsafe partial struct ZL_VOEncoderDesc
     {
         public ZL_VOGraphDesc gd;
+#if NETSTANDARD2_0
+        public void* transform_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Encoder_s*, ZL_Input_s*, ZL_Result_size_t_u> transform_f;
+#endif
         public ZL_LocalParams localParams;
         public byte* name;
         public ZL_CodecStateManager trStateMgr;
@@ -4362,7 +4518,11 @@ namespace NativeCompressions.Interop
     public unsafe partial struct ZL_MIEncoderDesc
     {
         public ZL_MIGraphDesc gd;
+#if NETSTANDARD2_0
+        public void* transform_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Encoder_s*, ZL_Input_s**, nuint, ZL_Result_size_t_u> transform_f;
+#endif
         public ZL_LocalParams localParams;
         public byte* name;
         public ZL_CodecStateManager trStateMgr;
@@ -4463,8 +4623,16 @@ namespace NativeCompressions.Interop
     public unsafe partial struct ZL_PipeDecoderDesc
     {
         public uint CTid;
+#if NETSTANDARD2_0
+        public void* dstBound_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, nuint, nuint> dstBound_f;
+#endif
+#if NETSTANDARD2_0
+        public void* transform_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, nuint, void*, nuint, nuint> transform_f;
+#endif
         public byte* name;
     }
 
@@ -4473,8 +4641,16 @@ namespace NativeCompressions.Interop
     {
         public uint CTid;
         public nuint nbInputStreams;
+#if NETSTANDARD2_0
+        public void* dstBound_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_RBuffer*, nuint> dstBound_f;
+#endif
+#if NETSTANDARD2_0
+        public void* transform_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_WBuffer, ZL_RBuffer*, nuint> transform_f;
+#endif
         public byte* name;
     }
 
@@ -4482,7 +4658,11 @@ namespace NativeCompressions.Interop
     public unsafe partial struct ZL_TypedDecoderDesc
     {
         public ZL_TypedGraphDesc gd;
+#if NETSTANDARD2_0
+        public void* transform_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Decoder_s*, ZL_Input_s**, ZL_Result_size_t_u> transform_f;
+#endif
         public byte* name;
         public ZL_CodecStateManager trStateMgr;
         /// <summary>
@@ -4498,7 +4678,11 @@ namespace NativeCompressions.Interop
     public unsafe partial struct ZL_VODecoderDesc
     {
         public ZL_VOGraphDesc gd;
+#if NETSTANDARD2_0
+        public void* transform_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Decoder_s*, ZL_Input_s**, nuint, ZL_Input_s**, nuint, ZL_Result_size_t_u> transform_f;
+#endif
         public byte* name;
         public ZL_CodecStateManager trStateMgr;
         /// <summary>
@@ -4514,7 +4698,11 @@ namespace NativeCompressions.Interop
     public unsafe partial struct ZL_MIDecoderDesc
     {
         public ZL_MIGraphDesc gd;
+#if NETSTANDARD2_0
+        public void* transform_f; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<ZL_Decoder_s*, ZL_Input_s**, nuint, ZL_Input_s**, nuint, ZL_Result_size_t_u> transform_f;
+#endif
         public byte* name;
         public ZL_CodecStateManager trStateMgr;
         /// <summary>

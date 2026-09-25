@@ -371,7 +371,7 @@ public static partial class LZ4
         // same contract on every framework, even where the netstandard2.1 path compresses sequentially
         var newOptions = options ?? LZ4CompressionOptions.Default;
         ThrowIfParallelWithContentChecksum(newOptions, maxDegreeOfParallelism);
-#if NETSTANDARD2_1
+#if NETSTANDARD
         var fs = NonOwningFileStream.Open(source, offset); // not disposed, it does not own the handle
         await CompressAsync(fs, destination, options, cancellationToken);
         return;
@@ -594,7 +594,7 @@ public static partial class LZ4
             return;
         }
 
-#if !NETSTANDARD2_1
+#if !NETSTANDARD
         if (source is FileStream fs && fs.CanSeek)
         {
             await CompressAsync(fs.SafeFileHandle, fs.Position, destination, options, maxDegreeOfParallelism: 1, cancellationToken);

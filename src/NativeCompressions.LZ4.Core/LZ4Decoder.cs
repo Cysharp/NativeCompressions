@@ -196,11 +196,9 @@ public sealed unsafe class LZ4Decoder : IDisposable
             }
             else
             {
-                var dict = dictionary.RawDictionary;
-                fixed (void* dictPtr = dict)
-                {
-                    hintOrErrorCode = LZ4F_decompress_usingDict(context, dest, &written, src, &consumed, dictPtr, (nuint)dict.Length, decompressOptionsPtr: optionsPtr);
-                }
+                // lz4frame stores this address at the first call and reads from it for every block of the frame,
+                // so the dictionary keeps its bytes pinned rather than pinning them per call here
+                hintOrErrorCode = LZ4F_decompress_usingDict(context, dest, &written, src, &consumed, dictionary.RawDictionaryPointer, (nuint)dictionary.RawDictionaryLength, decompressOptionsPtr: optionsPtr);
             }
             GC.KeepAlive(this);
 

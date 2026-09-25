@@ -71,7 +71,7 @@ The solution uses a multi-project structure with clear separation of concerns:
 ### Testing Strategy
 - Unit tests in `tests/NativeCompressions.Tests/` using xunit.v3 (Microsoft.Testing.Platform runner, project is `OutputType=Exe`)
   - The test project targets net8.0, net9.0 and net11.0. The BCL Zstandard oracle tests and the fuzz regression tests compile only for net11.0.
-  - `dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.1` runs the tests against the netstandard2.1 build of the library (its own code paths for file handles and polyfills). CI runs this as a separate step.
+  - `dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.0` (or `netstandard2.1`) runs the tests against that netstandard build of the library (its own code paths for file handles and polyfills). CI runs both as separate steps.
 - Fuzz targets in `tests/NativeCompressions.Fuzz/` (SharpFuzz), replayed by the unit tests over seeds and mutations
 - Benchmarks in `sandbox/Benchmark/` using BenchmarkDotNet
 - Profiling projects in `sandbox/Profiling/` for performance analysis

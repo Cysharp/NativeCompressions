@@ -62,8 +62,6 @@ namespace System.Threading.Tasks
 
             internal TaskAsyncResult(Task task, object? state, AsyncCallback? callback)
             {
-                Debug.Assert(task is not null);
-
                 this.task = task;
                 AsyncState = state;
 

@@ -295,6 +295,76 @@ public class LZ4EncoderDecoderLifecycleTest
     }
 
     [Fact]
+    public unsafe void Dictionary_SurvivesGCMoveDuringIndependentBlockFrame()
+    {
+        // lz4frame keeps the dictionary address it saw at the first call for the whole frame.
+        // With independent blocks every block reads from that address, so the bytes must stay put
+        // between Decompress calls even when the GC compacts the heap.
+        var dictBytes = Utf8(string.Concat(Enumerable.Repeat("lz4 native compression dotnet dictionary ", 64)));
+        byte[] compressed;
+        using (var compressDict = LZ4Dictionary.Create(dictBytes))
+        {
+            compressed = LZ4.Compress(Data, LZ4CompressionOptions.Default with { Dictionary = compressDict, BlockMode = BlockMode.BlockIndependent });
+        }
+
+        var output = new byte[Data.Length];
+        LZ4Dictionary dict;
+        LZ4Decoder decoder;
+        int consumed, written;
+        var attempt = 0;
+        while (true)
+        {
+            attempt++;
+            // surrounding allocations shape where the dictionary lands, so vary them until a collection moves it
+            var before = new byte[attempt * 8 * 1024];
+            dict = LZ4Dictionary.Create(dictBytes);
+            var after = new byte[attempt * 8 * 1024];
+            GC.KeepAlive(before);
+            GC.KeepAlive(after);
+
+            decoder = new LZ4Decoder(LZ4DecompressionOptions.Default with { Dictionary = dict });
+            var status = decoder.Decompress(compressed.AsSpan(0, 1000), output, out consumed, out written, out _);
+            Assert.NotEqual(OperationStatus.InvalidData, status);
+
+            byte* addressSeenByNative;
+            fixed (byte* p = dict.Data.Span) addressSeenByNative = p;
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            byte* addressAfterGC;
+            fixed (byte* p = dict.Data.Span) addressAfterGC = p;
+
+            if (addressSeenByNative != addressAfterGC || attempt == 40) break; // a stable address is also fine, then this is a plain round trip
+
+            decoder.Dispose();
+            dict.Dispose();
+        }
+
+        using (decoder)
+        using (dict)
+        {
+            for (var i = 0; i < 256; i++)
+            {
+                new byte[32 * 1024].AsSpan().Fill(0xFF); // reuse and overwrite the memory the dictionary used to live in
+            }
+
+            var total = written;
+            var remaining = compressed.AsSpan(consumed);
+            var status = OperationStatus.NeedMoreData;
+            while (remaining.Length > 0)
+            {
+                var piece = remaining.Slice(0, Math.Min(1000, remaining.Length));
+                status = decoder.Decompress(piece, output.AsSpan(total), out consumed, out written, out _);
+                Assert.NotEqual(OperationStatus.InvalidData, status);
+                total += written;
+                remaining = remaining.Slice(consumed);
+            }
+
+            Assert.Equal(OperationStatus.Done, status);
+            Assert.Equal(Data, output.AsSpan(0, total).ToArray());
+        }
+    }
+
+    [Fact]
     public void Stream_ConstructorRejectsNull()
     {
         Assert.Throws<ArgumentNullException>(() => new LZ4Stream(new MemoryStream(), (LZ4Encoder)null!));

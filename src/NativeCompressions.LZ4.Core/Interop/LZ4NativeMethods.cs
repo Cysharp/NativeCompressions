@@ -1289,9 +1289,21 @@ namespace NativeCompressions.Interop
     [StructLayout(LayoutKind.Sequential)]
     public unsafe partial struct LZ4F_CustomMem
     {
+#if NETSTANDARD2_0
+        public void* customAlloc; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, nuint, void*> customAlloc;
+#endif
+#if NETSTANDARD2_0
+        public void* customCalloc; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, nuint, void*> customCalloc;
+#endif
+#if NETSTANDARD2_0
+        public void* customFree; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
+#else
         public delegate* unmanaged[Cdecl]<void*, void*, void> customFree;
+#endif
         public void* opaqueState;
     }
 

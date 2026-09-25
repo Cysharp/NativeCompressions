@@ -32,7 +32,8 @@ jobs:
       # runs the test project on net8.0, net9.0 and net11.0 against the matching library builds
       - run: dotnet test -c Release --no-build
       - run: dotnet pack -c Release -p:Version=${{ inputs.tag }} -o ./publish
-      # the netstandard2.1 build of the library has its own code paths (no RandomAccess, polyfills), run the tests against it too
+      # the netstandard builds of the library have their own code paths (no RandomAccess, polyfills), run the tests against them too
+      - run: dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.0 -p:Version=${{ inputs.tag }}
       - run: dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.1 -p:Version=${{ inputs.tag }}
       # Store artifacts.
       - uses: Cysharp/Actions/.github/actions/upload-artifact@main
