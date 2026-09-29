@@ -93,25 +93,47 @@ internal ref struct SegmentedArrayProvider<T>
                     var segment = array.AsSpan();
                     segment.CopyTo(destination);
                     destination = destination.Slice(segment.Length);
-
-                    // return to pool
-                    ArrayPool<T>.Shared.Return(array, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>());
                 }
-#if NETSTANDARD2_0
-                segments.Clear();
-#endif
             }
 
             // copy current(last) buffer
             var lastSegment = segments[segmentIndex];
             lastSegment.AsSpan(0, countInCurrentSegment).CopyTo(destination);
-            ArrayPool<T>.Shared.Return(lastSegment, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>());
         }
         else
         {
             // only copy initial buffer
             currentSegment.Slice(0, countInCurrentSegment).CopyTo(destination);
         }
+
+        Clear();
+    }
+
+    // Returns the rented segments to the pool. Call it on every path, a failure in the middle must not keep them.
+    // Safe to call again after CopyToAndClear.
+    public void Clear()
+    {
+        var count = segmentsCount;
+        if (count != 0)
+        {
+#if NET8_0_OR_GREATER
+            ReadOnlySpan<T[]> segmentSpan = ((ReadOnlySpan<T[]>)segments).Slice(0, count);
+#else
+            ReadOnlySpan<T[]> segmentSpan = segments.AsSpan().Slice(0, count);
+#endif
+            foreach (var array in segmentSpan)
+            {
+                ArrayPool<T>.Shared.Return(array, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            }
+#if NETSTANDARD2_0
+            segments.Clear();
+#endif
+        }
+
+        segmentsCount = 0;
+        countInFinishedSegments = 0;
+        countInCurrentSegment = 0;
+        currentSegment = initialBuffer;
     }
 }
 

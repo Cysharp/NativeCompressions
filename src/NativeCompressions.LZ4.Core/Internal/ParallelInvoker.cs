@@ -1,4 +1,4 @@
-﻿using System.Threading.Tasks.Sources;
+using System.Threading.Tasks.Sources;
 
 namespace NativeCompressions.Internal;
 
@@ -9,6 +9,7 @@ internal class ParallelInvoker : IThreadPoolWorkItem, IValueTaskSource
     readonly CancellationToken cancellationToken;
     int workerId = -1;
     int remaining;
+    Exception? failure;
 
     ManualResetValueTaskSourceCore<object?> core;
 
@@ -38,20 +39,36 @@ internal class ParallelInvoker : IThreadPoolWorkItem, IValueTaskSource
         {
             var id = Interlocked.Increment(ref workerId);
             await body(id, cancellationToken);
-
-            if (Interlocked.Decrement(ref remaining) == 0) // all workers complete successfully.
-            {
-                cancellationTokenSource.Dispose();
-                core.SetResult(null);
-            }
         }
         catch (Exception ex)
         {
-            if (Interlocked.Exchange(ref remaining, -1) > 0) // only first exception
+            if (Interlocked.CompareExchange(ref failure, ex, null) == null) // only first exception
             {
-                cancellationTokenSource.Cancel(); // if one worker failed, other workers should stop as soon as possible.
-                cancellationTokenSource.Dispose();
+                try
+                {
+                    cancellationTokenSource.Cancel(); // if one worker failed, other workers should stop as soon as possible.
+                }
+                catch
+                {
+                    // a callback registered on the token failed, the first exception is the one to report
+                }
+            }
+        }
+
+        // Completes only after every worker has ended, also on failure.
+        // The caller may release what the workers read from as soon as the operation completes.
+        if (Interlocked.Decrement(ref remaining) == 0)
+        {
+            cancellationTokenSource.Dispose();
+
+            var ex = failure;
+            if (ex != null)
+            {
                 core.SetException(ex);
+            }
+            else
+            {
+                core.SetResult(null);
             }
         }
     }

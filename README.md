@@ -133,7 +133,7 @@ using var ms = new MemoryStream();
 await LZ4.CompressAsync(source, PipeWriter.Create(ms));
 
 // to File
-using var fs = new FileStream("foo.lz4", FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
+using var fs = new FileStream("foo.lz4", FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
 await LZ4.CompressAsync(source, PipeWriter.Create(fs));
 
 // to Network
@@ -146,7 +146,7 @@ When source is `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, or `SafeFileHan
 ```csharp
 // Parallel Compression from File to File
 using SafeFileHandle sourceHandle = File.OpenHandle("foo.bin");
-using var dest = new FileStream("foo.lz4", FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
+using var dest = new FileStream("foo.lz4", FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
 await LZ4.CompressAsync(sourceHandle, PipeWriter.Create(dest), maxDegreeOfParallelism: Environment.ProcessorCount);
 ```
 

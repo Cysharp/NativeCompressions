@@ -84,38 +84,45 @@ public static partial class LZ4
     {
         Span<byte> scratch = stackalloc byte[256];
         var arrayProvider = new SegmentedArrayProvider<byte>(scratch);
-        var dest = arrayProvider.GetSpan();
-
-        while (true)
+        try
         {
-            var status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
-            source = source.Slice(bytesConsumed);
-            dest = dest.Slice(bytesWritten);
-            arrayProvider.Advance(bytesWritten);
+            var dest = arrayProvider.GetSpan();
 
-            if (status == OperationStatus.Done)
+            while (true)
             {
-                if (source.IsEmpty) break;
-                decoder.Reset(); // another frame follows
-            }
-            else if (status == OperationStatus.NeedMoreData && source.IsEmpty)
-            {
-                throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
-            }
-            else if (status == OperationStatus.InvalidData)
-            {
-                throw new LZ4Exception("Invalid LZ4 frame.");
+                var status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
+                source = source.Slice(bytesConsumed);
+                dest = dest.Slice(bytesWritten);
+                arrayProvider.Advance(bytesWritten);
+
+                if (status == OperationStatus.Done)
+                {
+                    if (source.IsEmpty) break;
+                    decoder.Reset(); // another frame follows
+                }
+                else if (status == OperationStatus.NeedMoreData && source.IsEmpty)
+                {
+                    throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
+                }
+                else if (status == OperationStatus.InvalidData)
+                {
+                    throw new LZ4Exception("Invalid LZ4 frame.");
+                }
+
+                if (dest.Length == 0)
+                {
+                    dest = arrayProvider.GetSpan();
+                }
             }
 
-            if (dest.Length == 0)
-            {
-                dest = arrayProvider.GetSpan();
-            }
+            var result = GC.AllocateUninitializedArray<byte>(arrayProvider.Count);
+            arrayProvider.CopyToAndClear(result);
+            return result;
         }
-
-        var result = GC.AllocateUninitializedArray<byte>(arrayProvider.Count);
-        arrayProvider.CopyToAndClear(result);
-        return result;
+        finally
+        {
+            arrayProvider.Clear(); // invalid data throws in the middle, the rented segments go back either way
+        }
     }
 
     /// <summary>

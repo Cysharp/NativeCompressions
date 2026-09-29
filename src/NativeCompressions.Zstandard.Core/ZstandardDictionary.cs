@@ -1,6 +1,7 @@
 using NativeCompressions.Internal;
 using NativeCompressions.Interop;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
@@ -15,27 +16,45 @@ namespace NativeCompressions;
 /// </remarks>
 public sealed unsafe class ZstandardDictionary : IDisposable
 {
-    // Held as raw pointers instead of SafeHandle to keep a single managed allocation.
-    // Released by Dispose or the finalizer.
-    ZSTD_CDict_s* cdict;
-    ZSTD_DDict_s* ddict;
+    // A SafeHandle, because an encoder with worker threads reads the native dictionary until its context is freed.
+    // The encoder takes a reference for that time, so neither Dispose nor the order of finalizers frees it earlier.
+    readonly NativeDictionaries native;
+
+    // The handle reports closed only after the last reference is gone, this is set by Dispose right away.
+    int disposed;
 
     readonly byte[] data;
 
-    ZstandardDictionary(byte[] data, int compressionLevel, ZSTD_CDict_s* cdict, ZSTD_DDict_s* ddict, uint dictionaryId)
+    ZstandardDictionary(byte[] data, int compressionLevel, NativeDictionaries native, uint dictionaryId)
     {
         this.data = data;
         this.CompressionLevel = compressionLevel;
-        this.cdict = cdict;
-        this.ddict = ddict;
+        this.native = native;
         this.DictionaryId = dictionaryId;
     }
 
-    ~ZstandardDictionary()
+    sealed class NativeDictionaries : SafeHandle
     {
-        Free(cdict, ddict);
-        cdict = null;
-        ddict = null;
+        readonly ZSTD_DDict_s* ddict;
+
+        public NativeDictionaries(ZSTD_CDict_s* cdict, ZSTD_DDict_s* ddict)
+            : base(IntPtr.Zero, ownsHandle: true)
+        {
+            this.ddict = ddict;
+            SetHandle((IntPtr)cdict);
+        }
+
+        public override bool IsInvalid => handle == IntPtr.Zero;
+
+        public ZSTD_CDict_s* Compression => (ZSTD_CDict_s*)handle;
+        public ZSTD_DDict_s* Decompression => ddict;
+
+        protected override bool ReleaseHandle()
+        {
+            ZSTD_freeCDict((ZSTD_CDict_s*)handle);
+            ZSTD_freeDDict(ddict);
+            return true;
+        }
     }
 
     /// <summary>
@@ -61,7 +80,7 @@ public sealed unsafe class ZstandardDictionary : IDisposable
             }
 
             var id = ZSTD_getDictID_fromDict(p, (nuint)copy.Length);
-            return new ZstandardDictionary(copy, compressionLevel, cdict, ddict, id);
+            return new ZstandardDictionary(copy, compressionLevel, new NativeDictionaries(cdict, ddict), id);
         }
     }
 
@@ -137,16 +156,16 @@ public sealed unsafe class ZstandardDictionary : IDisposable
     /// <summary>
     /// Gets a value indicating whether the dictionary has been disposed.
     /// </summary>
-    public bool IsDisposed => cdict == null;
+    public bool IsDisposed => Volatile.Read(ref disposed) != 0;
 
+    // The caller keeps this instance reachable for as long as it uses the pointer.
     internal ZSTD_CDict_s* CompressionHandle
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            var handle = cdict;
-            if (handle == null) Throws.ObjectDisposedException(nameof(ZstandardDictionary));
-            return handle;
+            if (IsDisposed) Throws.ObjectDisposedException(nameof(ZstandardDictionary));
+            return native.Compression;
         }
     }
 
@@ -155,34 +174,34 @@ public sealed unsafe class ZstandardDictionary : IDisposable
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            var handle = ddict;
-            if (handle == null) Throws.ObjectDisposedException(nameof(ZstandardDictionary));
-            return handle;
+            if (IsDisposed) Throws.ObjectDisposedException(nameof(ZstandardDictionary));
+            return native.Decompression;
         }
+    }
+
+    // Keeps the native dictionaries alive until ReleaseReference, also when the dictionary is disposed or finalized meanwhile.
+    internal void AddReference()
+    {
+        if (IsDisposed) Throws.ObjectDisposedException(nameof(ZstandardDictionary));
+
+        var added = false;
+        native.DangerousAddRef(ref added);
+    }
+
+    internal void ReleaseReference()
+    {
+        native.DangerousRelease();
     }
 
     /// <summary>
     /// Releases the native dictionaries. Safe to call multiple times.
     /// </summary>
+    /// <remarks>
+    /// An encoder that still uses the dictionary keeps the native memory until it is done with it.
+    /// </remarks>
     public void Dispose()
     {
-        // Interlocked has no pointer overload, so swap the fields as IntPtr while they are pinned.
-        ZSTD_CDict_s* c;
-        ZSTD_DDict_s* d;
-        fixed (ZSTD_CDict_s** pc = &cdict)
-        fixed (ZSTD_DDict_s** pd = &ddict)
-        {
-            c = (ZSTD_CDict_s*)Interlocked.Exchange(ref *(IntPtr*)pc, IntPtr.Zero);
-            d = (ZSTD_DDict_s*)Interlocked.Exchange(ref *(IntPtr*)pd, IntPtr.Zero);
-        }
-
-        Free(c, d);
-        GC.SuppressFinalize(this);
-    }
-
-    static void Free(ZSTD_CDict_s* cdict, ZSTD_DDict_s* ddict)
-    {
-        if (cdict != null) ZSTD_freeCDict(cdict);
-        if (ddict != null) ZSTD_freeDDict(ddict);
+        Volatile.Write(ref disposed, 1);
+        native.Dispose();
     }
 }

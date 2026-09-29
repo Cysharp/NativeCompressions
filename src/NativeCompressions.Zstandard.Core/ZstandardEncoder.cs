@@ -19,12 +19,28 @@ public sealed unsafe class ZstandardEncoder : IDisposable
     // Released by Dispose or the finalizer.
     ZSTD_CCtx_s* cctx;
 
-    // The native context only references the dictionary, so keep it reachable while this encoder is alive.
+    // The native context only references the dictionary. The encoder holds a reference on it (AddReference)
+    // from the moment the context refers to it until nothing native can read it any more.
     ZstandardDictionary? dictionary;
 
     // Pinned prefix set by SetPrefix. zstd references the memory, so it stays pinned until Reset, Dispose or the next SetPrefix.
     MemoryHandle prefixHandle;
     bool hasPrefix;
+
+    // What the native context is configured with. Kept to build a fresh context with the same parameters,
+    // see ReplaceContext. SetPrefix removes the dictionary from it, the same as it does natively.
+    ZstandardCompressionOptions options;
+
+    // true from the first call of a frame until the frame is completely written
+    bool frameInProgress;
+
+    // Set by SetSourceLength for the next frame, -1 when nothing is declared.
+    long declaredLength = -1;
+
+    // Worker threads of an unfinished frame keep reading its prefix and dictionary until the native context is freed.
+    // What they may still read is kept here until then.
+    List<MemoryHandle>? retiredPrefixes;
+    List<ZstandardDictionary>? retiredDictionaries;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardEncoder"/> with default settings.
@@ -38,22 +54,8 @@ public sealed unsafe class ZstandardEncoder : IDisposable
     /// Initializes a new instance of the <see cref="ZstandardEncoder"/> with compressionLevel.
     /// </summary>
     public ZstandardEncoder(int compressionLevel)
+        : this(compressionLevel == Zstandard.DefaultCompressionLevel ? ZstandardCompressionOptions.Default : new ZstandardCompressionOptions(compressionLevel))
     {
-        this.cctx = CreateContext();
-
-        if (compressionLevel != Zstandard.DefaultCompressionLevel)
-        {
-            try
-            {
-                var result = ZSTD_CCtx_setParameter(cctx, ZSTD_cParameter.ZSTD_c_compressionLevel, compressionLevel);
-                Zstandard.ThrowIfError(result);
-            }
-            catch
-            {
-                Dispose();
-                throw;
-            }
-        }
     }
 
     /// <summary>
@@ -64,12 +66,29 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         this.cctx = CreateContext();
         try
         {
-            compressionOptions.SetParameter(cctx);
+            Configure(cctx, compressionOptions);
+            this.options = compressionOptions;
             this.dictionary = compressionOptions.Dictionary;
         }
         catch
         {
             Dispose();
+            throw;
+        }
+    }
+
+    // Applies the options. On return the dictionary of the options is referenced, on failure it is not.
+    static void Configure(ZSTD_CCtx_s* context, in ZstandardCompressionOptions options)
+    {
+        var dictionary = options.Dictionary;
+        dictionary?.AddReference();
+        try
+        {
+            options.SetParameter(context);
+        }
+        catch
+        {
+            dictionary?.ReleaseReference();
             throw;
         }
     }
@@ -84,6 +103,8 @@ public sealed unsafe class ZstandardEncoder : IDisposable
             ZSTD_freeCCtx(context);
         }
         prefixHandle.Dispose();
+        ReleaseRetired();
+        dictionary?.ReleaseReference();
     }
 
     /// <summary>
@@ -129,6 +150,15 @@ public sealed unsafe class ZstandardEncoder : IDisposable
     {
         var context = GetContext();
 
+        // zstd takes the size from the input when a frame starts and ends in the same call, which would skip
+        // the check of the declared length
+        if (endOperation == ZSTD_EndDirective.ZSTD_e_end && !frameInProgress && declaredLength >= 0 && source.Length != declaredLength)
+        {
+            bytesWritten = 0;
+            bytesConsumed = 0;
+            return OperationStatus.InvalidData;
+        }
+
         fixed (byte* src = source)
         fixed (byte* dest = destination)
         {
@@ -152,9 +182,16 @@ public sealed unsafe class ZstandardEncoder : IDisposable
 
             if (Zstandard.IsError(remaining))
             {
+                frameInProgress = true; // workers may still hold jobs of the failed frame
                 bytesWritten = 0;
                 bytesConsumed = 0;
                 return OperationStatus.InvalidData;
+            }
+
+            frameInProgress = !(endOperation == ZSTD_EndDirective.ZSTD_e_end && remaining == 0);
+            if (!frameInProgress)
+            {
+                declaredLength = -1; // applies to one frame
             }
 
             bytesConsumed = (int)input.pos;
@@ -198,15 +235,25 @@ public sealed unsafe class ZstandardEncoder : IDisposable
     {
         var context = GetContext();
 
-        var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_only);
-        Zstandard.ThrowIfError(result);
-
-        // A session reset keeps an unused prefix referenced by the native context, so drop that reference before unpinning.
-        if (HasPrefix)
+        if (HasRunningWorkers)
         {
-            Zstandard.ThrowIfError(ZSTD_CCtx_refCDict(context, null));
-            ReleasePrefix();
+            ReplaceContext(options);
         }
+        else
+        {
+            var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_only);
+            Zstandard.ThrowIfError(result);
+
+            // A session reset keeps an unused prefix referenced by the native context, so drop that reference before unpinning.
+            if (HasPrefix)
+            {
+                Zstandard.ThrowIfError(ZSTD_CCtx_refCDict(context, null));
+            }
+        }
+
+        ReleasePrefix();
+        frameInProgress = false;
+        declaredLength = -1;
         GC.KeepAlive(this);
     }
 
@@ -214,14 +261,82 @@ public sealed unsafe class ZstandardEncoder : IDisposable
     {
         var context = GetContext();
 
-        var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
-        Zstandard.ThrowIfError(result);
-        dictionary = null;
-        ReleasePrefix();
+        if (HasRunningWorkers)
+        {
+            // the fresh context is configured before it replaces the current one, a failure changes nothing
+            ReplaceContext(options);
+        }
+        else
+        {
+            try
+            {
+                var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
+                Zstandard.ThrowIfError(result);
+                Configure(context, options);
+            }
+            catch
+            {
+                // Some parameters are applied and some are not. The context is replaced by one with the previous
+                // options, so the native parameters and the options kept here never disagree.
+                RestoreOptions();
+                throw;
+            }
 
-        options.SetParameter(context);
-        dictionary = options.Dictionary;
+            // no workers are running, nothing reads the previous dictionary
+            dictionary?.ReleaseReference();
+            dictionary = options.Dictionary;
+        }
+
+        ReleasePrefix();
+        this.options = options;
+        frameInProgress = false;
+        declaredLength = -1;
         GC.KeepAlive(this);
+    }
+
+    void RestoreOptions()
+    {
+        try
+        {
+            ReplaceContext(options);
+        }
+        catch
+        {
+            // the previous options cannot be applied any more, for example their dictionary was disposed
+            options = ZstandardCompressionOptions.Default;
+            ReplaceContext(options);
+        }
+
+        ReleasePrefix();
+        frameInProgress = false;
+        declaredLength = -1;
+    }
+
+    // With worker threads, the jobs of an unfinished frame keep running after a reset and read the prefix and
+    // the dictionary of that frame. zstd waits for them only when the next frame is compressed with workers again,
+    // a small next frame is compressed without. Freeing the context is the one call that always stops them.
+    bool HasRunningWorkers => frameInProgress && options.NbWorkers > 0;
+
+    void ReplaceContext(in ZstandardCompressionOptions newOptions)
+    {
+        var fresh = CreateContext();
+        try
+        {
+            Configure(fresh, newOptions);
+        }
+        catch
+        {
+            ZSTD_freeCCtx(fresh);
+            throw;
+        }
+
+        var old = cctx;
+        cctx = fresh;
+        ZSTD_freeCCtx(old); // returns after the workers have stopped
+
+        ReleaseRetired();
+        dictionary?.ReleaseReference();
+        dictionary = newOptions.Dictionary;
     }
 
     /// <summary>
@@ -237,6 +352,7 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         var result = ZSTD_CCtx_setPledgedSrcSize(context, (ulong)length);
         GC.KeepAlive(this);
         Zstandard.ThrowIfError(result);
+        declaredLength = length;
     }
 
     /// <summary>
@@ -261,10 +377,29 @@ public sealed unsafe class ZstandardEncoder : IDisposable
             Zstandard.ThrowIfError(result);
         }
 
-        ReleasePrefix();
+        // zstd accepts a prefix only between frames. After a failed frame that is also the case while
+        // workers may still run, then the previous prefix and dictionary are kept instead of released.
+        if (HasRunningWorkers)
+        {
+            RetirePrefix();
+            RetireDictionary();
+        }
+        else
+        {
+            ReleasePrefix();
+            dictionary?.ReleaseReference();
+            dictionary = null;
+        }
+
         prefixHandle = handle;
         hasPrefix = true;
-        dictionary = null; // refPrefix clears the referenced dictionary
+
+        // refPrefix cleared the referenced dictionary, and it stays cleared after the frame.
+        // The caller is free to dispose it from here on, so it must not be referenced again.
+        if (options.Dictionary != null)
+        {
+            options = options with { Dictionary = null };
+        }
         GC.KeepAlive(this);
     }
 
@@ -277,12 +412,49 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         hasPrefix = false;
     }
 
+    void RetirePrefix()
+    {
+        if (!hasPrefix) return;
+
+        (retiredPrefixes ??= new()).Add(prefixHandle);
+        prefixHandle = default;
+        hasPrefix = false;
+    }
+
+    void RetireDictionary()
+    {
+        if (dictionary == null) return;
+
+        (retiredDictionaries ??= new()).Add(dictionary);
+        dictionary = null;
+    }
+
+    void ReleaseRetired()
+    {
+        if (retiredPrefixes != null)
+        {
+            foreach (var handle in retiredPrefixes)
+            {
+                handle.Dispose();
+            }
+            retiredPrefixes = null;
+        }
+
+        if (retiredDictionaries != null)
+        {
+            foreach (var retired in retiredDictionaries)
+            {
+                retired.ReleaseReference();
+            }
+            retiredDictionaries = null;
+        }
+    }
+
     /// <summary>
     /// Releases the native compression context. Safe to call multiple times.
     /// </summary>
     public void Dispose()
     {
-        ReleasePrefix();
         // Interlocked has no pointer overload, so swap the field as an IntPtr while it is pinned.
         ZSTD_CCtx_s* context;
         fixed (ZSTD_CCtx_s** p = &cctx)
@@ -294,6 +466,12 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         {
             ZSTD_freeCCtx(context);
         }
+
+        // freeing the context stops its worker threads, nothing reads the prefix and the dictionary after that
+        ReleasePrefix();
+        ReleaseRetired();
+        dictionary?.ReleaseReference();
+        dictionary = null;
         GC.SuppressFinalize(this);
     }
 

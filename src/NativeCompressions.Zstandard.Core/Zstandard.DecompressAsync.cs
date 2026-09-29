@@ -118,6 +118,13 @@ public static partial class Zstandard
 #if !NETSTANDARD
         if (source is FileStream fs && fs.CanSeek)
         {
+            // A position at or past the end is a legal EOF and is left where it is, the same as for MemoryStream.
+            if (fs.Position >= fs.Length)
+            {
+                await DecompressAsync(ReadOnlyMemory<byte>.Empty, destination, decoder, cancellationToken);
+                return;
+            }
+
             await DecompressAsync(fs.SafeFileHandle, fs.Position, destination, decoder, cancellationToken);
             fs.Position = fs.Length; // the handle was read directly, leave the stream at the end like a normal read would
             return;
@@ -125,8 +132,14 @@ public static partial class Zstandard
 #endif
 
         var pipeReader = PipeReader.Create(source, LeaveOpenPipeReaderOptions);
-        await DecompressAsync(pipeReader, destination, decoder, cancellationToken);
-        await pipeReader.CompleteAsync();
+        try
+        {
+            await DecompressAsync(pipeReader, destination, decoder, cancellationToken);
+        }
+        finally
+        {
+            await pipeReader.CompleteAsync(); // returns the buffers of the reader, also after a failure
+        }
     }
 
     public static async ValueTask DecompressAsync(PipeReader source, PipeWriter destination, ZstandardDecompressionOptions? options = null, CancellationToken cancellationToken = default)
@@ -182,7 +195,14 @@ public static partial class Zstandard
         using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
         using var destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
         var destinationWriter = PipeWriter.Create(destinationStream);
-        await DecompressAsync(sourceHandle, destinationWriter, decoder, cancellationToken);
+        try
+        {
+            await DecompressAsync(sourceHandle, destinationWriter, decoder, cancellationToken);
+        }
+        finally
+        {
+            await destinationWriter.CompleteAsync(); // returns the buffers of the writer
+        }
     }
 
     // Feeds one chunk of compressed input and writes whatever it decodes to destination.
@@ -213,14 +233,14 @@ public static partial class Zstandard
 
             if (pending >= sizeHint)
             {
-                await destination.FlushAsync(cancellationToken);
+                await destination.FlushAndCheckAsync(cancellationToken);
                 pending = 0;
             }
         }
 
         if (pending > 0)
         {
-            await destination.FlushAsync(cancellationToken);
+            await destination.FlushAndCheckAsync(cancellationToken);
         }
 
         return status;
@@ -234,7 +254,7 @@ public static partial class Zstandard
             var dest = destination.GetMemory(sizeHint);
             status = decoder.Decompress(ReadOnlySpan<byte>.Empty, dest.Span, out _, out var bytesWritten);
             destination.Advance(bytesWritten);
-            await destination.FlushAsync(cancellationToken);
+            await destination.FlushAndCheckAsync(cancellationToken);
 
             if (status == OperationStatus.Done)
             {

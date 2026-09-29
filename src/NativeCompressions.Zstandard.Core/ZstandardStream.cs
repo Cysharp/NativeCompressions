@@ -617,10 +617,12 @@ public sealed class ZstandardStream : Stream
         Exception? closeFailure = null;
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            // also without any Write, so an empty source still produces a valid frame
+            if (mode == CompressionMode.Compress)
             {
                 try
                 {
+                    buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
                     var status = OperationStatus.DestinationTooSmall;
                     while (status == OperationStatus.DestinationTooSmall)
                     {
@@ -678,10 +680,12 @@ public sealed class ZstandardStream : Stream
         Exception? closeFailure = null;
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            // also without any Write, so an empty source still produces a valid frame
+            if (mode == CompressionMode.Compress)
             {
                 try
                 {
+                    buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
                     var status = OperationStatus.DestinationTooSmall;
                     while (status == OperationStatus.DestinationTooSmall)
                     {

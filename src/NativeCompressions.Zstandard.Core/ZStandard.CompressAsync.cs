@@ -34,7 +34,7 @@ public static partial class Zstandard
             }
 
             destination.Advance(bytesWritten);
-            await destination.FlushAsync(cancellationToken);
+            await destination.FlushAndCheckAsync(cancellationToken);
         }
     }
 
@@ -69,7 +69,7 @@ public static partial class Zstandard
                 if (dest.Length == 0)
                 {
                     destination.Advance(writtenInDest);
-                    await destination.FlushAsync(cancellationToken);
+                    await destination.FlushAndCheckAsync(cancellationToken);
 
                     writtenInDest = 0;
                     dest = destination.GetSpan(sizeHint);
@@ -80,7 +80,7 @@ public static partial class Zstandard
         if (writtenInDest != 0)
         {
             destination.Advance(writtenInDest);
-            await destination.FlushAsync(cancellationToken);
+            await destination.FlushAndCheckAsync(cancellationToken);
         }
 
         // write final block
@@ -97,7 +97,7 @@ public static partial class Zstandard
                 }
 
                 destination.Advance(bytesWritten);
-                await destination.FlushAsync(cancellationToken);
+                await destination.FlushAndCheckAsync(cancellationToken);
             }
         }
     }
@@ -156,7 +156,7 @@ public static partial class Zstandard
                     if (dest.Length == 0)
                     {
                         destination.Advance(writtenInDest);
-                        await destination.FlushAsync(cancellationToken);
+                        await destination.FlushAndCheckAsync(cancellationToken);
 
                         writtenInDest = 0;
                         dest = destination.GetMemory(sizeHint);
@@ -169,7 +169,7 @@ public static partial class Zstandard
             if (writtenInDest != 0)
             {
                 destination.Advance(writtenInDest);
-                await destination.FlushAsync(cancellationToken);
+                await destination.FlushAndCheckAsync(cancellationToken);
             }
 
             // write final block
@@ -186,7 +186,7 @@ public static partial class Zstandard
                     }
 
                     destination.Advance(bytesWritten);
-                    await destination.FlushAsync(cancellationToken);
+                    await destination.FlushAndCheckAsync(cancellationToken);
                 }
             }
         }
@@ -223,6 +223,13 @@ public static partial class Zstandard
 #if !NETSTANDARD
         if (source is FileStream fs && fs.CanSeek)
         {
+            // A position at or past the end is a legal EOF and is left where it is, the same as for MemoryStream.
+            if (fs.Position >= fs.Length)
+            {
+                await CompressAsync(ReadOnlyMemory<byte>.Empty, destination, encoder, cancellationToken);
+                return;
+            }
+
             await CompressAsync(fs.SafeFileHandle, fs.Position, destination, encoder, cancellationToken);
             fs.Position = fs.Length; // the handle was read directly, leave the stream at the end like a normal read would
             return;
@@ -230,8 +237,14 @@ public static partial class Zstandard
 #endif
 
         var pipeReader = PipeReader.Create(source, LeaveOpenPipeReaderOptions);
-        await CompressAsync(pipeReader, destination, encoder, cancellationToken);
-        await pipeReader.CompleteAsync();
+        try
+        {
+            await CompressAsync(pipeReader, destination, encoder, cancellationToken);
+        }
+        finally
+        {
+            await pipeReader.CompleteAsync(); // returns the buffers of the reader, also after a failure
+        }
     }
 
     public static async ValueTask CompressAsync(PipeReader source, PipeWriter destination, ZstandardCompressionOptions? options = null, CancellationToken cancellationToken = default)
@@ -273,7 +286,7 @@ public static partial class Zstandard
                     if (dest.Length == 0)
                     {
                         destination.Advance(writtenInDest);
-                        await destination.FlushAsync(cancellationToken);
+                        await destination.FlushAndCheckAsync(cancellationToken);
 
                         writtenInDest = 0;
                         dest = destination.GetMemory(sizeHint);
@@ -286,7 +299,7 @@ public static partial class Zstandard
         if (writtenInDest != 0)
         {
             destination.Advance(writtenInDest);
-            await destination.FlushAsync(cancellationToken);
+            await destination.FlushAndCheckAsync(cancellationToken);
         }
 
         // write final block
@@ -303,7 +316,7 @@ public static partial class Zstandard
                 }
 
                 destination.Advance(bytesWritten);
-                await destination.FlushAsync(cancellationToken);
+                await destination.FlushAndCheckAsync(cancellationToken);
             }
         }
     }
@@ -331,7 +344,14 @@ public static partial class Zstandard
         using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
         using var destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
         var destinationWriter = PipeWriter.Create(destinationStream);
-        await CompressAsync(sourceHandle, destinationWriter, encoder, cancellationToken);
+        try
+        {
+            await CompressAsync(sourceHandle, destinationWriter, encoder, cancellationToken);
+        }
+        finally
+        {
+            await destinationWriter.CompleteAsync(); // returns the buffers of the writer
+        }
     }
 
     static int GetBufferSize(int sourceLength, int minimumBufferSize)

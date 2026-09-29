@@ -89,6 +89,7 @@ public static partial class Zstandard
             {
                 ZSTD_freeCCtx(context);
             }
+            GC.KeepAlive(compressionOptions.Dictionary);
 
             ThrowIfError(bytesWritten);
             return (int)bytesWritten;

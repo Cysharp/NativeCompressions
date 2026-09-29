@@ -399,28 +399,6 @@ namespace NativeCompressions.Interop
         public static extern int LZ4_decompress_safe_partial_usingDict(byte* src, byte* dst, int compressedSize, int targetOutputSize, int maxOutputSize, byte* dictStart, int dictSize);
 
         /// <summary>
-        ///  LZ4_compress_fast_extState_fastReset() :
-        ///   A variant of LZ4_compress_fast_extState().
-        /// 
-        ///   Using this variant avoids an expensive initialization step.
-        ///   It is only safe to call if the state buffer is known to be correctly initialized already
-        ///   (see above comment on LZ4_resetStream_fast() for a definition of "correctly initialized").
-        ///   From a high level, the difference is that
-        ///   this function initializes the provided state with a call to something like LZ4_resetStream_fast()
-        ///   while LZ4_compress_fast_extState() starts with a call to LZ4_resetStream().
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "LZ4_compress_fast_extState_fastReset", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern int LZ4_compress_fast_extState_fastReset(void* state, byte* src, byte* dst, int srcSize, int dstCapacity, int acceleration);
-
-        /// <summary>
-        ///  LZ4_compress_destSize_extState() : introduced in v1.10.0
-        ///   Same as LZ4_compress_destSize(), but using an externally allocated state.
-        ///   Also: exposes @acceleration
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "LZ4_compress_destSize_extState", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern int LZ4_compress_destSize_extState(void* state, byte* src, byte* dst, int* srcSizePtr, int targetDstSize, int acceleration);
-
-        /// <summary>
         ///  LZ4_initStream() : v1.9.0+
         ///   An LZ4_stream_t structure must be initialized at least once.
         ///   This is automatically done when invoking LZ4_createStream(),
@@ -534,18 +512,6 @@ namespace NativeCompressions.Interop
         /// </summary>
         [DllImport(__DllName, EntryPoint = "LZ4_resetStream", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern void LZ4_resetStream(LZ4_stream_u* streamPtr);
-
-        [DllImport(__DllName, EntryPoint = "LZ4_compress_forceExtDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern int LZ4_compress_forceExtDict(LZ4_stream_u* LZ4_dict, byte* source, byte* dest, int srcSize);
-
-        [DllImport(__DllName, EntryPoint = "LZ4_decompress_safe_forceExtDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern int LZ4_decompress_safe_forceExtDict(byte* source, byte* dest, int compressedSize, int maxOutputSize, void* dictStart, nuint dictSize);
-
-        [DllImport(__DllName, EntryPoint = "LZ4_decompress_safe_partial_forceExtDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern int LZ4_decompress_safe_partial_forceExtDict(byte* source, byte* dest, int compressedSize, int targetOutputSize, int dstCapacity, void* dictStart, nuint dictSize);
-
-        [DllImport(__DllName, EntryPoint = "LZ4_loadDict_internal", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern int LZ4_loadDict_internal(LZ4_stream_u* LZ4_dict, byte* dictionary, int dictSize, LoadDict_mode_e _ld);
 
         /// <summary>
         ///  LZ4_compress_HC() :
@@ -735,41 +701,6 @@ namespace NativeCompressions.Interop
 
         [DllImport(__DllName, EntryPoint = "LZ4_resetStreamHC", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern void LZ4_resetStreamHC(LZ4_streamHC_u* streamHCPtr, int compressionLevel);
-
-        /// <summary>
-        ///  LZ4_setCompressionLevel() : v1.8.0+ (experimental)
-        ///   It's possible to change compression level
-        ///   between successive invocations of LZ4_compress_HC_continue*()
-        ///   for dynamic adaptation.
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "LZ4_setCompressionLevel", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern void LZ4_setCompressionLevel(LZ4_streamHC_u* LZ4_streamHCPtr, int compressionLevel);
-
-        /// <summary>
-        ///  LZ4_favorDecompressionSpeed() : v1.8.2+ (experimental)
-        ///   Opt. Parser will favor decompression speed over compression ratio.
-        ///   Only applicable to levels &gt;= LZ4HC_CLEVEL_OPT_MIN.
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "LZ4_favorDecompressionSpeed", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern void LZ4_favorDecompressionSpeed(LZ4_streamHC_u* LZ4_streamHCPtr, int favor);
-
-        /// <summary>
-        ///  LZ4_compress_HC_extStateHC_fastReset() :
-        ///   A variant of LZ4_compress_HC_extStateHC().
-        /// 
-        ///   Using this variant avoids an expensive initialization step. It is only safe
-        ///   to call if the state buffer is known to be correctly initialized already
-        ///   (see above comment on LZ4_resetStreamHC_fast() for a definition of
-        ///   "correctly initialized"). From a high level, the difference is that this
-        ///   function initializes the provided state with a call to
-        ///   LZ4_resetStreamHC_fast() while LZ4_compress_HC_extStateHC() starts with a
-        ///   call to LZ4_resetStreamHC().
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "LZ4_compress_HC_extStateHC_fastReset", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern int LZ4_compress_HC_extStateHC_fastReset(void* state, byte* src, byte* dst, int srcSize, int dstCapacity, int compressionLevel);
-
-        [DllImport(__DllName, EntryPoint = "LZ4HC_searchExtDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern LZ4HC_match_t LZ4HC_searchExtDict(byte* ip, uint ipIndex, byte* iLowLimit, byte* iHighLimit, LZ4HC_CCtx_internal* dictCtx, uint gDictEndIndex, int currentBestML, int nbAttempts);
 
         [DllImport(__DllName, EntryPoint = "LZ4F_isError", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern uint LZ4F_isError(nuint code);
@@ -1108,50 +1039,6 @@ namespace NativeCompressions.Interop
         /// </summary>
         [DllImport(__DllName, EntryPoint = "LZ4F_compressBegin_usingCDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern nuint LZ4F_compressBegin_usingCDict(LZ4F_cctx_s* cctx, void* dstBuffer, nuint dstCapacity, LZ4F_CDict_s* cdict, LZ4F_preferences_t* prefsPtr);
-
-        [DllImport(__DllName, EntryPoint = "LZ4F_getErrorCode", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern LZ4F_errorCodes LZ4F_getErrorCode(nuint functionResult);
-
-        /// <summary>
-        ///  LZ4F_getBlockSize() :
-        ///  @return, in scalar format (size_t),
-        ///           the maximum block size associated with @blockSizeID,
-        ///           or an error code (can be tested using LZ4F_isError()) if @blockSizeID is invalid.
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "LZ4F_getBlockSize", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern nuint LZ4F_getBlockSize(LZ4F_blockSizeID_t blockSizeID);
-
-        /// <summary>
-        ///  LZ4F_uncompressedUpdate() :
-        ///   LZ4F_uncompressedUpdate() can be called repetitively to add data stored as uncompressed blocks.
-        ///   Important rule: dstCapacity MUST be large enough to store the entire source buffer as
-        ///   no compression is done for this operation
-        ///   If this condition is not respected, LZ4F_uncompressedUpdate() will fail (result is an errorCode).
-        ///   After an error, the state is left in a UB state, and must be re-initialized or freed.
-        ///   If previously a compressed block was written, buffered data is flushed first,
-        ///   before appending uncompressed data is continued.
-        ///   This operation is only supported when LZ4F_blockIndependent is used.
-        ///  `cOptPtr` is optional : NULL can be provided, in which case all options are set to default.
-        ///  @return : number of bytes written into `dstBuffer` (it can be zero, meaning input data was just buffered).
-        ///            or an error code if it fails (which can be tested using LZ4F_isError())
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "LZ4F_uncompressedUpdate", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern nuint LZ4F_uncompressedUpdate(LZ4F_cctx_s* cctx, void* dstBuffer, nuint dstCapacity, void* srcBuffer, nuint srcSize, LZ4F_compressOptions_t* cOptPtr);
-
-        [DllImport(__DllName, EntryPoint = "LZ4F_createCompressionContext_advanced", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern LZ4F_cctx_s* LZ4F_createCompressionContext_advanced(LZ4F_CustomMem customMem, uint version);
-
-        [DllImport(__DllName, EntryPoint = "LZ4F_createDecompressionContext_advanced", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern LZ4F_dctx_s* LZ4F_createDecompressionContext_advanced(LZ4F_CustomMem customMem, uint version);
-
-        [DllImport(__DllName, EntryPoint = "LZ4F_createCDict_advanced", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern LZ4F_CDict_s* LZ4F_createCDict_advanced(LZ4F_CustomMem customMem, void* dictBuffer, nuint dictSize);
-
-        [DllImport(__DllName, EntryPoint = "LZ4F_compressBegin_internal", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern nuint LZ4F_compressBegin_internal(LZ4F_cctx_s* cctx, void* dstBuffer, nuint dstCapacity, void* dictBuffer, nuint dictSize, LZ4F_CDict_s* cdict, LZ4F_preferences_t* preferencesPtr);
-
-        [DllImport(__DllName, EntryPoint = "LZ4F_compressBegin_usingDictOnce", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern nuint LZ4F_compressBegin_usingDictOnce(LZ4F_cctx_s* cctx, void* dstBuffer, nuint dstCapacity, void* dict, nuint dictSize, LZ4F_preferences_t* preferencesPtr);
 
 
     }

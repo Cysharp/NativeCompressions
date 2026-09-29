@@ -20,6 +20,9 @@ internal static class NativeMethodsLoader
         NativeLibrary.SetDllImportResolver(typeof(NativeCompressions.Interop.OpenZLNativeMethods).Assembly, DllImportResolver);
     }
 
+    // handle of a bundled native library, for tests that inspect its exports
+    internal static IntPtr Load(string libraryName) => DllImportResolver(libraryName, typeof(NativeMethodsLoader).Assembly, null);
+
     static IntPtr DllImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
         if (libraryName is "lz4" or "libzstd" or "libopenzl")

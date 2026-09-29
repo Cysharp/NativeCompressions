@@ -549,10 +549,12 @@ public sealed class LZ4Stream : Stream
         Exception? closeFailure = null;
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            // also without any Write, so an empty source still produces a valid frame
+            if (mode == CompressionMode.Compress)
             {
                 try
                 {
+                    buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxCompressedLength(0));
                     var written = encoder!.Close(buffer);
                     stream.Write(buffer, 0, written);
                 }
@@ -601,10 +603,12 @@ public sealed class LZ4Stream : Stream
         Exception? closeFailure = null;
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            // also without any Write, so an empty source still produces a valid frame
+            if (mode == CompressionMode.Compress)
             {
                 try
                 {
+                    buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxCompressedLength(0));
                     var written = encoder!.Close(buffer);
                     await stream.WriteAsync(buffer.AsMemory(0, written));
                 }

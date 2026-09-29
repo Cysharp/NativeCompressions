@@ -20,6 +20,7 @@
     <!-- Shared internals, only the ones Zstandard actually uses. -->
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Throws.cs" Link="Internal\Throws.cs" />
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\SegmentedArrayProvider.cs" Link="Internal\SegmentedArrayProvider.cs" />
+    <Compile Include="..\NativeCompressions.LZ4.Core\Internal\PipeWriterExtensions.cs" Link="Internal\PipeWriterExtensions.cs" />
     <!-- netstandard2.1 polyfills: Array.MaxLength, GC.AllocateUninitializedArray, ValueTask.FromCanceled, File.OpenHandle -->
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Polyfill\StaticExtensions.cs" Link="Internal\Polyfill\StaticExtensions.cs" />
     <!-- netstandard2.0 polyfills: Stream Span / Memory overloads and DisposeAsync -->
