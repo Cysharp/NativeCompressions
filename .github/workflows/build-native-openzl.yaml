@@ -407,7 +407,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [arm64, x86_64]
+        arch: [arm64, x86_64, simulator-arm64]
         include:
           - arch: arm64
             sdk: iphoneos
@@ -417,6 +417,11 @@ jobs:
             sdk: iphonesimulator
             target: x86_64-apple-ios11.0-simulator
             cflags: "-arch x86_64 -mios-simulator-version-min=11.0"
+          # Simulator on Apple silicon. The ios-arm64 archive is built for devices and cannot be linked into a simulator app.
+          - arch: simulator-arm64
+            sdk: iphonesimulator
+            target: arm64-apple-ios14.0-simulator
+            cflags: "-arch arm64 -mios-simulator-version-min=14.0"
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
@@ -443,6 +448,11 @@ jobs:
           ls -la
           file -L libopenzl.a
           lipo -info libopenzl.a
+      # device and simulator archives are both arm64, only the platform in the load commands tells them apart
+      - name: Verify simulator platform
+        if: ${{ matrix.arch == 'simulator-arm64' }}
+        run: |
+          otool -l openzl/libopenzl.a | grep -A 4 LC_BUILD_VERSION | grep -E 'platform (7|IOSSIMULATOR)'
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/ios-${{ matrix.arch }}
@@ -597,10 +607,13 @@ jobs:
           make libopenzl.so BUILD_TYPE=OPT CC="${CC}" STRIP=llvm-strip MOREFLAGS="-flto" \
             LIBZSTD_SO=nc-static/libzstd.a LIBLZ4_SO=nc-static/liblz4.a \
             -o nc-static/libzstd.a -o nc-static/liblz4.a \
-            LDFLAGS="-Wl,--version-script=nc-static/exports.map -Wl,-soname,libopenzl.so -Wl,--no-undefined" \
+            LDFLAGS="-Wl,--version-script=nc-static/exports.map -Wl,-soname,libopenzl.so -Wl,--no-undefined -Wl,-z,max-page-size=16384" \
             -j "$(nproc)"
           ls -la libopenzl.so
           file -L libopenzl.so
+          # 16 KB page size support, required for 64-bit devices running Android 15 or later.
+          llvm-readelf -lW libopenzl.so | grep LOAD
+          if llvm-readelf -lW libopenzl.so | grep LOAD | grep -v -E "0x4000[[:space:]]*$"; then echo "LOAD segment is not aligned to 16 KB"; exit 1; fi
       - name: Verify self-contained library
         working-directory: openzl
         run: |
@@ -656,7 +669,7 @@ jobs:
           mkdir -p release/runtimes/{linux-x64,linux-arm64}/native
           mkdir -p release/runtimes/{osx-x64,osx-arm64}/native
           mkdir -p release/runtimes/{android-arm,android-arm64,android-x64}/native
-          mkdir -p release/runtimes/{ios-arm64,ios-x64}/native
+          mkdir -p release/runtimes/{ios-arm64,ios-x64,iossimulator-arm64}/native
           mkdir -p release/runtimes/{maccatalyst-arm64,maccatalyst-x64}/native
 
           # Windows
@@ -689,6 +702,9 @@ jobs:
           fi
           if [ -f artifacts/openzl-ios-x86_64/libopenzl.a ]; then
             cp artifacts/openzl-ios-x86_64/libopenzl.a release/runtimes/ios-x64/native/
+          fi
+          if [ -f artifacts/openzl-ios-simulator-arm64/libopenzl.a ]; then
+            cp artifacts/openzl-ios-simulator-arm64/libopenzl.a release/runtimes/iossimulator-arm64/native/
           fi
 
           # Catalyst
@@ -769,7 +785,7 @@ jobs:
         run: |
           echo "Updated openzl runtimes to ${LATEST_TAG}"
 
-          for arch in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64 ios-arm64 ios-x64 maccatalyst-arm64 maccatalyst-x64 android-arm android-arm64 android-x64; do
+          for arch in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64 ios-arm64 ios-x64 iossimulator-arm64 maccatalyst-arm64 maccatalyst-x64 android-arm android-arm64 android-x64; do
             mkdir -p "${DEST_BASE_PATH}/${arch}/native"
           done
 
@@ -814,6 +830,9 @@ jobs:
             fi
             if [ -f artifacts/openzl-ios-x86_64/libopenzl.a ]; then
               cp -f artifacts/openzl-ios-x86_64/libopenzl.a "${DEST_BASE_PATH}/ios-x64/native/libopenzl.a"
+            fi
+            if [ -f artifacts/openzl-ios-simulator-arm64/libopenzl.a ]; then
+              cp -f artifacts/openzl-ios-simulator-arm64/libopenzl.a "${DEST_BASE_PATH}/iossimulator-arm64/native/libopenzl.a"
             fi
 
             # Catalyst

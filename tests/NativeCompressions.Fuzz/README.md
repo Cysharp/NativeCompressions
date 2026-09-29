@@ -10,7 +10,7 @@ a fixed set of deterministic mutations, and every file under `regressions/`.
 |---|---|---|
 | `decompress` | `Zstandard.Decompress` (trusted and untrusted), `TryDecompress`, frame inspection, BCL `ZstandardDecoder.TryDecompress` as an oracle | `ZstandardException` |
 | `decoder` | `ZstandardDecoder` with input and output chunk sizes taken from the data, multi frame, drain | none (returns `InvalidData`) |
-| `stream` | `ZstandardStream` reading from an inner stream that returns small reads | `InvalidOperationException` |
+| `stream` | `ZstandardStream` reading from an inner stream that returns small reads | `ZstandardException` |
 | `decompress-async` | `DecompressAsync` over a multi segment `ReadOnlySequence`, compared with one-shot | `ZstandardException` |
 | `roundtrip` | compress with options taken from the data, decompress through every path, both directions against the BCL | none |
 | `dictionary` | raw content dictionaries: create, compress, decompress with and without, BCL with the same bytes | `ZstandardException` only when decoding without the dictionary |

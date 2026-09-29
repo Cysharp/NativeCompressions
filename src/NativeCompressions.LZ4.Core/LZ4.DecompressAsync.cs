@@ -70,6 +70,7 @@ public static partial class LZ4
         if (source is FileStream fs && fs.CanSeek)
         {
             await DecompressAsync(fs.SafeFileHandle, fs.Position, destination, options, maxDegreeOfParallelism, cancellationToken);
+            fs.Position = fs.Length; // the handle was read directly, leave the stream at the end like a normal read would
             return;
         }
 #endif

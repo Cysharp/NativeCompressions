@@ -406,7 +406,7 @@ public sealed class ZstandardStream : Stream
             switch (status)
             {
                 case OperationStatus.InvalidData:
-                    throw new InvalidOperationException("Decompression failed: the input is not valid Zstandard data.");
+                    throw new ZstandardException("Invalid Zstandard frame.");
 
                 case OperationStatus.Done:
                     // Frame completed, there might be another frame so continue
@@ -429,6 +429,13 @@ public sealed class ZstandardStream : Stream
                         break;
                     }
 
+                    // Data decoded so far is returned before asking for more input.
+                    // The inner stream may not deliver more until the caller has acted on this data.
+                    if (totalRead > 0)
+                    {
+                        return totalRead;
+                    }
+
                     // Only consider reading new data when written == 0
                     if (readBufferCount == 0)
                     {
@@ -439,7 +446,11 @@ public sealed class ZstandardStream : Stream
 
                         if (readBufferCount == 0)
                         {
-                            // Truly reached EOF
+                            if (decoder!.IsFrameInProgress)
+                            {
+                                throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
+                            }
+
                             return totalRead;
                         }
                     }
@@ -462,9 +473,7 @@ public sealed class ZstandardStream : Stream
 
                         if (bytesRead == 0)
                         {
-                            // No more data available
-                            // Possibly incomplete frame at end
-                            return totalRead;
+                            throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
                         }
                     }
                     break;
@@ -518,7 +527,7 @@ public sealed class ZstandardStream : Stream
             switch (status)
             {
                 case OperationStatus.InvalidData:
-                    throw new InvalidOperationException("Decompression failed: the input is not valid Zstandard data.");
+                    throw new ZstandardException("Invalid Zstandard frame.");
 
                 case OperationStatus.Done:
                     // Frame completed, there might be another frame so continue
@@ -541,6 +550,13 @@ public sealed class ZstandardStream : Stream
                         break;
                     }
 
+                    // Data decoded so far is returned before asking for more input.
+                    // The inner stream may not deliver more until the caller has acted on this data.
+                    if (totalRead > 0)
+                    {
+                        return totalRead;
+                    }
+
                     // Only consider reading new data when written == 0
                     if (readBufferCount == 0)
                     {
@@ -552,7 +568,11 @@ public sealed class ZstandardStream : Stream
 
                         if (readBufferCount == 0)
                         {
-                            // Truly reached EOF
+                            if (decoder!.IsFrameInProgress)
+                            {
+                                throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
+                            }
+
                             return totalRead;
                         }
                     }
@@ -577,9 +597,7 @@ public sealed class ZstandardStream : Stream
 
                         if (bytesRead == 0)
                         {
-                            // No more data available
-                            // Possibly incomplete frame at end
-                            return totalRead;
+                            throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
                         }
                     }
                     break;

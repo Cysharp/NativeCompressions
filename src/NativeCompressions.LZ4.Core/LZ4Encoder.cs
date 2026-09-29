@@ -102,7 +102,8 @@ public sealed unsafe class LZ4Encoder : IDisposable
             bound = (int)LZ4F_compressBound((nuint)inputSize, prefs);
         }
 
-        if (includingHeader) bound += GetActualFrameHeaderLength();
+        // LZ4F_compressBegin requires room for the largest header, whatever size the header actually takes
+        if (includingHeader) bound += LZ4.MaxFrameHeaderLength;
         if (includingFooter) bound += GetActualFrameFooterLength();
         return bound;
     }
@@ -170,16 +171,20 @@ public sealed unsafe class LZ4Encoder : IDisposable
         // Write header block
         if (!isWrittenHeader)
         {
+            // LZ4F_cctx_s always need to call compressBegin but header can ignore(write for single frame from multiple context(multiple block))
+            // An ignored header goes to a scratch buffer, so the destination needs no room for it.
+            Span<byte> scratch = stackalloc byte[LZ4.MaxFrameHeaderLength];
+            var headerDestination = IsWriteHeader ? destination : scratch;
+
             fixed (LZ4F_preferences_t* preference = &preferences)
-            fixed (byte* dest = destination)
+            fixed (byte* dest = headerDestination)
             {
                 var writtenOrErrorCode = (dictionary == null)
-                    ? LZ4F_compressBegin(context, dest, (nuint)destination.Length, preference)
-                    : LZ4F_compressBegin_usingCDict(context, dest, (nuint)destination.Length, dictionary.Handle, preference);
+                    ? LZ4F_compressBegin(context, dest, (nuint)headerDestination.Length, preference)
+                    : LZ4F_compressBegin_usingCDict(context, dest, (nuint)headerDestination.Length, dictionary.Handle, preference);
                 LZ4.ThrowIfError(writtenOrErrorCode);
                 isWrittenHeader = true;
 
-                // LZ4F_cctx_s always need to call compressBegin but header can ignore(write for single frame from multiple context(multiple block))
                 if (IsWriteHeader)
                 {
                     destination = destination.Slice((int)writtenOrErrorCode);

@@ -23,6 +23,7 @@ public sealed unsafe class LZ4Decoder : IDisposable
 
     LZ4F_decompressOptions_t options;
     LZ4Dictionary? dictionary; // keeps the dictionary reachable while this decoder uses it
+    bool frameInProgress; // tracked here so the layout of the native context is never read
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LZ4Decoder"/>.
@@ -64,16 +65,8 @@ public sealed unsafe class LZ4Decoder : IDisposable
     /// </summary>
     public bool IsDisposed => dctx == null;
 
-    internal bool IsFrameInProgress
-    {
-        get
-        {
-            var context = GetContext();
-            var inProgress = context->dStage != dStage_t.dstage_getFrameHeader;
-            GC.KeepAlive(this);
-            return inProgress;
-        }
-    }
+    // true once bytes of a frame were taken and until that frame completes or the decoder is reset
+    internal bool IsFrameInProgress => frameInProgress;
 
     /// <summary>
     /// Determines the size of an LZ4 frame header from the beginning of a compressed stream.
@@ -141,6 +134,7 @@ public sealed unsafe class LZ4Decoder : IDisposable
             LZ4.ThrowIfError(hintOrErrorCode);
 
             bytesConsumed = (int)consumed;
+            if (bytesConsumed > 0) frameInProgress = true;
             return result;
         }
     }
@@ -226,8 +220,11 @@ public sealed unsafe class LZ4Decoder : IDisposable
 
             if (hintOrErrorCode == 0)
             {
+                frameInProgress = false;
                 return OperationStatus.Done;
             }
+
+            if (bytesConsumed > 0 || bytesWritten > 0) frameInProgress = true;
 
             var sourceFullyConsumed = bytesConsumed == source.Length;
             var destinationFullyUsed = bytesWritten == destination.Length;
@@ -260,6 +257,7 @@ public sealed unsafe class LZ4Decoder : IDisposable
     {
         var context = GetContext();
         LZ4F_resetDecompressionContext(context);
+        frameInProgress = false;
         GC.KeepAlive(this);
     }
 

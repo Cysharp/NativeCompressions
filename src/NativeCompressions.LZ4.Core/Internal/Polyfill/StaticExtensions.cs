@@ -27,7 +27,10 @@ namespace NativeCompressions.Internal
         {
             public static SafeFileHandle OpenHandle(string path, FileMode mode = FileMode.Open, FileAccess access = FileAccess.Read, FileShare share = FileShare.Read, FileOptions options = FileOptions.None, long preallocationSize = 0)
             {
-                var fs = new FileStream(path, mode, access, share, preallocationSize == 0 ? 1 : (int)preallocationSize, options);
+                var fs = new FileStream(path, mode, access, share, bufferSize: 1, options);
+
+                // only the handle is handed out, the stream must not close it when it is finalized
+                GC.SuppressFinalize(fs);
                 return fs.SafeFileHandle;
             }
         }

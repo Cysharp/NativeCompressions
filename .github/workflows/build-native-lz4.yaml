@@ -256,7 +256,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [arm64, x86_64]
+        arch: [arm64, x86_64, simulator-arm64]
         include:
           - arch: arm64
             sdk: iphoneos
@@ -266,6 +266,11 @@ jobs:
             sdk: iphonesimulator
             target: x86_64-apple-ios11.0-simulator
             cflags: "-arch x86_64 -mios-simulator-version-min=11.0"
+          # Simulator on Apple silicon. The ios-arm64 archive is built for devices and cannot be linked into a simulator app.
+          - arch: simulator-arm64
+            sdk: iphonesimulator
+            target: arm64-apple-ios14.0-simulator
+            cflags: "-arch arm64 -mios-simulator-version-min=14.0"
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
@@ -292,6 +297,11 @@ jobs:
           ls -la liblz4.a
           file liblz4.a
           lipo -info liblz4.a
+      # device and simulator archives are both arm64, only the platform in the load commands tells them apart
+      - name: Verify simulator platform
+        if: ${{ matrix.arch == 'simulator-arm64' }}
+        run: |
+          otool -l lz4/lib/liblz4.a | grep -A 4 LC_BUILD_VERSION | grep -E 'platform (7|IOSSIMULATOR)'
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/ios-${{ matrix.arch }}
@@ -410,9 +420,13 @@ jobs:
           export PATH="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
 
           cd lz4/lib
-          make BUILD_STATIC=no BUILD_SHARED=yes CC="${{ matrix.cc }}" CFLAGS="-O3 -fPIC -DXXH_NAMESPACE=LZ4_" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
+          # 16 KB page size support, required for 64-bit devices running Android 15 or later.
+          # LDFLAGS comes from the environment so the Makefile can still add to it.
+          LDFLAGS="-Wl,-z,max-page-size=16384" make BUILD_STATIC=no BUILD_SHARED=yes CC="${{ matrix.cc }}" CFLAGS="-O3 -fPIC -DXXH_NAMESPACE=LZ4_" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
           ls -la liblz4.so*
           file liblz4.so*
+          llvm-readelf -lW liblz4.so | grep LOAD
+          if llvm-readelf -lW liblz4.so | grep LOAD | grep -v -E "0x4000[[:space:]]*$"; then echo "LOAD segment is not aligned to 16 KB"; exit 1; fi
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/android-${{ matrix.arch }}
@@ -452,7 +466,7 @@ jobs:
           mkdir -p release/runtimes/{linux-x64,linux-arm64}/native
           mkdir -p release/runtimes/{osx-x64,osx-arm64}/native
           mkdir -p release/runtimes/{android-arm,android-arm64,android-x64}/native
-          mkdir -p release/runtimes/{ios-arm64,ios-x64}/native
+          mkdir -p release/runtimes/{ios-arm64,ios-x64,iossimulator-arm64}/native
           mkdir -p release/runtimes/{maccatalyst-arm64,maccatalyst-x64}/native
 
           # Windows
@@ -485,6 +499,9 @@ jobs:
           fi
           if [ -f artifacts/lz4-ios-x86_64/liblz4.a ]; then
             cp artifacts/lz4-ios-x86_64/liblz4.a release/runtimes/ios-x64/native/
+          fi
+          if [ -f artifacts/lz4-ios-simulator-arm64/liblz4.a ]; then
+            cp artifacts/lz4-ios-simulator-arm64/liblz4.a release/runtimes/iossimulator-arm64/native/
           fi
 
           # Catalyst
@@ -565,7 +582,7 @@ jobs:
         run: |
           echo "Updated lz4 runtimes to ${LATEST_TAG}"
 
-          for arch in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64 ios-arm64 ios-x64 maccatalyst-arm64 maccatalyst-x64 android-arm android-arm64 android-x64; do
+          for arch in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64 ios-arm64 ios-x64 iossimulator-arm64 maccatalyst-arm64 maccatalyst-x64 android-arm android-arm64 android-x64; do
             mkdir -p "${DEST_BASE_PATH}/${arch}/native"
           done
 
@@ -610,6 +627,9 @@ jobs:
             fi
             if [ -f artifacts/lz4-ios-x86_64/liblz4.a ]; then
               cp -f artifacts/lz4-ios-x86_64/liblz4.a "${DEST_BASE_PATH}/ios-x64/native/liblz4.a"
+            fi
+            if [ -f artifacts/lz4-ios-simulator-arm64/liblz4.a ]; then
+              cp -f artifacts/lz4-ios-simulator-arm64/liblz4.a "${DEST_BASE_PATH}/iossimulator-arm64/native/liblz4.a"
             fi
 
             # Catalyst
