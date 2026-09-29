@@ -193,7 +193,7 @@ You can change `with` operator.
 var options = LZ4CompressionOptions.Default with
 {
     CompressionLevel = 3,
-    ContentSize = source.Length
+    ContentSize = (ulong)source.Length
 };
 ```
 
@@ -208,7 +208,7 @@ var options = new LZ4CompressionOptions
     BlockMode = BlockMode.BlockIndependent, 
     ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled,
     BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled,
-    ContentSize = (ulong)sourceData.Length  // Pre-declare size
+    ContentSize = (ulong)sourceData.Length, // Pre-declare size
     Dictionary = null // LZ4 Dictionary
 };
 ```
@@ -218,7 +218,7 @@ Improve compression ratio for similar data:
 
 ```csharp
 // Create dictionary from sample data
-var dictionary = new LZ4CompressionDictionary(sampleData, dictionaryId: 12345);
+using var dictionary = LZ4Dictionary.Create(sampleData, dictionaryId: 12345);
 
 // Use dictionary for compression
 byte[] compressed = LZ4.Compress(source, LZ4CompressionOptions.Default with { Dictionary = dictionary });
@@ -253,7 +253,7 @@ TODO
 
 Zstandard
 ---
-It is generally similar to the LZ4 API. The `Zstandard` class has static methods, and there are `ZstandardEncoder` and `ZstandardDecoder` as Streamless-streaming APIs. Currently, the PipeReader/PipeWriter API is not implemented, but it will eventually be provided.
+It is generally similar to the LZ4 API. The `Zstandard` class has static methods, and there are `ZstandardEncoder` and `ZstandardDecoder` as Streamless-streaming APIs. `CompressAsync`/`DecompressAsync` with `PipeReader`/`PipeWriter` are provided as well. Unlike LZ4, they are not parallelized.
 
 `ZstandardEncoder` and `ZstandardDecoder` API is completely same as `BrotliEncoder`/`BrotliDecoder` unlike `LZ4Encoder/Decoder`. In other words, Compress returns an `OperationStatus`, which contains `int bytesConsumed`, `int bytesWritten`, and `bool isFinalBlock`.
 
