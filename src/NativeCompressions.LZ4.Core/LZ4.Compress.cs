@@ -42,6 +42,7 @@ public static partial class LZ4
                     finally
                     {
                         LZ4F_freeCompressionContext(cctx);
+                        GC.KeepAlive(dictionary); // its finalizer frees the native dictionary
                     }
                 }
             }
@@ -84,6 +85,7 @@ public static partial class LZ4
                 finally
                 {
                     LZ4F_freeCompressionContext(cctx);
+                    GC.KeepAlive(dictionary); // its finalizer frees the native dictionary
                 }
             }
         }

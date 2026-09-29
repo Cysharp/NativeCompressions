@@ -141,7 +141,7 @@ public static partial class LZ4
 
     static async ValueTask DecompressCoreAsync(PipeReader source, PipeWriter destination, LZ4DecompressionOptions options, int? maxDegreeOfParallelism, CancellationToken cancellationToken)
     {
-        using var decoder = new LZ4Decoder(options);
+        using var decoder = new LZ4Decoder(options.WithoutStableDst());
 
         while (true)
         {
@@ -221,7 +221,10 @@ public static partial class LZ4
             foreach (var segment in buffer)
             {
                 var src = segment;
-                while (src.Length > 0)
+
+                // DestinationTooSmall means the decoder still holds output, which is taken out with empty input.
+                // Leaving it there would hold it back until more input arrives.
+                while (src.Length > 0 || status == OperationStatus.DestinationTooSmall)
                 {
                     var dest = destination.GetMemory(maxBlockSize);
                     status = decoder.Decompress(src.Span, dest.Span, out var bytesConsumed, out var bytesWritten);
@@ -229,6 +232,11 @@ public static partial class LZ4
                     pending += bytesWritten;
                     src = src.Slice(bytesConsumed);
                     consumedInBuffer += bytesConsumed;
+
+                    if (bytesConsumed == 0 && bytesWritten == 0 && status == OperationStatus.DestinationTooSmall)
+                    {
+                        throw new LZ4Exception("Invalid LZ4 frame: decoder made no progress.");
+                    }
 
                     if (status == OperationStatus.InvalidData)
                     {

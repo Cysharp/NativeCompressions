@@ -407,6 +407,11 @@ public static partial class LZ4
             throw new ArgumentException("Invalid file handle", nameof(source));
         }
 
+        if (offset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(offset));
+        }
+
         // same contract on every framework, even where the netstandard2.1 path compresses sequentially
         var newOptions = options ?? LZ4CompressionOptions.Default;
         ThrowIfParallelWithContentChecksum(newOptions, maxDegreeOfParallelism);
@@ -415,7 +420,8 @@ public static partial class LZ4
         await CompressAsync(fs, destination, options, cancellationToken);
         return;
 #else
-        long sourceLength = RandomAccess.GetLength(source) - offset; // we can accept `long` length(over 2GB file), don't cast to int.
+        // we can accept `long` length(over 2GB file), don't cast to int. An offset at or past the end is an empty source.
+        long sourceLength = Math.Max(0, RandomAccess.GetLength(source) - offset);
 
         newOptions = newOptions with
         {

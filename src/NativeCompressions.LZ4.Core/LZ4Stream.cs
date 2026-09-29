@@ -59,7 +59,7 @@ public sealed class LZ4Stream : Stream
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.needDisposeNativeCompressor = true;
-        this.decoder = new LZ4Decoder(options);
+        this.decoder = new LZ4Decoder(options.WithoutStableDst());
         this.mode = CompressionMode.Decompress;
     }
 

@@ -33,7 +33,7 @@ public static partial class LZ4
             return [];
         }
 
-        using var decoder = new LZ4Decoder(options);
+        using var decoder = new LZ4Decoder(options.WithoutStableDst());
 
         if (trustedData && TryGetFrameInfo(source, out var frameInfo) && frameInfo.FrameType == FrameType.Frame && frameInfo.ContentSize != 0)
         {
@@ -141,7 +141,7 @@ public static partial class LZ4
             return 0;
         }
 
-        using var decoder = new LZ4Decoder(options);
+        using var decoder = new LZ4Decoder(options.WithoutStableDst());
 
         var totalWritten = 0;
         while (true)

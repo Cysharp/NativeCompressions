@@ -212,13 +212,20 @@ public static partial class Zstandard
         var status = OperationStatus.NeedMoreData;
         var pending = 0; // bytes advanced but not yet flushed
 
-        while (chunk.Length > 0)
+        // DestinationTooSmall means the decoder still holds output, which is taken out with empty input.
+        // Leaving it there would hold it back until more input arrives.
+        while (chunk.Length > 0 || status == OperationStatus.DestinationTooSmall)
         {
             var dest = destination.GetMemory(sizeHint);
             status = decoder.Decompress(chunk.Span, dest.Span, out var bytesConsumed, out var bytesWritten);
             chunk = chunk.Slice(bytesConsumed);
             destination.Advance(bytesWritten);
             pending += bytesWritten;
+
+            if (bytesConsumed == 0 && bytesWritten == 0 && status == OperationStatus.DestinationTooSmall)
+            {
+                throw new ZstandardException("Zstandard decoder made no progress.");
+            }
 
             switch (status)
             {
