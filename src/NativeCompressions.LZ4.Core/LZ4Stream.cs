@@ -27,7 +27,6 @@ public sealed class LZ4Stream : Stream
     byte[]? buffer; // both compress and decompress
     int readBufferOffset; // for decompress
     int readBufferCount; // for decompress
-    bool frameInProgress; // for decompress
 
     public LZ4Stream(Stream stream, CompressionMode mode, bool leaveOpen = false)
     {
@@ -79,7 +78,6 @@ public sealed class LZ4Stream : Stream
         this.leaveOpen = leaveOpen;
         this.needDisposeNativeCompressor = false;
         this.decoder = decoder ?? throw new ArgumentNullException(nameof(decoder));
-        this.frameInProgress = this.decoder.IsFrameInProgress;
         this.mode = CompressionMode.Decompress;
     }
 
@@ -337,15 +335,6 @@ public sealed class LZ4Stream : Stream
                 destination = destination.Slice(written);
             }
 
-            if (status == OperationStatus.Done)
-            {
-                frameInProgress = false;
-            }
-            else if (consumed > 0 || written > 0)
-            {
-                frameInProgress = true;
-            }
-
             switch (status)
             {
                 case OperationStatus.InvalidData:
@@ -382,7 +371,7 @@ public sealed class LZ4Stream : Stream
 
                         if (readBufferCount == 0)
                         {
-                            if (frameInProgress)
+                            if (decoder!.IsFrameInProgress)
                             {
                                 throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
                             }
@@ -460,15 +449,6 @@ public sealed class LZ4Stream : Stream
                 destination = destination.Slice(written);
             }
 
-            if (status == OperationStatus.Done)
-            {
-                frameInProgress = false;
-            }
-            else if (consumed > 0 || written > 0)
-            {
-                frameInProgress = true;
-            }
-
             switch (status)
             {
                 case OperationStatus.InvalidData:
@@ -506,7 +486,7 @@ public sealed class LZ4Stream : Stream
 
                         if (readBufferCount == 0)
                         {
-                            if (frameInProgress)
+                            if (decoder!.IsFrameInProgress)
                             {
                                 throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
                             }

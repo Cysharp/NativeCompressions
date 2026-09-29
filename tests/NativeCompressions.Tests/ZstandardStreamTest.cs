@@ -472,18 +472,13 @@ public class ZstandardStreamTest
     // ---- truncated and corrupt input
 
     [Fact]
-    public void Read_TruncatedInput_StopsAtAvailableData()
+    public void Read_TruncatedInput_Throws()
     {
         var compressed = BclCompress(Data);
         var truncated = compressed.AsSpan(0, compressed.Length / 2).ToArray();
 
         using var reader = new ZstandardStream(new MemoryStream(truncated), CompressionMode.Decompress);
-        var ms = new MemoryStream();
-        reader.CopyTo(ms);
-
-        // whatever came out must be a prefix of the original
-        Assert.True(ms.Length < Data.Length);
-        Assert.Equal(Data.AsSpan(0, (int)ms.Length).ToArray(), ms.ToArray());
+        Assert.Throws<ZstandardException>(() => reader.CopyTo(Stream.Null));
     }
 
     [Fact]
@@ -492,6 +487,6 @@ public class ZstandardStreamTest
         var garbage = new byte[4096];
         new Random(1).NextBytes(garbage);
         using var reader = new ZstandardStream(new MemoryStream(garbage), CompressionMode.Decompress);
-        Assert.ThrowsAny<Exception>(() => reader.CopyTo(Stream.Null));
+        Assert.Throws<ZstandardException>(() => reader.CopyTo(Stream.Null));
     }
 }

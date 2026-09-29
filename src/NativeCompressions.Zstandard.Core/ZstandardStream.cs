@@ -406,7 +406,7 @@ public sealed class ZstandardStream : Stream
             switch (status)
             {
                 case OperationStatus.InvalidData:
-                    throw new InvalidOperationException("Decompression failed: the input is not valid Zstandard data.");
+                    throw new ZstandardException("Invalid Zstandard frame.");
 
                 case OperationStatus.Done:
                     // Frame completed, there might be another frame so continue
@@ -439,7 +439,11 @@ public sealed class ZstandardStream : Stream
 
                         if (readBufferCount == 0)
                         {
-                            // Truly reached EOF
+                            if (decoder!.IsFrameInProgress)
+                            {
+                                throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
+                            }
+
                             return totalRead;
                         }
                     }
@@ -462,9 +466,7 @@ public sealed class ZstandardStream : Stream
 
                         if (bytesRead == 0)
                         {
-                            // No more data available
-                            // Possibly incomplete frame at end
-                            return totalRead;
+                            throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
                         }
                     }
                     break;
@@ -518,7 +520,7 @@ public sealed class ZstandardStream : Stream
             switch (status)
             {
                 case OperationStatus.InvalidData:
-                    throw new InvalidOperationException("Decompression failed: the input is not valid Zstandard data.");
+                    throw new ZstandardException("Invalid Zstandard frame.");
 
                 case OperationStatus.Done:
                     // Frame completed, there might be another frame so continue
@@ -552,7 +554,11 @@ public sealed class ZstandardStream : Stream
 
                         if (readBufferCount == 0)
                         {
-                            // Truly reached EOF
+                            if (decoder!.IsFrameInProgress)
+                            {
+                                throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
+                            }
+
                             return totalRead;
                         }
                     }
@@ -577,9 +583,7 @@ public sealed class ZstandardStream : Stream
 
                         if (bytesRead == 0)
                         {
-                            // No more data available
-                            // Possibly incomplete frame at end
-                            return totalRead;
+                            throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
                         }
                     }
                     break;

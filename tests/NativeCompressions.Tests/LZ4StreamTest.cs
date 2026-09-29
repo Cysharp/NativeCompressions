@@ -416,6 +416,41 @@ public class LZ4StreamTest
     }
 
     [Fact]
+    public void ExternalDecoder_ReusedAfterEmptyInput_EmptyInputIsCleanEof()
+    {
+        using var decoder = new LZ4Decoder();
+        using (var first = new LZ4Stream(new MemoryStream(), decoder, leaveOpen: true))
+        {
+            Assert.Equal(0, first.Read(new byte[1]));
+        }
+
+        // reading nothing must not leave the decoder looking like it is inside a frame
+        using var second = new LZ4Stream(new MemoryStream(), decoder, leaveOpen: true);
+        Assert.Equal(0, second.Read(new byte[1]));
+    }
+
+    [Fact]
+    public void ExternalDecoder_SharedAcrossStreams_TruncatedSecondHalfThrows()
+    {
+        var compressed = LZ4.Compress(Data);
+        var half = compressed.Length / 2;
+        using var decoder = new LZ4Decoder();
+
+        // the first stream ends inside the frame
+        using (var first = new LZ4Stream(new MemoryStream(compressed, 0, half), decoder, leaveOpen: true))
+        {
+            Assert.Throws<LZ4Exception>(() => first.CopyTo(Stream.Null));
+        }
+
+        // after a reset the same decoder reads a complete frame
+        decoder.Reset();
+        using var second = new LZ4Stream(new MemoryStream(compressed), decoder, leaveOpen: true);
+        var ms = new MemoryStream();
+        second.CopyTo(ms);
+        Assert.Equal(Data, ms.ToArray());
+    }
+
+    [Fact]
     public void Read_TruncatedInput_Throws()
     {
         var compressed = LZ4.Compress(Data);

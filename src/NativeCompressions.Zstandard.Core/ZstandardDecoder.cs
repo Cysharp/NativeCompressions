@@ -26,6 +26,8 @@ public sealed unsafe class ZstandardDecoder : IDisposable
     MemoryHandle prefixHandle;
     bool hasPrefix;
 
+    bool frameInProgress;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardDecoder"/>.
     /// </summary>
@@ -68,6 +70,9 @@ public sealed unsafe class ZstandardDecoder : IDisposable
     /// Gets a value indicating whether the decoder has been disposed.
     /// </summary>
     public bool IsDisposed => dctx == null;
+
+    // true once bytes of a frame were taken and until that frame completes or the decoder is reset
+    internal bool IsFrameInProgress => frameInProgress;
 
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten)
     {
@@ -116,8 +121,11 @@ public sealed unsafe class ZstandardDecoder : IDisposable
 
             if (hintOrErrorCode == 0)
             {
+                frameInProgress = false;
                 return OperationStatus.Done;
             }
+
+            if (bytesConsumed > 0 || bytesWritten > 0) frameInProgress = true;
 
             var sourceFullyConsumed = input.pos == input.size;
             var destinationFullyUsed = output.pos == output.size;
@@ -149,6 +157,7 @@ public sealed unsafe class ZstandardDecoder : IDisposable
 
         var result = ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_only);
         Zstandard.ThrowIfError(result);
+        frameInProgress = false;
 
         // A session reset keeps an unused prefix referenced by the native context, so drop that reference before unpinning.
         if (hasPrefix)
@@ -165,6 +174,7 @@ public sealed unsafe class ZstandardDecoder : IDisposable
 
         var result = ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
         Zstandard.ThrowIfError(result);
+        frameInProgress = false;
         dictionary = null;
         ReleasePrefix();
 
