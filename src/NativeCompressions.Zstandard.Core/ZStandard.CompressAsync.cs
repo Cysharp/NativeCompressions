@@ -224,6 +224,7 @@ public static partial class Zstandard
         if (source is FileStream fs && fs.CanSeek)
         {
             await CompressAsync(fs.SafeFileHandle, fs.Position, destination, encoder, cancellationToken);
+            fs.Position = fs.Length; // the handle was read directly, leave the stream at the end like a normal read would
             return;
         }
 #endif

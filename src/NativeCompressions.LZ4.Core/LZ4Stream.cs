@@ -361,6 +361,13 @@ public sealed class LZ4Stream : Stream
                         break;
                     }
 
+                    // Data decoded so far is returned before asking for more input.
+                    // The inner stream may not deliver more until the caller has acted on this data.
+                    if (totalRead > 0)
+                    {
+                        return totalRead;
+                    }
+
                     // Only consider reading new data when written == 0
                     if (readBufferCount == 0)
                     {
@@ -473,6 +480,13 @@ public sealed class LZ4Stream : Stream
                         // Decoder produced output, retry in next loop
                         // Don't read additional data
                         break;
+                    }
+
+                    // Data decoded so far is returned before asking for more input.
+                    // The inner stream may not deliver more until the caller has acted on this data.
+                    if (totalRead > 0)
+                    {
+                        return totalRead;
                     }
 
                     // Only consider reading new data when written == 0

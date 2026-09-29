@@ -56,8 +56,8 @@ public static partial class LZ4
                 source = source.Slice(count);
             }
 
-            // `AutoFlush = true` so no need to care about encoder's internal buffer
-            var lastBuffer = destination.GetSpan(encoder.GetActualFrameFooterLength());
+            // `AutoFlush = true` so no need to care about encoder's internal buffer, but an empty source writes the header here
+            var lastBuffer = destination.GetSpan(encoder.GetMaxCompressedLength(0));
             var lastWritten = encoder.Close(lastBuffer);
             destination.Advance(lastWritten);
             await destination.FlushAsync(cancellationToken);
@@ -95,7 +95,7 @@ public static partial class LZ4
             // write header at first. NOTE: can't reuse Encoder because not called LZ4F_compressEnd(Close).
             using (var headerEncoder = new LZ4Encoder(newOptions) { IsWriteHeader = true })
             {
-                var dest = destination.GetSpan(headerEncoder.GetActualFrameHeaderLength());
+                var dest = destination.GetSpan(MaxFrameHeaderLength); // LZ4F_compressBegin requires room for the largest header
                 var written = headerEncoder.Compress([], dest);
                 destination.Advance(written);
                 await destination.FlushAsync(cancellationToken);
@@ -244,7 +244,7 @@ public static partial class LZ4
             // write header at first.
             using (var headerEncoder = new LZ4Encoder(newOptions) { IsWriteHeader = true })
             {
-                var dest = destination.GetSpan(headerEncoder.GetActualFrameHeaderLength());
+                var dest = destination.GetSpan(MaxFrameHeaderLength); // LZ4F_compressBegin requires room for the largest header
                 var written = headerEncoder.Compress([], dest);
                 destination.Advance(written);
                 await destination.FlushAsync(cancellationToken);
@@ -253,15 +253,14 @@ public static partial class LZ4
             // producer: slice buffer and compress, send compressed buffer.
             var bufferId = -1;
             Task outputProducers;
-#if NET8_0_OR_GREATER
-            outputProducers = Parallel.ForAsync(0, threadCount, async (producerId, _) =>
+            async Task CompressBlocksAsync()
             {
                 using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
 
                 while (true)
                 {
                     var id = Interlocked.Increment(ref bufferId);
-                    var offset = id * actualChunkSize;
+                    var offset = id * (long)actualChunkSize; // long for over 2GB sequence
 
                     var remaining = source.Length - offset;
                     if (remaining <= 0)
@@ -273,14 +272,25 @@ public static partial class LZ4
                     var bufferLength = encoder.GetMaxCompressedLength((int)src.Length, includingHeader: false, includingFooter: false);
                     var destBuffer = ArrayPool<byte>.Shared.Rent(bufferLength);
 
-                    var written = 0;
-                    var dest = destBuffer.AsSpan(0, bufferLength);
-                    foreach (var item in src)
+                    int written;
+                    if (src.IsSingleSegment)
                     {
-                        written += encoder.Compress(item.Span, dest);
-                        dest = dest.Slice(written);
+                        written = CompressBlock(encoder, src.First.Span, destBuffer);
                     }
-                    written += encoder.Flush(dest); // must flush after compress ReadOnlySequence chunks
+                    else
+                    {
+                        // a block that spans segments is gathered first, the destination is sized for one block
+                        var gathered = ArrayPool<byte>.Shared.Rent((int)src.Length);
+                        try
+                        {
+                            src.CopyTo(gathered);
+                            written = CompressBlock(encoder, gathered.AsSpan(0, (int)src.Length), destBuffer);
+                        }
+                        finally
+                        {
+                            ArrayPool<byte>.Shared.Return(gathered, clearArray: false);
+                        }
+                    }
 
                     await outputChannel.Writer.WriteAsync(new CompressionBuffer
                     {
@@ -289,47 +299,25 @@ public static partial class LZ4
                         Id = id
                     }, channelToken.Token);
                 }
+            }
+
+            static int CompressBlock(LZ4Encoder encoder, ReadOnlySpan<byte> source, Span<byte> destination)
+            {
+                var written = encoder.Compress(source, destination);
+                written += encoder.Flush(destination.Slice(written)); // without AutoFlush the last block stays buffered
+                return written;
+            }
+
+#if NET8_0_OR_GREATER
+            outputProducers = Parallel.ForAsync(0, threadCount, async (producerId, _) =>
+            {
+                await CompressBlocksAsync();
             });
 #else
             var producerTasks = new Task[threadCount];
             for (int i = 0; i < producerTasks.Length; i++)
             {
-                producerTasks[i] = Task.Run(async () =>
-                {
-                    using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
-
-                    while (true)
-                    {
-                        var id = Interlocked.Increment(ref bufferId);
-                        var offset = id * actualChunkSize;
-
-                        var remaining = source.Length - offset;
-                        if (remaining <= 0)
-                        {
-                            break;
-                        }
-
-                        var src = source.Slice(offset, Math.Min(remaining, actualChunkSize));
-                        var bufferLength = encoder.GetMaxCompressedLength((int)src.Length, includingHeader: false, includingFooter: false);
-                        var destBuffer = ArrayPool<byte>.Shared.Rent(bufferLength);
-
-                        var written = 0;
-                        var dest = destBuffer.AsSpan(0, bufferLength);
-                        foreach (var item in src)
-                        {
-                            written += encoder.Compress(item.Span, dest);
-                            dest = dest.Slice(written);
-                        }
-                        written += encoder.Flush(dest); // must flush after compress ReadOnlySequence chunks
-
-                        await outputChannel.Writer.WriteAsync(new CompressionBuffer
-                        {
-                            CompressedBuffer = destBuffer,
-                            Count = written,
-                            Id = id
-                        }, channelToken.Token);
-                    }
-                });
+                producerTasks[i] = Task.Run(CompressBlocksAsync);
             }
 
             outputProducers = Task.WhenAll(producerTasks);
@@ -416,8 +404,8 @@ public static partial class LZ4
                 remaining -= read;
             }
 
-            // `AutoFlush = true` so no need to care about encoder's internal buffer
-            var lastBuffer = destination.GetSpan(encoder.GetActualFrameFooterLength());
+            // `AutoFlush = true` so no need to care about encoder's internal buffer, but an empty source writes the header here
+            var lastBuffer = destination.GetSpan(encoder.GetMaxCompressedLength(0));
             var lastWritten = encoder.Close(lastBuffer);
             destination.Advance(lastWritten);
             await destination.FlushAsync(cancellationToken);
@@ -455,7 +443,7 @@ public static partial class LZ4
             // write header at first.
             using (var headerEncoder = new LZ4Encoder(newOptions) { IsWriteHeader = true })
             {
-                var dest = destination.GetSpan(headerEncoder.GetActualFrameHeaderLength());
+                var dest = destination.GetSpan(MaxFrameHeaderLength); // LZ4F_compressBegin requires room for the largest header
                 var written = headerEncoder.Compress([], dest);
                 destination.Advance(written);
                 await destination.FlushAsync(cancellationToken);
@@ -598,6 +586,7 @@ public static partial class LZ4
         if (source is FileStream fs && fs.CanSeek)
         {
             await CompressAsync(fs.SafeFileHandle, fs.Position, destination, options, maxDegreeOfParallelism: 1, cancellationToken);
+            fs.Position = fs.Length; // the handle was read directly, leave the stream at the end like a normal read would
             return;
         }
 #endif

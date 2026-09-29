@@ -119,6 +119,7 @@ public static partial class Zstandard
         if (source is FileStream fs && fs.CanSeek)
         {
             await DecompressAsync(fs.SafeFileHandle, fs.Position, destination, decoder, cancellationToken);
+            fs.Position = fs.Length; // the handle was read directly, leave the stream at the end like a normal read would
             return;
         }
 #endif
@@ -239,6 +240,12 @@ public static partial class Zstandard
             {
                 decoder.Reset();
             }
+        }
+
+        // a decoder handed in by the caller may already be inside a frame, so no input is not enough to call it a clean end
+        if (decoder.IsFrameInProgress)
+        {
+            throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
         }
 
         if (!anyInput)
