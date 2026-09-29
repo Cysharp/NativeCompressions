@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ### Build
-The Core projects also target `net10.0-ios`, so building the solution needs the iOS workload (`dotnet workload install ios`). The workload is only available on Windows and macOS hosts.
+The Core projects also target iOS and Mac Catalyst on macOS hosts, so building the solution there needs the workloads (`dotnet workload install ios maccatalyst`). The workload is only available on Windows and macOS hosts.
 
 ```bash
 # Build entire solution in Debug mode

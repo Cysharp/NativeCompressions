@@ -7,13 +7,18 @@
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <IncludeContentInPack>true</IncludeContentInPack>
     <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
-    <Description>OpenZL native runtime for ios-arm64.</Description>
+    <Description>OpenZL native runtime for ios-arm64 and iossimulator-arm64.</Description>
 
   </PropertyGroup>
 
   <ItemGroup>
     <None Remove="runtimes\**" />
     <None Include="runtimes\ios-arm64\native\libopenzl.a" PackagePath="runtimes\ios-arm64\native\" Pack="true">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <!-- The simulator on Apple silicon falls back to ios-arm64, so it resolves to this package.
+         The device archive cannot be linked there, the more specific asset below is selected instead. -->
+    <None Include="runtimes\iossimulator-arm64\native\libopenzl.a" PackagePath="runtimes\iossimulator-arm64\native\" Pack="true" Condition="Exists('runtimes\iossimulator-arm64\native\libopenzl.a')">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <!-- Block Catalyst fallback to the iOS static archive. -->
