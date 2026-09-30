@@ -1,7 +1,8 @@
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-   bindgen::Builder::default()
+    println!("cargo:rerun-if-changed=../../openzl/include");
+    bindgen::Builder::default()
         .header("../../openzl/include/openzl/openzl.h")
         .clang_arg("-I../../openzl/include")
         .generate_inline_functions(true)

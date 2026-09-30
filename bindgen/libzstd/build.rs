@@ -1,7 +1,8 @@
 use std::{error::Error};
 
 fn main() -> Result<(), Box<dyn Error>> {
-     bindgen::Builder::default()
+    println!("cargo:rerun-if-changed=../../zstd/lib");
+    bindgen::Builder::default()
         .header("../../zstd/lib/zstd.h")
         .header("../../zstd/lib/zdict.h")
         .header("../../zstd/lib/zstd_errors.h")
