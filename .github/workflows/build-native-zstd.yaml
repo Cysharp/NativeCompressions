@@ -59,7 +59,6 @@ jobs:
           install: >-
             ${{ matrix.arch == 'x64' && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-make' || 'mingw-w64-clang-aarch64-gcc mingw-w64-clang-aarch64-make' }}
             make
-      # Windows lib-mt-release build not apply -DZSTD_MULTITHREAD, so use lib-release instead + `MOREFLAGS="-DZSTD_MULTITHREAD -flto"`
       # `-fPIC` is not needed on Windows
       - name: Build DLL
         shell: msys2 {0}
@@ -67,7 +66,7 @@ jobs:
           LDFLAGS: -Wl,--no-insert-timestamp
         run: |
           cd zstd/lib
-          make lib-release TARGET_SYSTEM=Windows CC=gcc MOREFLAGS="-DZSTD_MULTITHREAD" -j "$(nproc)"
+          make lib-release-nomt TARGET_SYSTEM=Windows CC=gcc -j "$(nproc)"
       - name: Prepare artifacts
         shell: pwsh
         run: |
@@ -99,14 +98,13 @@ jobs:
             git checkout ${{ needs.check_new_release.outputs.latest_tag }}
           cd ..
           echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
-      # Windows lib-mt-release build not apply -DZSTD_MULTITHREAD, so use lib-release instead + `MOREFLAGS="-DZSTD_MULTITHREAD -flto"`
       # `-fPIC` is not needed on Windows
       - name: Build using Docker
         run: |
           docker run --rm -v "$PWD:/work" -e LDFLAGS=-Wl,--no-insert-timestamp \
             mstorsjo/llvm-mingw:latest \
             bash -c "cd /work/zstd/lib && \
-              make lib-release TARGET_SYSTEM=Windows CC=aarch64-w64-mingw32-gcc MOREFLAGS='-DZSTD_MULTITHREAD'"
+              make lib-release-nomt TARGET_SYSTEM=Windows CC=aarch64-w64-mingw32-gcc"
           file zstd/lib/dll/libzstd.dll
       - name: Prepare artifacts
         run: |
@@ -178,7 +176,7 @@ jobs:
       - name: Build shared library
         run: |
           cd zstd/lib
-          make lib-release CC="${CC}" MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j "$(nproc)"
+          make lib-release-nomt CC="${CC}" -j "$(nproc)"
           ls -la ./*.so*
           file libzstd.so*
       - name: Verify glibc requirement
@@ -235,7 +233,7 @@ jobs:
       - name: Build dynamic library
         run: |
           cd zstd/lib
-          make lib-release MOREFLAGS="-DZSTD_MULTITHREAD ${{ matrix.flags }} -fPIC -flto" -j "$(sysctl -n hw.ncpu)"
+          make lib-release-nomt MOREFLAGS="${{ matrix.flags }}" -j "$(sysctl -n hw.ncpu)"
           lipo -info ./*.dylib
       - name: Prepare artifacts
         run: |
@@ -293,8 +291,6 @@ jobs:
             git checkout ${{ needs.check_new_release.outputs.latest_tag }}
           cd ..
           echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
-      # `lib-release + -DZSTD_MULTITHREAD` build single-threaded static lib, so use `lib-mt + -O3` instead
-      # -fPIC is not needed on static library
       - name: Build static library for iOS
         env:
           ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
@@ -303,7 +299,7 @@ jobs:
 
           # Build static library (iOS App Store requires static linking)
           cd zstd/lib
-          make lib-mt CC="clang" CFLAGS="-O3 ${{ matrix.flags }} -flto -isysroot $SDK_PATH" DEBUGFLAGS="" -j "$(sysctl -n hw.ncpu)"
+          make libzstd.a-release-nomt CC="clang" CFLAGS="-O3 ${{ matrix.flags }} -isysroot $SDK_PATH" DEBUGFLAGS="" -j "$(sysctl -n hw.ncpu)"
 
           ls -la libzstd.a
           file libzstd.a
@@ -358,8 +354,8 @@ jobs:
           output="$GITHUB_WORKSPACE/zstd/lib"
           sdk="$(xcrun --sdk macosx --show-sdk-path)"
           flags="-O3 -target ${{ matrix.clang-arch }}-apple-ios15.0-macabi -isysroot $sdk"
-          # Static-only lib-mt; no LTO
-          make -C zstd/lib libzstd.a-mt \
+          # Static-only single-threaded release build; no LTO
+          make -C zstd/lib libzstd.a-release-nomt \
             CC="$(xcrun --find clang)" AR="$(xcrun --find ar)" \
             CFLAGS="$flags" ASFLAGS="$flags" DEBUGFLAGS="" BUILD_DIR="$output/obj/catalyst" \
             -j "$(sysctl -n hw.ncpu)"
@@ -433,7 +429,7 @@ jobs:
           cd zstd/lib
           # 16 KB page size support, required for 64-bit devices running Android 15 or later.
           # LDFLAGS comes from the environment, on the command line it would replace the -shared the Makefile adds.
-          LDFLAGS="-Wl,-z,max-page-size=16384" make lib-release CC="${{ matrix.cc }}" MOREFLAGS="-DZSTD_MULTITHREAD -fPIC -flto" -j "$(nproc)"
+          LDFLAGS="-Wl,-z,max-page-size=16384" make lib-release-nomt CC="${{ matrix.cc }}" -j "$(nproc)"
           ls -la libzstd.so*
           file libzstd.so*
           llvm-readelf -lW libzstd.so | grep LOAD

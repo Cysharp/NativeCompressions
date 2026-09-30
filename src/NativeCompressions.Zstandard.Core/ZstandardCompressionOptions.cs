@@ -46,9 +46,6 @@ public readonly record struct ZstandardCompressionOptions
     readonly bool contentSizeFlag = true; // int to bool, default: 1
     readonly bool checksumFlag = false;   // int to bool, default: 0
     readonly bool dictIDFlag = true;      // int to bool, default: 1
-    readonly int nbWorkers;
-    readonly int jobSize;
-    readonly int overlapLog;
 
     readonly ZstandardDictionary? dictionary;
 
@@ -285,62 +282,6 @@ public readonly record struct ZstandardCompressionOptions
         init => dictIDFlag = value;
     }
 
-    // multi-threading parameters
-    // These parameters are only active if multi-threading is enabled (compiled with build macro ZSTD_MULTITHREAD).
-    // Otherwise, trying to set any other value than default (0) will be a no-op and return an error.
-    // In a situation where it's unknown if the linked library supports multi-threading or not,
-    // setting ZSTD_c_nbWorkers to any value >= 1 and consulting the return value provides a quick way to check this property.
-
-    /// <summary>
-    /// Select how many threads will be spawned to compress in parallel.
-    /// When nbWorkers &gt;= 1, triggers asynchronous mode when invoking ZSTD_compressStream*() :
-    /// ZSTD_compressStream*() consumes input and flush output if possible, but immediately gives back control to caller,
-    /// while compression is performed in parallel, within worker thread(s).
-    /// (note : a strong exception to this rule is when first invocation of ZSTD_compressStream2() sets ZSTD_e_end :
-    ///  in which case, ZSTD_compressStream2() delegates to ZSTD_compress2(), which is always a blocking call).
-    /// More workers improve speed, but also increase memory usage.
-    /// Default value is `0`, aka "single-threaded mode" : no worker is spawned,
-    /// compression is performed inside Caller's thread, and all invocations are blocking
-    /// </summary>
-    public int NbWorkers
-    {
-        get => nbWorkers;
-        init => nbWorkers = value;
-    }
-
-    /// <summary>
-    /// Size of a compression job. This value is enforced only when nbWorkers &gt;= 1.
-    /// Each compression job is completed in parallel, so this value can indirectly impact the nb of active threads.
-    /// 0 means default, which is dynamically determined based on compression parameters.
-    /// Job size must be a minimum of overlap size, or ZSTDMT_JOBSIZE_MIN (= 512 KB), whichever is largest.
-    /// The minimum size is automatically and transparently enforced.
-    /// </summary>
-    public int JobSize
-    {
-        get => jobSize;
-        init => jobSize = value;
-    }
-
-    /// <summary>
-    /// Control the overlap size, as a fraction of window size.
-    /// The overlap size is an amount of data reloaded from previous job at the beginning of a new job.
-    /// It helps preserve compression ratio, while each job is compressed in parallel.
-    /// This value is enforced only when nbWorkers &gt;= 1.
-    /// Larger values increase compression ratio, but decrease speed.
-    /// Possible values range from 0 to 9 :
-    /// - 0 means "default" : value will be determined by the library, depending on strategy
-    /// - 1 means "no overlap"
-    /// - 9 means "full overlap", using a full window size.
-    /// Each intermediate rank increases/decreases load size by a factor 2 :
-    /// 9: full window;  8: w/2;  7: w/4;  6: w/8;  5:w/16;  4: w/32;  3:w/64;  2:w/128;  1:no overlap;  0:default
-    /// default value varies between 6 and 9, depending on strategy
-    /// </summary>
-    public int OverlapLog
-    {
-        get => overlapLog;
-        init => overlapLog = value;
-    }
-
     public ZstandardDictionary? Dictionary
     {
         get => dictionary;
@@ -367,9 +308,6 @@ public readonly record struct ZstandardCompressionOptions
         SetParameterDefaultIsTrue(context, ZSTD_cParameter.ZSTD_c_contentSizeFlag, contentSizeFlag);
         SetParameterDefaultIsFalse(context, ZSTD_cParameter.ZSTD_c_checksumFlag, checksumFlag);
         SetParameterDefaultIsTrue(context, ZSTD_cParameter.ZSTD_c_dictIDFlag, dictIDFlag);
-        SetParameter(context, ZSTD_cParameter.ZSTD_c_nbWorkers, nbWorkers);
-        SetParameter(context, ZSTD_cParameter.ZSTD_c_jobSize, jobSize);
-        SetParameter(context, ZSTD_cParameter.ZSTD_c_overlapLog, overlapLog);
 
         // and dictionary
         if (dictionary != null)

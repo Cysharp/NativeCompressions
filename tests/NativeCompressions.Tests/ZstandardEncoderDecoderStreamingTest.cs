@@ -174,10 +174,9 @@ public class ZstandardEncoderDecoderStreamingTest
     }
 
     [Fact]
-    public void Encoder_MultiThreaded_StreamingProducesValidFrame()
+    public void Encoder_ChunkedStreamingProducesValidFrame()
     {
-        // with NbWorkers, Compress returns quickly and data appears on later calls / Close
-        using var encoder = new ZstandardEncoder(ZstandardCompressionOptions.Default with { NbWorkers = 2, JobSize = 64 * 1024 });
+        using var encoder = new ZstandardEncoder();
         var ms = new MemoryStream();
         var output = new byte[8192];
 

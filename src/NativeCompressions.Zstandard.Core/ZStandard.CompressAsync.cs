@@ -352,7 +352,6 @@ public static partial class Zstandard
         return Math.Min(minimumBufferSize, maxCompressedLength);
     }
 
-    // Parallel compression is configured through ZstandardCompressionOptions.NbWorkers.
     static ZstandardEncoder CreateEncoder(ZstandardCompressionOptions? options)
     {
         return options == null ? new ZstandardEncoder() : new ZstandardEncoder(options.Value);
