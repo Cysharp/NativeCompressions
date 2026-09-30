@@ -611,10 +611,10 @@ public static class FuzzTargets
         for (int i = 0; i < sampleCount; i++) lengths[i] = each;
         lengths[^1] += samples.Length - each * sampleCount;
 
-        ZstandardDictionary dict;
+        byte[] trained;
         try
         {
-            dict = ZstandardDictionary.Train(samples, lengths, maxDictionarySize);
+            trained = ZstandardDictionary.Train(samples, lengths, maxDictionarySize);
         }
         catch (ZstandardException)
         {
@@ -625,10 +625,10 @@ public static class FuzzTargets
             return; // zero length samples etc.
         }
 
-        using (dict)
+        Check(trained.Length > 0 && trained.Length <= maxDictionarySize, "trained dictionary size out of range");
+
+        using (var dict = ZstandardDictionary.Create(trained))
         {
-            Check(dict.Data.Length > 0 && dict.Data.Length <= maxDictionarySize, "trained dictionary size out of range");
-            Check(dict.DictionaryId != 0, "trained dictionary has no id");
 
             var payload = samples.Slice(0, Math.Min(samples.Length, lengths[0]));
             var compressed = Zstandard.Compress(payload, ZstandardCompressionOptions.Default with { Dictionary = dict });

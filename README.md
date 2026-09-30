@@ -98,9 +98,9 @@ foreach (var chunk in dataChunks) // dataChunks = byte[][]
     bufferWriter.Advance(written);
 }
 
-// Finalize frame(need to get size of footer with buffered-data)
-var fotterWithBufferdDataSize = encoder.GetMaxFlushBufferLength(includingFooter: true);
-var finalBytes = bufferWriter.GetSpan(fotterWithBufferdDataSize);
+// Finalize frame. The size covers buffered data, the footer, and the header of an empty frame when nothing was compressed.
+var footerWithBufferedDataSize = encoder.GetMaxFlushBufferLength(includingFooter: true);
+var finalBytes = bufferWriter.GetSpan(footerWithBufferedDataSize);
 
 // need to call `Close` to write LZ4 frame footer
 var finalWritten = encoder.Close(finalBytes);
@@ -123,7 +123,7 @@ In `Decompress`, both source and destination can receive incomplete data. When `
 
 ### High-level Streaming Compression
 
-Using `CompressAsync` or `DecompressAsync`, you can stream encode/decode from `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, `SafeFileHandle`, `Stream`, `PipeReader` to `PipeWriter`. While internally using `LZ4Encoder/LZ4Decoder`, a single method call optimally handles complex operations.
+Using `CompressAsync` or `DecompressAsync`, you can stream encode/decode from `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, `Stream`, `PipeReader` or a file path to `PipeWriter`. While internally using `LZ4Encoder/LZ4Decoder`, a single method call optimally handles complex operations.
 
 The destination `PipeWriter` can be passed directly or wrapped around a Stream to change where to write.
 
@@ -141,23 +141,25 @@ using var fs = new NetworkStream(socket);
 await LZ4.CompressAsync(source, PipeWriter.Create(fs));
 ```
 
-When source is `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, or `SafeFileHandle`, the length is known up front. It is recorded in the frame header as the content size, and the block size is chosen from it. `Stream` (other than `MemoryStream` and `FileStream`) and `PipeReader` have no known length, so the frame has no content size and the default block size is used.
+When source is `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, a seekable `Stream` or a file path, the length is known up front. It is recorded in the frame header as the content size, and the block size is chosen from it. A non-seekable `Stream` and `PipeReader` have no known length, so the frame has no content size and the default block size is used.
 
 ```csharp
 // Compression from File to File
-using SafeFileHandle sourceHandle = File.OpenHandle("foo.bin");
+await LZ4.CompressAsync("foo.bin", "foo.lz4");
+
+// or from a FileStream, starting at its current position
+using var source = new FileStream("foo.bin", FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, useAsync: true);
 using var dest = new FileStream("foo.lz4", FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
-await LZ4.CompressAsync(sourceHandle, PipeWriter.Create(dest));
+await LZ4.CompressAsync(source, PipeWriter.Create(dest));
 ```
 
 Compression and decompression run on the calling task, one block at a time. Output that is ready is flushed to the destination before more input is awaited, so the APIs work over a connection where the other side waits for a reply.
 
-Similarly for Decompress, source can be `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, `SafeFileHandle`, `Stream`, `PipeReader`, and destination can be `PipeWriter`.
+Similarly for Decompress, source can be `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, `Stream`, `PipeReader` or a file path, and destination can be `PipeWriter`.
 
 ```csharp
 using var ms = new MemoryStream();
-using SafeFileHandle sourceHandle = File.OpenHandle("foo.lz4");
-await LZ4.DecompressAsync(source, PipeWriter.Create(ms));
+await LZ4.DecompressAsync("foo.lz4", PipeWriter.Create(ms));
 
 var decompressed = ms.ToArray();
 ```
@@ -181,6 +183,8 @@ using var lz4Stream = new LZ4Stream(input, CompressionMode.Decompress);
 byte[] buffer = new byte[4096];
 int read = await lz4Stream.ReadAsync(buffer);
 ```
+
+Each `Write` and `Read` goes to the native codec once, the same as the streams in `System.IO.Compression`. The native codec keeps its own block buffers, so a small read or write costs one call of about 10 ns and no buffering is done in the stream itself. Code that processes many small pieces at once, a serializer for example, is better served by the `PipeWriter` based `CompressAsync` and `DecompressAsync`.
 
 ### Options
 You can change `with` operator.
@@ -320,7 +324,15 @@ Install `NativeCompressions` from NuGet using [NuGetForUnity](https://github.com
 
 The `NativeCompressions` package includes all runtimes. If you want to install only specific runtimes, please install the `Core` package and `Runtime.***` packages separately.
 
-NuGetForUnity basically handles native runtimes correctly, but there are some that are not currently supported. For example, win-arm64, linux-arm64, android-arm, android-x64, and ios-x64 cannot be imported. As a workaround, you can replace `ProjectSettings/Packages/com.github-glitchenzo.nugetforunity/NativeRuntimeSettings.json` with this [NativeRuntimeSettings.json](https://github.com/Cysharp/NativeCompressions/blob/main/sandbox/UnityApp/ProjectSettings/Packages/com.github-glitchenzo.nugetforunity/NativeRuntimeSettings.json) to enable import support. I have submitted a PR to NuGetForUnity to support this by default, but until that is released, please use the above workaround.
+NuGetForUnity basically handles native runtimes correctly, but there are some that are not currently supported. For example, win-arm64, linux-arm64, android-arm, android-x64, and ios-x64 cannot be imported. NuGetForUnity deletes the native files of a runtime that is missing from its settings when the package is imported, so the settings have to be in place before the install. Do this before you install the packages:
+
+1. Replace `ProjectSettings/Packages/com.github-glitchenzo.nugetforunity/NativeRuntimeSettings.json` with this [NativeRuntimeSettings.json](https://github.com/Cysharp/NativeCompressions/blob/main/sandbox/UnityApp/ProjectSettings/Packages/com.github-glitchenzo.nugetforunity/NativeRuntimeSettings.json). Create the directories when they do not exist yet.
+2. Restart the Unity Editor. NuGetForUnity reads the file once and keeps it in memory, so a replaced file is not picked up by a running Editor.
+3. Install the packages.
+
+If the packages were installed before the settings were in place, the missing runtimes are already deleted and replacing the settings does not bring them back. Replace the file, restart the Editor, then uninstall and install the `NativeCompressions` package (or the affected `Runtime.***` packages) again so the files are imported with the new settings. Afterwards, `Assets/Packages/NativeCompressions.*.Runtime.<rid>.<version>/runtimes/<rid>/native` should exist for every runtime you need.
+
+I have submitted a PR to NuGetForUnity to support this by default, but until that is released, please use the above workaround.
 
 iOS builds need one additional package. iOS links native libraries statically, which requires `DllImport("__Internal")`, but the assemblies that NuGetForUnity installs use regular library names. Install the `NativeCompressions.Unity` editor package from the Package Manager with this git URL:
 

@@ -41,6 +41,8 @@ public readonly record struct LZ4DecompressionOptions
         }
     }
 
+    internal LZ4Dictionary.Lease AcquireDictionary() => dictionary == null ? default : dictionary.Acquire();
+
     // For the APIs that choose the destination themselves: arrays that grow, PipeWriter memory and the buffers
     // handed to Stream.Read do not stay at one address, so StableDst cannot be honored there.
     internal LZ4DecompressionOptions WithoutStableDst() => StableDst ? this with { StableDst = false } : this;

@@ -61,15 +61,13 @@ public class ReviewRegressionTest5 : IDisposable
 
     // ---- 1. an encoder keeps its dictionary usable, whatever happens to the dictionary object
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(2)]
-    public void Zstd_DictionaryDisposedWhileEncoderUsesIt(int workers)
+    [Fact]
+    public void Zstd_DictionaryDisposedWhileEncoderUsesIt()
     {
         var content = Random(32 * 1024, 71);
         var data = content.AsSpan(0, 16 * 1024).ToArray().Concat(Compressible(6 * 1024 * 1024, 72)).ToArray();
         var dictionary = ZstandardDictionary.Create(content);
-        var options = ZstandardCompressionOptions.Default with { NbWorkers = workers, Dictionary = dictionary, ChecksumFlag = true };
+        var options = ZstandardCompressionOptions.Default with { Dictionary = dictionary, ChecksumFlag = true };
 
         using var encoder = new ZstandardEncoder(options);
         var buffer = new byte[64 * 1024];
@@ -102,6 +100,71 @@ public class ReviewRegressionTest5 : IDisposable
         // a disposed dictionary is still refused for new use
         Assert.Throws<ObjectDisposedException>(() => new ZstandardEncoder(options));
         Assert.Throws<ObjectDisposedException>(() => encoder.Reset(options));
+    }
+
+    [Fact]
+    public void Zstd_DictionaryDisposedWhileDecoderUsesIt()
+    {
+        var content = Random(32 * 1024, 77);
+        var data = content.AsSpan(0, 16 * 1024).ToArray().Concat(Compressible(2 * 1024 * 1024, 78)).ToArray();
+        byte[] compressed;
+        using (var compressDict = ZstandardDictionary.Create(content))
+        {
+            compressed = Zstandard.Compress(data, ZstandardCompressionOptions.Default with { Dictionary = compressDict });
+        }
+
+        var dictionary = ZstandardDictionary.Create(content);
+        var options = ZstandardDecompressionOptions.Default with { Dictionary = dictionary };
+        using var decoder = new ZstandardDecoder(options);
+        var buffer = new byte[64 * 1024];
+        var ms = new MemoryStream();
+
+        // start the frame, then the owner lets go of the dictionary
+        var source = compressed.AsSpan();
+        var status = decoder.Decompress(source.Slice(0, 1000), buffer, out var consumed, out var written);
+        Assert.NotEqual(OperationStatus.InvalidData, status);
+        ms.Write(buffer, 0, written);
+        source = source.Slice(consumed);
+
+        dictionary.Dispose();
+        Assert.True(dictionary.IsDisposed);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+
+        while (true)
+        {
+            status = decoder.Decompress(source, buffer, out consumed, out written);
+            Assert.NotEqual(OperationStatus.InvalidData, status);
+            ms.Write(buffer, 0, written);
+            source = source.Slice(consumed);
+            if (status == OperationStatus.Done) break;
+        }
+        Assert.Equal(data, ms.ToArray());
+
+        // the frames that follow keep using it as well
+        decoder.Reset();
+        ms.SetLength(0);
+        source = compressed;
+        while (true)
+        {
+            status = decoder.Decompress(source, buffer, out consumed, out written);
+            Assert.NotEqual(OperationStatus.InvalidData, status);
+            ms.Write(buffer, 0, written);
+            source = source.Slice(consumed);
+            if (status == OperationStatus.Done) break;
+        }
+        Assert.Equal(data, ms.ToArray());
+
+        // a disposed dictionary is still refused for new use
+        Assert.Throws<ObjectDisposedException>(() => new ZstandardDecoder(options));
+        Assert.Throws<ObjectDisposedException>(() => decoder.Reset(options));
+
+        // every way of letting go of the dictionary
+        decoder.Reset();
+        decoder.SetPrefix(Random(1024, 79));
+        decoder.Reset(ZstandardDecompressionOptions.Default);
+        decoder.Dispose();
+        decoder.Dispose();
     }
 
     [Fact]
@@ -228,7 +291,7 @@ public class ReviewRegressionTest5 : IDisposable
 
         using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1, FileOptions.Asynchronous);
         var writer = new FailingWritePipeWriter(failAtWrite);
-        var compressing = LZ4.CompressAsync(file.SafeFileHandle, writer, options).AsTask();
+        var compressing = LZ4.CompressAsync(file, writer, options).AsTask();
 
         await Assert.ThrowsAsync<IOException>(() => compressing.WaitAsync(TimeSpan.FromSeconds(20)));
     }
@@ -342,21 +405,8 @@ public class ReviewRegressionTest5 : IDisposable
         using var file = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite, 1, FileOptions.Asynchronous);
         var writer = new TruncatingPipeWriter(file, 1024);
 
-        try
-        {
-            await LZ4.CompressAsync(file.SafeFileHandle, writer).AsTask().WaitAsync(TimeSpan.FromSeconds(20));
-        }
-        catch (LZ4Exception)
-        {
-            // the length was taken at the start and written to the header, the shorter file cannot satisfy it
-            return;
-        }
-
-        // The netstandard builds read the handle as a stream of unknown length. They compress what they could read,
-        // which includes what was read before the file shrank, and the result is a correct frame.
-        var decoded = LZ4.Decompress(writer.ToArray());
-        Assert.InRange(decoded.Length, 1024, content.Length - 1);
-        Assert.Equal(content.AsSpan(0, decoded.Length).ToArray(), decoded);
+        // the length was taken at the start and written to the header, the shorter file cannot satisfy it
+        await Assert.ThrowsAsync<LZ4Exception>(() => LZ4.CompressAsync(file, writer).AsTask().WaitAsync(TimeSpan.FromSeconds(20)));
     }
 
     // ---- 4. decoded data goes out before the decoder waits for more input

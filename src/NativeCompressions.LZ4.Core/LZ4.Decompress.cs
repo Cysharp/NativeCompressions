@@ -1,5 +1,6 @@
-using NativeCompressions.Internal;
+﻿using NativeCompressions.Internal;
 using System.Buffers;
+using System.IO.Compression;
 
 namespace NativeCompressions;
 

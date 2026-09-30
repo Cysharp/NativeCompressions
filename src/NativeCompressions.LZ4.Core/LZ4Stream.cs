@@ -72,12 +72,16 @@ public sealed class LZ4Stream : Stream
         this.mode = CompressionMode.Compress;
     }
 
+    /// <exception cref="ArgumentException">The decoder was created with <see cref="LZ4DecompressionOptions.StableDst"/>. Buffers handed to Read do not stay at one address, so such a decoder cannot be used by a stream.</exception>
     public LZ4Stream(Stream stream, LZ4Decoder decoder, bool leaveOpen = false)
     {
+        if (decoder == null) throw new ArgumentNullException(nameof(decoder));
+        if (decoder.StableDst) throw new ArgumentException("A decoder created with StableDst cannot be used by a stream. Buffers handed to Read do not stay at one address.", nameof(decoder));
+
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.needDisposeNativeCompressor = false;
-        this.decoder = decoder ?? throw new ArgumentNullException(nameof(decoder));
+        this.decoder = decoder;
         this.mode = CompressionMode.Decompress;
     }
 
@@ -169,6 +173,10 @@ public sealed class LZ4Stream : Stream
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
+
+        // Checked before the encoder is touched. Output taken from the encoder cannot be put back,
+        // so a cancelled write after that would lose it.
+        cancellationToken.ThrowIfCancellationRequested();
         if (buffer == null) return;
 
         // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
@@ -422,6 +430,9 @@ public sealed class LZ4Stream : Stream
         {
             throw new InvalidOperationException("Read operation must be Decompress mode.");
         }
+
+        // checked before the decoder is touched, a cancelled read must not consume input
+        cancellationToken.ThrowIfCancellationRequested();
 
         buffer ??= ArrayPool<byte>.Shared.Rent(DecoderBufferSize);
         var totalRead = 0;

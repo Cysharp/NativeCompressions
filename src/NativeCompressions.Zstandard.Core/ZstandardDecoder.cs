@@ -1,4 +1,4 @@
-using NativeCompressions.Internal;
+﻿using NativeCompressions.Internal;
 using NativeCompressions.Interop;
 using System.Buffers;
 using System.Runtime.CompilerServices;
@@ -19,8 +19,9 @@ public sealed unsafe class ZstandardDecoder : IDisposable
     // Released by Dispose or the finalizer.
     ZSTD_DCtx_s* dctx;
 
-    // The native context only references the dictionary, so keep it reachable while this decoder is alive.
-    ZstandardDictionary? dictionary;
+    // The native context only references the dictionary. The decoder holds a lease on it
+    // from the moment the context refers to it until the context lets go of it.
+    ZstandardDictionary.Lease dictionary;
 
     // Pinned prefix set by SetPrefix. zstd references the memory, so it stays pinned until Reset, Dispose or the next SetPrefix.
     MemoryHandle prefixHandle;
@@ -44,8 +45,7 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         this.dctx = CreateContext();
         try
         {
-            decompressionOptions.SetParameter(dctx);
-            this.dictionary = decompressionOptions.Dictionary;
+            this.dictionary = Configure(dctx, decompressionOptions);
         }
         catch
         {
@@ -54,16 +54,20 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         }
     }
 
-    ~ZstandardDecoder()
+    // Applies the options and returns the lease on their dictionary. On failure nothing is leased.
+    static ZstandardDictionary.Lease Configure(ZSTD_DCtx_s* context, in ZstandardDecompressionOptions options)
     {
-        // Finalizer runs only when the object is unreachable, so no race with Dispose.
-        var context = dctx;
-        if (context != null)
+        var lease = options.AcquireDictionary();
+        try
         {
-            dctx = null;
-            ZSTD_freeDCtx(context);
+            options.SetParameter(context, lease);
         }
-        prefixHandle.Dispose();
+        catch
+        {
+            lease.Dispose();
+            throw;
+        }
+        return lease;
     }
 
     /// <summary>
@@ -175,11 +179,19 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         var result = ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
         Zstandard.ThrowIfError(result);
         frameInProgress = false;
-        dictionary = null;
         ReleasePrefix();
 
-        options.SetParameter(context);
-        dictionary = options.Dictionary;
+        // the reset dropped the native reference to the previous dictionary, whether or not the new options apply
+        var previous = dictionary;
+        dictionary = default;
+        try
+        {
+            dictionary = Configure(context, options);
+        }
+        finally
+        {
+            previous.Dispose();
+        }
         GC.KeepAlive(this);
     }
 
@@ -207,7 +219,8 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         ReleasePrefix();
         prefixHandle = handle;
         hasPrefix = true;
-        dictionary = null; // refPrefix clears the referenced dictionary
+        dictionary.Dispose(); // refPrefix replaced the referenced dictionary
+        dictionary = default;
         GC.KeepAlive(this);
     }
 
@@ -216,6 +229,19 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         prefixHandle.Dispose();
         prefixHandle = default;
         hasPrefix = false;
+    }
+
+    ~ZstandardDecoder()
+    {
+        // Finalizer runs only when the object is unreachable, so no race with Dispose.
+        var context = dctx;
+        if (context != null)
+        {
+            dctx = null;
+            ZSTD_freeDCtx(context);
+        }
+        prefixHandle.Dispose();
+        dictionary.Dispose();
     }
 
     /// <summary>
@@ -235,6 +261,10 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         {
             ZSTD_freeDCtx(context);
         }
+
+        // freeing the context ends everything that reads the dictionary
+        dictionary.Dispose();
+        dictionary = default;
         GC.SuppressFinalize(this);
     }
 

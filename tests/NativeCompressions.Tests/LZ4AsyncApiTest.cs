@@ -179,22 +179,19 @@ public class LZ4AsyncApiTest : IDisposable
         var data = GetInput("compressible5m");
         var path = TempFile("contentsize.bin");
         await File.WriteAllBytesAsync(path, data);
-        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
+        using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
 
         // every source with a known length records it when no options are given
         var sources = new (string Name, byte[] Compressed)[]
         {
             ("memory", await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w))),
             ("sequence", await Collect(w => LZ4.CompressAsync(ToSequence(data, 5000), w))),
-            ("handle", await Collect(w => LZ4.CompressAsync(handle, w))),
+            ("file", await Collect(w => LZ4.CompressAsync(file, w))),
             ("memorystream", await Collect(w => LZ4.CompressAsync(new MemoryStream(data), w))),
         };
         foreach (var (name, compressed) in sources)
         {
             Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
-#if TEST_CORE_TFM_OVERRIDE
-            if (name == "handle") continue; // the netstandard builds read a handle as a stream of unknown length
-#endif
             Assert.True((ulong)data.Length == info.ContentSize, $"{name}: content size {info.ContentSize}");
         }
 
@@ -210,11 +207,8 @@ public class LZ4AsyncApiTest : IDisposable
         var wrong = LZ4CompressionOptions.Default with { ContentSize = 1 };
         await Assert.ThrowsAsync<ArgumentException>(async () => await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, wrong)));
         await Assert.ThrowsAsync<ArgumentException>(async () => await Collect(w => LZ4.CompressAsync(ToSequence(data, 5000), w, wrong)));
-#if TEST_CORE_TFM_OVERRIDE
-        await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.CompressAsync(handle, w, wrong))); // unknown length, checked when the frame closes
-#else
-        await Assert.ThrowsAsync<ArgumentException>(async () => await Collect(w => LZ4.CompressAsync(handle, w, wrong)));
-#endif
+        file.Position = 0;
+        await Assert.ThrowsAsync<ArgumentException>(async () => await Collect(w => LZ4.CompressAsync(file, w, wrong)));
 
         // a source of unknown length cannot be checked up front, the frame fails to close instead
         await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.CompressAsync(new NonSeekableStream(data, 4096), w, wrong)));
@@ -246,35 +240,6 @@ public class LZ4AsyncApiTest : IDisposable
         Assert.Equal(data, LZ4.Decompress(compressed));
 
         compressed = await Collect(w => LZ4.CompressAsync(ToSequence(data, 5000), w, IndependentBlocks));
-        Assert.Equal(data, LZ4.Decompress(compressed));
-    }
-
-    [Theory]
-    [MemberData(nameof(Inputs))]
-    public async Task CompressAsync_SafeFileHandle(string name)
-    {
-        var data = GetInput(name);
-        var path = TempFile($"{name}.bin");
-        await File.WriteAllBytesAsync(path, data);
-
-        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        var compressed = await Collect(w => LZ4.CompressAsync(handle, w));
-        Assert.Equal(data, LZ4.Decompress(compressed));
-
-        compressed = await Collect(w => LZ4.CompressAsync(handle, w, IndependentBlocks));
-        Assert.Equal(data, LZ4.Decompress(compressed));
-    }
-
-    [Fact]
-    public async Task CompressAsync_SafeFileHandle_WithOffset()
-    {
-        var header = Encoding.ASCII.GetBytes("HEADER-TO-SKIP-");
-        var data = GetInput("compressible5m");
-        var path = TempFile("offset.bin");
-        await File.WriteAllBytesAsync(path, header.Concat(data).ToArray());
-
-        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        var compressed = await Collect(w => LZ4.CompressAsync(handle, header.Length, w));
         Assert.Equal(data, LZ4.Decompress(compressed));
     }
 
@@ -395,35 +360,6 @@ public class LZ4AsyncApiTest : IDisposable
 
     [Theory]
     [MemberData(nameof(Inputs))]
-    public async Task DecompressAsync_SafeFileHandle(string name)
-    {
-        var data = GetInput(name);
-        var compressed = LZ4.Compress(data, IndependentBlocksWithChecksums);
-        var path = TempFile($"{name}.lz4");
-        await File.WriteAllBytesAsync(path, compressed);
-
-        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(handle, w)));
-
-        // the handle is still open and usable afterwards
-        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(handle, w)));
-    }
-
-    [Fact]
-    public async Task DecompressAsync_SafeFileHandle_WithOffset()
-    {
-        var header = Encoding.ASCII.GetBytes("HEADER-TO-SKIP-");
-        var data = GetInput("compressible5m");
-        var compressed = LZ4.Compress(data, IndependentBlocksWithChecksums);
-        var path = TempFile("offset.lz4");
-        await File.WriteAllBytesAsync(path, header.Concat(compressed).ToArray());
-
-        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(handle, header.Length, w)));
-    }
-
-    [Theory]
-    [MemberData(nameof(Inputs))]
     public async Task DecompressAsync_Stream_AllKinds(string name)
     {
         var data = GetInput(name);
@@ -490,10 +426,6 @@ public class LZ4AsyncApiTest : IDisposable
         Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(new NonSeekableStream(compressed, 97), w)));
         Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(path, w)));
 
-        using (var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous))
-        {
-            Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(handle, w)));
-        }
 
         var source = new Pipe();
         var feeding = Task.Run(async () =>

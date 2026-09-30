@@ -174,40 +174,6 @@ public class ZstandardEncoderDecoderStreamingTest
     }
 
     [Fact]
-    public void Encoder_MultiThreaded_StreamingProducesValidFrame()
-    {
-        // with NbWorkers, Compress returns quickly and data appears on later calls / Close
-        using var encoder = new ZstandardEncoder(ZstandardCompressionOptions.Default with { NbWorkers = 2, JobSize = 64 * 1024 });
-        var ms = new MemoryStream();
-        var output = new byte[8192];
-
-        var remaining = Data.AsSpan();
-        while (remaining.Length > 0)
-        {
-            var chunk = remaining.Slice(0, Math.Min(30_000, remaining.Length));
-            OperationStatus status;
-            do
-            {
-                status = encoder.Compress(chunk, output, out var consumed, out var written, isFinalBlock: false);
-                Assert.NotEqual(OperationStatus.InvalidData, status);
-                ms.Write(output, 0, written);
-                chunk = chunk.Slice(consumed);
-            } while (status == OperationStatus.DestinationTooSmall || chunk.Length > 0);
-            remaining = remaining.Slice(Math.Min(30_000, remaining.Length));
-        }
-
-        OperationStatus close;
-        do
-        {
-            close = encoder.Close(output, out var written);
-            ms.Write(output, 0, written);
-        } while (close == OperationStatus.DestinationTooSmall);
-        Assert.Equal(OperationStatus.Done, close);
-
-        Assert.Equal(Data, BclDecompress(ms.ToArray()));
-    }
-
-    [Fact]
     public void Encoder_IndependentInstancesInParallel()
     {
         var results = new byte[16][];

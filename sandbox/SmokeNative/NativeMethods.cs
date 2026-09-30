@@ -28,7 +28,6 @@ static unsafe class ZstdNative
 {
     const string Lib = "zstd";
 
-    public const int ZSTD_c_nbWorkers = 400;
     public const ulong ZSTD_CONTENTSIZE_UNKNOWN = unchecked(0UL - 1);
     public const ulong ZSTD_CONTENTSIZE_ERROR = unchecked(0UL - 2);
 
@@ -40,10 +39,6 @@ static unsafe class ZstdNative
     [DllImport(Lib)] public static extern ulong ZSTD_getFrameContentSize(byte* src, nuint srcSize);
     [DllImport(Lib)] public static extern uint ZSTD_isError(nuint code);
     [DllImport(Lib)] public static extern byte* ZSTD_getErrorName(nuint code);
-    [DllImport(Lib)] public static extern void* ZSTD_createCCtx();
-    [DllImport(Lib)] public static extern nuint ZSTD_freeCCtx(void* cctx);
-    [DllImport(Lib)] public static extern nuint ZSTD_CCtx_setParameter(void* cctx, int param, int value);
-    [DllImport(Lib)] public static extern nuint ZSTD_compress2(void* cctx, byte* dst, nuint dstCapacity, byte* src, nuint srcSize);
 }
 
 static unsafe class OpenZLNative

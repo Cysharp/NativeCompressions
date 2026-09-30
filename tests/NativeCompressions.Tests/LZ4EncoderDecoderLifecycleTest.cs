@@ -133,13 +133,13 @@ public class LZ4EncoderDecoderLifecycleTest
     }
 
     [Fact]
-    public void Encoder_ResetWithOptions_AppliesToNextFrame()
+    public void Encoder_OptionsApplyToItsFrames()
     {
         using var encoder = new LZ4Encoder();
         var plain = EncodeStreaming(encoder, Data, 8192);
 
-        encoder.Reset(LZ4CompressionOptions.Default with { CompressionLevel = 9, ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled });
-        var hc = EncodeStreaming(encoder, Data, 8192);
+        using var hcEncoder = new LZ4Encoder(LZ4CompressionOptions.Default with { CompressionLevel = 9, ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled });
+        var hc = EncodeStreaming(hcEncoder, Data, 8192);
 
         Assert.True(hc.Length < plain.Length);
         Assert.Equal(Data, LZ4.Decompress(plain));
@@ -192,7 +192,7 @@ public class LZ4EncoderDecoderLifecycleTest
         Assert.Throws<ObjectDisposedException>(() => encoder.Flush(buffer));
         Assert.Throws<ObjectDisposedException>(() => encoder.Close(buffer));
         Assert.Throws<ObjectDisposedException>(() => encoder.GetMaxCompressedLength(1));
-        Assert.Throws<ObjectDisposedException>(() => encoder.Reset(LZ4CompressionOptions.Default));
+        Assert.Throws<ObjectDisposedException>(() => encoder.Reset());
         Assert.Throws<ObjectDisposedException>(() => decoder.Decompress(buffer, buffer, out _, out _));
         Assert.Throws<ObjectDisposedException>(() => decoder.Reset());
         Assert.Throws<ObjectDisposedException>(() => decoder.GetFrameInfo(buffer, out _));
@@ -270,8 +270,9 @@ public class LZ4EncoderDecoderLifecycleTest
         Assert.True(dict.IsDisposed);
 
         Assert.Throws<ObjectDisposedException>(() => LZ4.Compress(Data, LZ4CompressionOptions.Default with { Dictionary = dict }));
-        using var decoder = new LZ4Decoder(LZ4DecompressionOptions.Default with { Dictionary = dict });
-        Assert.Throws<ObjectDisposedException>(() => decoder.Decompress(LZ4.Compress(Data), new byte[Data.Length], out _, out _));
+        Assert.Throws<ObjectDisposedException>(() => new LZ4Encoder(LZ4CompressionOptions.Default with { Dictionary = dict }));
+        Assert.Throws<ObjectDisposedException>(() => new LZ4Decoder(LZ4DecompressionOptions.Default with { Dictionary = dict }));
+        Assert.Throws<ObjectDisposedException>(() => LZ4.Decompress(LZ4.Compress(Data), LZ4DecompressionOptions.Default with { Dictionary = dict }));
     }
 
     [Fact]
@@ -292,6 +293,127 @@ public class LZ4EncoderDecoderLifecycleTest
             var dict = LZ4Dictionary.Create(Utf8(string.Concat(Enumerable.Repeat("lz4 native compression dotnet dictionary ", 64))));
             return new LZ4Encoder(LZ4CompressionOptions.Default with { Dictionary = dict });
         }
+    }
+
+    [Fact]
+    public void Dictionary_DisposedWhileEncoderUsesIt()
+    {
+        var dictBytes = Utf8(string.Concat(Enumerable.Repeat("lz4 native compression dotnet dictionary ", 64)));
+        var dict = LZ4Dictionary.Create(dictBytes);
+        var options = LZ4CompressionOptions.Default with { Dictionary = dict, BlockMode = BlockMode.BlockIndependent };
+
+        // start a frame, then the owner lets go of the dictionary while the encoder still needs it for every block
+        using var encoder = new LZ4Encoder(options);
+        var buffer = new byte[encoder.GetMaxCompressedLength(8192)];
+        var ms = new MemoryStream();
+        var written = encoder.Compress(Data.AsSpan(0, 8192), buffer);
+        ms.Write(buffer, 0, written);
+
+        dict.Dispose();
+        Assert.True(dict.IsDisposed);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+
+        var remaining = Data.AsSpan(8192);
+        while (remaining.Length > 0)
+        {
+            var piece = remaining.Slice(0, Math.Min(8192, remaining.Length));
+            written = encoder.Compress(piece, buffer);
+            ms.Write(buffer, 0, written);
+            remaining = remaining.Slice(piece.Length);
+        }
+        written = encoder.Close(buffer);
+        ms.Write(buffer, 0, written);
+
+        // the frames that follow keep using it as well
+        var second = EncodeStreaming(encoder, Data, 4096);
+
+        using var same = LZ4Dictionary.Create(dictBytes);
+        var decompressionOptions = LZ4DecompressionOptions.Default with { Dictionary = same };
+        Assert.Equal(Data, LZ4.Decompress(ms.ToArray(), decompressionOptions));
+        Assert.Equal(Data, LZ4.Decompress(second, decompressionOptions));
+
+        // a disposed dictionary is still refused for new use
+        Assert.Throws<ObjectDisposedException>(() => new LZ4Encoder(options));
+    }
+
+    [Fact]
+    public void Dictionary_SharedByManyEncoders()
+    {
+        var dictBytes = Utf8(string.Concat(Enumerable.Repeat("lz4 native compression dotnet dictionary ", 64)));
+        var dict = LZ4Dictionary.Create(dictBytes);
+        var options = LZ4CompressionOptions.Default with { Dictionary = dict };
+
+        var encoders = Enumerable.Range(0, 8).Select(_ => new LZ4Encoder(options)).ToArray();
+        dict.Dispose();
+        dict.Dispose(); // twice is fine
+
+        using var same = LZ4Dictionary.Create(dictBytes);
+        foreach (var encoder in encoders)
+        {
+            Assert.Equal(Data, LZ4.Decompress(EncodeStreaming(encoder, Data, 8192), LZ4DecompressionOptions.Default with { Dictionary = same }));
+            encoder.Dispose();
+        }
+    }
+
+    [Fact]
+    public void Dictionary_ReleasedByDispose()
+    {
+        var dictBytes = Utf8(string.Concat(Enumerable.Repeat("lz4 native compression dotnet dictionary ", 64)));
+        var first = LZ4Dictionary.Create(dictBytes);
+        var second = LZ4Dictionary.Create(dictBytes);
+
+        var other = new LZ4Encoder(LZ4CompressionOptions.Default with { Dictionary = first });
+        var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { Dictionary = second });
+        other.Dispose();
+        first.Dispose(); // no longer referenced by any encoder, so freed right here
+        Assert.Equal(Data, LZ4.Decompress(EncodeStreaming(encoder, Data, 8192), LZ4DecompressionOptions.Default with { Dictionary = second }));
+
+        encoder.Reset(); // keeps the dictionary
+        Assert.Equal(Data, LZ4.Decompress(EncodeStreaming(encoder, Data, 8192), LZ4DecompressionOptions.Default with { Dictionary = second }));
+
+        second.Dispose();
+        encoder.Dispose(); // the last reference, the native dictionary goes with it
+        encoder.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => encoder.Compress(Data, new byte[Data.Length * 2]));
+    }
+
+    [Fact]
+    public void Dictionary_DisposedWhileDecoderUsesIt()
+    {
+        var dictBytes = Utf8(string.Concat(Enumerable.Repeat("lz4 native compression dotnet dictionary ", 64)));
+        byte[] compressed;
+        using (var compressDict = LZ4Dictionary.Create(dictBytes))
+        {
+            // independent blocks, so every block of the frame reads the dictionary bytes
+            compressed = LZ4.Compress(Data, LZ4CompressionOptions.Default with { Dictionary = compressDict, BlockMode = BlockMode.BlockIndependent });
+        }
+
+        var dict = LZ4Dictionary.Create(dictBytes);
+        var options = LZ4DecompressionOptions.Default with { Dictionary = dict };
+        using var decoder = new LZ4Decoder(options);
+
+        // start the frame, then the owner lets go of the dictionary
+        var output = new byte[Data.Length];
+        var status = decoder.Decompress(compressed.AsSpan(0, 1000), output, out var consumed, out var written);
+        Assert.NotEqual(OperationStatus.InvalidData, status);
+
+        dict.Dispose();
+        Assert.True(dict.IsDisposed);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+
+        var ms = new MemoryStream();
+        ms.Write(output, 0, written);
+        ms.Write(DecodeStreaming(decoder, compressed.AsSpan(consumed), 1000, 4096));
+        Assert.Equal(Data, ms.ToArray());
+
+        // the frames that follow keep using it as well
+        decoder.Reset();
+        Assert.Equal(Data, DecodeStreaming(decoder, compressed, 1000, 4096));
+
+        // a disposed dictionary is still refused for new use
+        Assert.Throws<ObjectDisposedException>(() => new LZ4Decoder(options));
     }
 
     [Fact]

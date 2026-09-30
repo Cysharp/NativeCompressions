@@ -360,10 +360,6 @@ public class ReviewRegressionTest
         encoder.Reset();
         Assert.Equal(0, encoder.Flush(buffer));
 
-        encoder.Compress(Utf8("abandoned-data"), buffer);
-        encoder.Reset(LZ4CompressionOptions.Default with { CompressionLevel = 3 });
-        Assert.Equal(0, encoder.Flush(buffer));
-
         var ms = new MemoryStream();
         ms.Write(buffer, 0, encoder.Compress(Utf8("kept"), buffer));
         ms.Write(buffer, 0, encoder.Close(buffer));

@@ -35,8 +35,6 @@ var original = LZ4.Decompress(linkedCompressed);
 //var blockIndependenCompressed = LZ4.Compress(original);
 
 
-var opt = ZstandardCompressionOptions.Default with { NbWorkers = 4 };
-
 var p = new ArrayBufferPipeWriter();
 await Zstandard.CompressAsync(original, p);
 

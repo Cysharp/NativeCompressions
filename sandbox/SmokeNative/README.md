@@ -10,7 +10,7 @@ The project references neither NativeCompressions Core nor the Runtime packages.
 | --- | --- |
 | all | load (architecture, OS/glibc version, dependent libraries), dependencies (where each loaded module comes from) |
 | lz4 | version, block / HC block / frame round trips |
-| zstd | version, round trip, multithreaded round trip (`nbWorkers=2`, needs a `ZSTD_MULTITHREAD` build) |
+| zstd | version, round trip |
 | openzl | encoding version, round trips through the zstd and lz4 graphs |
 
 Every round trip runs on empty data, 64KB of text and 4MB of mixed data, and compares the bytes for an exact match.

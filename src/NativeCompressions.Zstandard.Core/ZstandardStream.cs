@@ -235,6 +235,10 @@ public sealed class ZstandardStream : Stream
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
+
+        // Checked before the encoder is touched. Output taken from the encoder cannot be put back,
+        // so a cancelled write after that would lose it.
+        cancellationToken.ThrowIfCancellationRequested();
         if (buffer == null) return;
 
         var status = OperationStatus.DestinationTooSmall;
@@ -490,6 +494,9 @@ public sealed class ZstandardStream : Stream
         {
             throw new InvalidOperationException("Read operation must be Decompress mode.");
         }
+
+        // checked before the decoder is touched, a cancelled read must not consume input
+        cancellationToken.ThrowIfCancellationRequested();
 
         buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
         var totalRead = 0;

@@ -1,5 +1,4 @@
-using Microsoft.Win32.SafeHandles;
-using NativeCompressions.Internal;
+﻿using NativeCompressions.Internal;
 using System.Buffers;
 using System.IO.Pipelines;
 
@@ -12,7 +11,8 @@ public static partial class LZ4
     // Without options the known length is recorded in the frame header. With options, ContentSize is what the
     // caller asked for: it must match a known length, and for a stream or pipe it is checked when the frame closes.
 
-    static readonly StreamPipeReaderOptions LeaveOpenPipeReaderOptions = new StreamPipeReaderOptions(leaveOpen: true);
+    // Streams are read in 64KB pieces, the size the encoder and decoder work in.
+    static readonly StreamPipeReaderOptions LeaveOpenPipeReaderOptions = new StreamPipeReaderOptions(bufferSize: 65536, leaveOpen: true);
 
     public static async ValueTask CompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -40,41 +40,6 @@ public static partial class LZ4
         }
     }
 
-    public static ValueTask CompressAsync(SafeFileHandle source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        return CompressAsync(source, 0, destination, options, cancellationToken);
-    }
-
-    public static async ValueTask CompressAsync(SafeFileHandle source, long offset, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        if (source == null || source.IsInvalid || source.IsClosed)
-        {
-            throw new ArgumentException("Invalid file handle", nameof(source));
-        }
-        if (offset < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(offset));
-        }
-
-#if NETSTANDARD
-        // the handle is read as a stream of unknown length
-        var stream = NonOwningFileStream.Open(source, offset); // not disposed, it does not own the handle
-        long? length = null;
-#else
-        var stream = new RandomAccessReadStream(source, offset);
-        long? length = Math.Max(0, RandomAccess.GetLength(source) - offset); // an offset at or past the end is an empty source
-#endif
-        var reader = PipeReader.Create(stream, LargeBufferLeaveOpenPipeReaderOptions);
-        try
-        {
-            await CompressCoreAsync(reader, length, destination, options, cancellationToken);
-        }
-        finally
-        {
-            await reader.CompleteAsync(); // returns the buffers of the reader, also after a failure
-        }
-    }
-
     public static async ValueTask CompressAsync(Stream source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
         if (source is MemoryStream ms && ms.TryGetBuffer(out var buffer))
@@ -91,22 +56,6 @@ public static partial class LZ4
             ms.Position = ms.Length;
             return;
         }
-
-#if !NETSTANDARD
-        if (source is FileStream fs && fs.CanSeek)
-        {
-            // A position at or past the end is a legal EOF and is left where it is, the same as for MemoryStream.
-            if (fs.Position >= fs.Length)
-            {
-                await CompressAsync(ReadOnlyMemory<byte>.Empty, destination, options, cancellationToken);
-                return;
-            }
-
-            await CompressAsync(fs.SafeFileHandle, fs.Position, destination, options, cancellationToken);
-            fs.Position = fs.Length; // the handle was read directly, leave the stream at the end like a normal read would
-            return;
-        }
-#endif
 
         // any other seekable stream (a MemoryStream without an exposable buffer, for example) still knows its length
         long? length = source.CanSeek ? Math.Max(0, source.Length - source.Position) : null;
@@ -129,12 +78,12 @@ public static partial class LZ4
 
     public static async ValueTask CompressAsync(string sourceFilePath, string destinationFilePath, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
+        using var source = OpenSource(sourceFilePath);
         using var destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
         var destinationWriter = PipeWriter.Create(destinationStream);
         try
         {
-            await CompressAsync(sourceHandle, destinationWriter, options, cancellationToken);
+            await CompressAsync(source, destinationWriter, options, cancellationToken);
         }
         finally
         {
@@ -144,9 +93,12 @@ public static partial class LZ4
 
     public static async ValueTask CompressAsync(string sourceFilePath, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        await CompressAsync(sourceHandle, destination, options, cancellationToken);
+        using var source = OpenSource(sourceFilePath);
+        await CompressAsync(source, destination, options, cancellationToken);
     }
+
+    // The PipeReader reads in large pieces, so the FileStream needs no buffer of its own.
+    static FileStream OpenSource(string path) => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.Asynchronous);
 
     // ---- core
 
@@ -174,25 +126,36 @@ public static partial class LZ4
             result = await source.ReadAsync(cancellationToken);
             if (result.IsCanceled) throw new OperationCanceledException();
 
-            foreach (var segment in result.Buffer)
+            // The reader is advanced by what the encoder took, also when the destination fails on the way.
+            // Otherwise the reader would stay in the middle of a read and refuse the next one.
+            var input = result.Buffer;
+            long consumed = 0;
+            try
             {
-                var src = segment;
-                while (!src.IsEmpty)
+                foreach (var segment in input)
                 {
-                    // one block at a time, so the destination never needs more than a block's worth of room
-                    var count = Math.Min(src.Length, blockSize);
-                    var buffer = destination.GetSpan(encoder.GetMaxCompressedLength(count, includingHeader: true, includingFooter: false));
-
-                    var written = encoder.Compress(src.Span.Slice(0, count), buffer);
-                    if (written > 0) // nothing is written while the encoder buffers a block
+                    var src = segment;
+                    while (!src.IsEmpty)
                     {
-                        destination.Advance(written);
-                        await destination.FlushAndCheckAsync(cancellationToken);
+                        // one block at a time, so the destination never needs more than a block's worth of room
+                        var count = Math.Min(src.Length, blockSize);
+                        var buffer = destination.GetSpan(encoder.GetMaxCompressedLength(count, includingHeader: true, includingFooter: false));
+
+                        var written = encoder.Compress(src.Span.Slice(0, count), buffer);
+                        consumed += count;
+                        if (written > 0) // nothing is written while the encoder buffers a block
+                        {
+                            destination.Advance(written);
+                            await destination.FlushAndCheckAsync(cancellationToken);
+                        }
+                        src = src.Slice(count);
                     }
-                    src = src.Slice(count);
                 }
             }
-            source.AdvanceTo(result.Buffer.End);
+            finally
+            {
+                source.AdvanceTo(input.GetPosition(consumed), input.End);
+            }
         }
 
         // what the encoder still buffers, the footer, and the header when nothing was written at all

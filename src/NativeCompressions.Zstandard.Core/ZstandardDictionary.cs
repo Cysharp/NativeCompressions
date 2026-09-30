@@ -16,8 +16,8 @@ namespace NativeCompressions;
 /// </remarks>
 public sealed unsafe class ZstandardDictionary : IDisposable
 {
-    // A SafeHandle, because an encoder with worker threads reads the native dictionary until its context is freed.
-    // The encoder takes a reference for that time, so neither Dispose nor the order of finalizers frees it earlier.
+    // A SafeHandle, because encoders and decoders read the native dictionary until their context is freed.
+    // They hold a lease for that time, so neither Dispose nor the order of finalizers frees it earlier.
     readonly NativeDictionaries native;
 
     // The handle reports closed only after the last reference is gone, this is set by Dispose right away.
@@ -25,36 +25,11 @@ public sealed unsafe class ZstandardDictionary : IDisposable
 
     readonly byte[] data;
 
-    ZstandardDictionary(byte[] data, int compressionLevel, NativeDictionaries native, uint dictionaryId)
+    ZstandardDictionary(byte[] data, int compressionLevel, NativeDictionaries native)
     {
         this.data = data;
         this.CompressionLevel = compressionLevel;
         this.native = native;
-        this.DictionaryId = dictionaryId;
-    }
-
-    sealed class NativeDictionaries : SafeHandle
-    {
-        readonly ZSTD_DDict_s* ddict;
-
-        public NativeDictionaries(ZSTD_CDict_s* cdict, ZSTD_DDict_s* ddict)
-            : base(IntPtr.Zero, ownsHandle: true)
-        {
-            this.ddict = ddict;
-            SetHandle((IntPtr)cdict);
-        }
-
-        public override bool IsInvalid => handle == IntPtr.Zero;
-
-        public ZSTD_CDict_s* Compression => (ZSTD_CDict_s*)handle;
-        public ZSTD_DDict_s* Decompression => ddict;
-
-        protected override bool ReleaseHandle()
-        {
-            ZSTD_freeCDict((ZSTD_CDict_s*)handle);
-            ZSTD_freeDDict(ddict);
-            return true;
-        }
     }
 
     /// <summary>
@@ -79,29 +54,22 @@ public sealed unsafe class ZstandardDictionary : IDisposable
                 throw new ZstandardException("Failed to create decompression dictionary");
             }
 
-            var id = ZSTD_getDictID_fromDict(p, (nuint)copy.Length);
-            return new ZstandardDictionary(copy, compressionLevel, new NativeDictionaries(cdict, ddict), id);
+            return new ZstandardDictionary(copy, compressionLevel, new NativeDictionaries(cdict, ddict));
         }
     }
 
     /// <summary>
-    /// Trains a dictionary from samples and prepares it for compression and decompression.
+    /// Trains dictionary bytes from samples. Pass them to <see cref="Create"/> to use them, or store them for later.
     /// </summary>
     /// <param name="samples">All samples concatenated into one buffer.</param>
     /// <param name="sampleLengths">The length of each sample in <paramref name="samples"/>, in order.</param>
     /// <param name="maxDictionarySize">The upper bound of the trained dictionary size. About 100 KB is a typical choice.</param>
-    /// <param name="compressionLevel">The compression level the compression side is prepared for.</param>
     /// <remarks>
     /// Training fails when there are too few samples or most samples are shorter than 8 bytes.
     /// zstd recommends a few thousand samples whose total size is roughly 100 times the dictionary size.
+    /// The bytes also work as an LZ4 dictionary.
     /// </remarks>
-    public static ZstandardDictionary Train(ReadOnlySpan<byte> samples, ReadOnlySpan<int> sampleLengths, int maxDictionarySize, int compressionLevel = Zstandard.DefaultCompressionLevel)
-    {
-        var trained = TrainCore(samples, sampleLengths, maxDictionarySize);
-        return Create(trained, compressionLevel);
-    }
-
-    static byte[] TrainCore(ReadOnlySpan<byte> samples, ReadOnlySpan<int> sampleLengths, int maxDictionarySize)
+    public static byte[] Train(ReadOnlySpan<byte> samples, ReadOnlySpan<int> sampleLengths, int maxDictionarySize)
     {
         if (maxDictionarySize <= 0) throw new ArgumentOutOfRangeException(nameof(maxDictionarySize));
         if (sampleLengths.IsEmpty) throw new ArgumentException("At least one sample is required.", nameof(sampleLengths));
@@ -144,11 +112,6 @@ public sealed unsafe class ZstandardDictionary : IDisposable
     public ReadOnlyMemory<byte> Data => data;
 
     /// <summary>
-    /// Gets the dictionary id stored in the dictionary header, or 0 for raw content dictionaries.
-    /// </summary>
-    public uint DictionaryId { get; }
-
-    /// <summary>
     /// Gets the compression level the compression side was prepared for.
     /// </summary>
     public int CompressionLevel { get; }
@@ -158,50 +121,74 @@ public sealed unsafe class ZstandardDictionary : IDisposable
     /// </summary>
     public bool IsDisposed => Volatile.Read(ref disposed) != 0;
 
-    // The caller keeps this instance reachable for as long as it uses the pointer.
-    internal ZSTD_CDict_s* CompressionHandle
-    {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get
-        {
-            if (IsDisposed) Throws.ObjectDisposedException(nameof(ZstandardDictionary));
-            return native.Compression;
-        }
-    }
 
-    internal ZSTD_DDict_s* DecompressionHandle
-    {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get
-        {
-            if (IsDisposed) Throws.ObjectDisposedException(nameof(ZstandardDictionary));
-            return native.Decompression;
-        }
-    }
-
-    // Keeps the native dictionaries alive until ReleaseReference, also when the dictionary is disposed or finalized meanwhile.
-    internal void AddReference()
+    internal Lease Acquire()
     {
         if (IsDisposed) Throws.ObjectDisposedException(nameof(ZstandardDictionary));
 
         var added = false;
         native.DangerousAddRef(ref added);
+        return new Lease(this);
     }
 
-    internal void ReleaseReference()
-    {
-        native.DangerousRelease();
-    }
+    void Release() => native.DangerousRelease();
 
     /// <summary>
     /// Releases the native dictionaries. Safe to call multiple times.
     /// </summary>
     /// <remarks>
-    /// An encoder that still uses the dictionary keeps the native memory until it is done with it.
+    /// An encoder or decoder that still uses the dictionary keeps the native memory until it is done with it.
     /// </remarks>
     public void Dispose()
     {
         Volatile.Write(ref disposed, 1);
         native.Dispose();
+    }
+    
+    // A lease keeps the native dictionaries alive until it is disposed, also when the dictionary is disposed or
+    // finalized meanwhile. It is the only way to the native pointers. A default lease stands for no dictionary.
+    internal readonly struct Lease : IDisposable
+    {
+        readonly ZstandardDictionary? dictionary;
+
+        public readonly ZSTD_CDict_s* Compression;
+        public readonly ZSTD_DDict_s* Decompression;
+
+        internal Lease(ZstandardDictionary dictionary)
+        {
+            this.dictionary = dictionary;
+            Compression = dictionary.native.Compression;
+            Decompression = dictionary.native.Decompression;
+        }
+
+        // true for the default lease, which stands for no dictionary
+        public bool IsEmpty => dictionary == null;
+
+        // The holder disposes a lease once, and does not use the pointers afterwards.
+        public void Dispose() => dictionary?.Release();
+    }
+
+    sealed class NativeDictionaries : SafeHandle
+    {
+        readonly ZSTD_DDict_s* ddict;
+
+        public NativeDictionaries(ZSTD_CDict_s* cdict, ZSTD_DDict_s* ddict)
+            : base(IntPtr.Zero, ownsHandle: true)
+        {
+            this.ddict = ddict;
+            SetHandle((IntPtr)cdict);
+        }
+
+        public override bool IsInvalid => handle == IntPtr.Zero;
+
+        public ZSTD_CDict_s* Compression => (ZSTD_CDict_s*)handle;
+        public ZSTD_DDict_s* Decompression => ddict;
+
+        protected override bool ReleaseHandle()
+        {
+            ZSTD_freeCDict((ZSTD_CDict_s*)handle);
+            ZSTD_freeDDict(ddict);
+            return true;
+        }
     }
 }

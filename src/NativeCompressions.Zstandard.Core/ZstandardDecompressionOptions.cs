@@ -35,12 +35,15 @@ public readonly record struct ZstandardDecompressionOptions
         init => dictionary = value;
     }
 
-    internal unsafe void SetParameter(ZSTD_DCtx_s* context)
+    internal ZstandardDictionary.Lease AcquireDictionary() => dictionary == null ? default : dictionary.Acquire();
+
+    // The lease is the one taken on the dictionary of these options.
+    internal unsafe void SetParameter(ZSTD_DCtx_s* context, in ZstandardDictionary.Lease lease)
     {
         SetParameter(context, ZSTD_dParameter.ZSTD_d_windowLogMax, windowLogMax);
-        if (dictionary != null)
+        if (!lease.IsEmpty)
         {
-            var code = ZSTD_DCtx_refDDict(context, dictionary.DecompressionHandle);
+            var code = ZSTD_DCtx_refDDict(context, lease.Decompression);
             Zstandard.ThrowIfError(code);
         }
     }

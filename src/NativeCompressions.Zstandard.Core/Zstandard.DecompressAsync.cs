@@ -1,4 +1,3 @@
-using Microsoft.Win32.SafeHandles;
 using NativeCompressions.Internal;
 using System.Buffers;
 using System.IO.Pipelines;
@@ -43,55 +42,6 @@ public static partial class Zstandard
         await FinishAsync(decoder, status, anyInput, destination, MinimumBufferSize, cancellationToken);
     }
 
-    public static ValueTask DecompressAsync(SafeFileHandle source, PipeWriter destination, ZstandardDecompressionOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        return DecompressAsync(source, 0, destination, options, cancellationToken);
-    }
-
-    public static ValueTask DecompressAsync(SafeFileHandle source, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
-    {
-        return DecompressAsync(source, 0, destination, decoder, cancellationToken);
-    }
-
-    public static async ValueTask DecompressAsync(SafeFileHandle source, long offset, PipeWriter destination, ZstandardDecompressionOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        using var decoder = new ZstandardDecoder(options ?? ZstandardDecompressionOptions.Default);
-        await DecompressAsync(source, offset, destination, decoder, cancellationToken);
-    }
-
-    public static async ValueTask DecompressAsync(SafeFileHandle source, long offset, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
-    {
-#if NETSTANDARD
-        var fs = NonOwningFileStream.Open(source, offset); // not disposed, it does not own the handle
-        await DecompressAsync(fs, destination, decoder, cancellationToken);
-#else
-        var sourceLength = RandomAccess.GetLength(source);
-        var sourceBuffer = ArrayPool<byte>.Shared.Rent(MinimumBufferSize);
-        try
-        {
-            var status = OperationStatus.NeedMoreData;
-            var anyInput = false;
-            var remaining = sourceLength - offset;
-            while (remaining > 0)
-            {
-                var currentOffset = sourceLength - remaining; // remaining already accounts for offset
-                var read = await RandomAccess.ReadAsync(source, sourceBuffer, currentOffset, cancellationToken);
-                if (read == 0) break; // EOF, the file shrank while reading
-
-                anyInput = true;
-                status = await FeedAsync(decoder, sourceBuffer.AsMemory(0, read), destination, MinimumBufferSize, cancellationToken);
-                remaining -= read;
-            }
-
-            await FinishAsync(decoder, status, anyInput, destination, MinimumBufferSize, cancellationToken);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(sourceBuffer, clearArray: false);
-        }
-#endif
-    }
-
     public static async ValueTask DecompressAsync(Stream source, PipeWriter destination, ZstandardDecompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
         using var decoder = new ZstandardDecoder(options ?? ZstandardDecompressionOptions.Default);
@@ -115,22 +65,6 @@ public static partial class Zstandard
             return;
         }
 
-#if !NETSTANDARD
-        if (source is FileStream fs && fs.CanSeek)
-        {
-            // A position at or past the end is a legal EOF and is left where it is, the same as for MemoryStream.
-            if (fs.Position >= fs.Length)
-            {
-                await DecompressAsync(ReadOnlyMemory<byte>.Empty, destination, decoder, cancellationToken);
-                return;
-            }
-
-            await DecompressAsync(fs.SafeFileHandle, fs.Position, destination, decoder, cancellationToken);
-            fs.Position = fs.Length; // the handle was read directly, leave the stream at the end like a normal read would
-            return;
-        }
-#endif
-
         var pipeReader = PipeReader.Create(source, LeaveOpenPipeReaderOptions);
         try
         {
@@ -152,6 +86,7 @@ public static partial class Zstandard
     {
         var status = OperationStatus.NeedMoreData;
         var anyInput = false;
+        var progress = new FeedProgress();
 
         ReadResult result = default;
         while (!result.IsCompleted)
@@ -159,14 +94,23 @@ public static partial class Zstandard
             result = await source.ReadAsync(cancellationToken);
             if (result.IsCanceled) throw new OperationCanceledException();
 
+            // The reader is advanced by what the decoder took, also when the destination fails on the way.
+            // Otherwise the reader would stay in the middle of a read and refuse the next one.
             var buffer = result.Buffer;
-            foreach (var segment in buffer)
+            progress.Consumed = 0;
+            try
             {
-                if (segment.IsEmpty) continue;
-                anyInput = true;
-                status = await FeedAsync(decoder, segment, destination, MinimumBufferSize, cancellationToken);
+                foreach (var segment in buffer)
+                {
+                    if (segment.IsEmpty) continue;
+                    anyInput = true;
+                    status = await FeedAsync(decoder, segment, destination, MinimumBufferSize, cancellationToken, progress);
+                }
             }
-            source.AdvanceTo(buffer.End);
+            finally
+            {
+                source.AdvanceTo(buffer.GetPosition(progress.Consumed), buffer.End);
+            }
         }
 
         await FinishAsync(decoder, status, anyInput, destination, MinimumBufferSize, cancellationToken);
@@ -180,8 +124,8 @@ public static partial class Zstandard
 
     public static async ValueTask DecompressAsync(string sourceFilePath, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
-        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        await DecompressAsync(sourceHandle, destination, decoder, cancellationToken);
+        using var source = OpenSource(sourceFilePath);
+        await DecompressAsync(source, destination, decoder, cancellationToken);
     }
 
     public static async ValueTask DecompressAsync(string sourceFilePath, string destinationFilePath, ZstandardDecompressionOptions? options = null, CancellationToken cancellationToken = default)
@@ -192,12 +136,12 @@ public static partial class Zstandard
 
     public static async ValueTask DecompressAsync(string sourceFilePath, string destinationFilePath, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
-        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
+        using var source = OpenSource(sourceFilePath);
         using var destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
         var destinationWriter = PipeWriter.Create(destinationStream);
         try
         {
-            await DecompressAsync(sourceHandle, destinationWriter, decoder, cancellationToken);
+            await DecompressAsync(source, destinationWriter, decoder, cancellationToken);
         }
         finally
         {
@@ -207,7 +151,8 @@ public static partial class Zstandard
 
     // Feeds one chunk of compressed input and writes whatever it decodes to destination.
     // A frame may end and the next one start anywhere inside the chunk.
-    static async ValueTask<OperationStatus> FeedAsync(ZstandardDecoder decoder, ReadOnlyMemory<byte> chunk, PipeWriter destination, int sizeHint, CancellationToken cancellationToken)
+    // progress, when given, counts the bytes of chunk the decoder took, also when this method fails
+    static async ValueTask<OperationStatus> FeedAsync(ZstandardDecoder decoder, ReadOnlyMemory<byte> chunk, PipeWriter destination, int sizeHint, CancellationToken cancellationToken, FeedProgress? progress = null)
     {
         var status = OperationStatus.NeedMoreData;
         var pending = 0; // bytes advanced but not yet flushed
@@ -219,6 +164,7 @@ public static partial class Zstandard
             var dest = destination.GetMemory(sizeHint);
             status = decoder.Decompress(chunk.Span, dest.Span, out var bytesConsumed, out var bytesWritten);
             chunk = chunk.Slice(bytesConsumed);
+            if (progress != null) progress.Consumed += bytesConsumed;
             destination.Advance(bytesWritten);
             pending += bytesWritten;
 
@@ -284,5 +230,11 @@ public static partial class Zstandard
         {
             throw new ZstandardException($"Zstandard decoder returns {status}.");
         }
+    }
+
+    // How much of the input of one read the decoder took so far.
+    sealed class FeedProgress
+    {
+        public long Consumed;
     }
 }

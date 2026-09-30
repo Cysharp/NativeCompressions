@@ -54,9 +54,6 @@ public class AllCompressDecompress
         i = NativeCompressions_Zstandard_Compress_Default();
         compressed5 = dest.AsSpan(0, i).ToArray();
 
-        //i = NativeCompressions_Zstandard_Compress_Multithread();
-        //compressed6 = dest.AsSpan(0, i).ToArray();
-
         i = NativeCompressions_Zstandard_Compress_Minus4();
         compressed7 = dest.AsSpan(0, i).ToArray();
 
@@ -132,13 +129,6 @@ public class AllCompressDecompress
     public int NativeCompressions_Zstandard_Compress_Minus4()
     {
         return NativeCompressions.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default with { CompressionLevel = -4 });
-    }
-
-    [Benchmark]
-    [BenchmarkCategory("Compress")]
-    public int NativeCompressions_Zstandard_Compress_Multithread()
-    {
-        return NativeCompressions.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default with { NbWorkers = Environment.ProcessorCount });
     }
 
     [Benchmark]

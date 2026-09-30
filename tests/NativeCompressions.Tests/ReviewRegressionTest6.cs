@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.IO.Pipelines;
-using Microsoft.Win32.SafeHandles;
 
 namespace NativeCompressions.Tests;
 
@@ -171,22 +170,25 @@ public class ReviewRegressionTest6 : IDisposable
     [Theory]
     [InlineData(3)]
     [InlineData(20)]
-    public async Task FileHandle_OffsetPastEnd_IsEmpty(long offset)
+    public async Task FileStream_OffsetPastEnd_IsEmpty(long offset)
     {
         var path = Path.Combine(tempDir, $"three-{offset}.bin");
         File.WriteAllBytes(path, [1, 2, 3]);
 
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1, FileOptions.Asynchronous);
-        SafeFileHandle handle = fs.SafeFileHandle;
 
-        Assert.Empty(LZ4.Decompress(await Collect(w => LZ4.CompressAsync(handle, offset, w))));
-        Assert.Empty(Zstandard.Decompress(await Collect(w => Zstandard.CompressAsync(handle, offset, w))));
-        Assert.Empty(await Collect(w => LZ4.DecompressAsync(handle, offset, w)));
-        Assert.Empty(await Collect(w => Zstandard.DecompressAsync(handle, offset, w)));
+        fs.Position = offset;
+        Assert.Empty(LZ4.Decompress(await Collect(w => LZ4.CompressAsync(fs, w))));
+        fs.Position = offset;
+        Assert.Empty(Zstandard.Decompress(await Collect(w => Zstandard.CompressAsync(fs, w))));
+        fs.Position = offset;
+        Assert.Empty(await Collect(w => LZ4.DecompressAsync(fs, w)));
+        fs.Position = offset;
+        Assert.Empty(await Collect(w => Zstandard.DecompressAsync(fs, w)));
     }
 
     [Fact]
-    public async Task FileHandle_OffsetInsideFile_StartsThere()
+    public async Task FileStream_OffsetInsideFile_StartsThere()
     {
         var data = Compressible(100_000, 95);
         var path = Path.Combine(tempDir, "offset.bin");
@@ -195,7 +197,9 @@ public class ReviewRegressionTest6 : IDisposable
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1, FileOptions.Asynchronous);
         var expected = data.AsSpan(1000).ToArray();
 
-        Assert.Equal(expected, LZ4.Decompress(await Collect(w => LZ4.CompressAsync(fs.SafeFileHandle, 1000, w))));
-        Assert.Equal(expected, Zstandard.Decompress(await Collect(w => Zstandard.CompressAsync(fs.SafeFileHandle, 1000, w))));
+        fs.Position = 1000;
+        Assert.Equal(expected, LZ4.Decompress(await Collect(w => LZ4.CompressAsync(fs, w))));
+        fs.Position = 1000;
+        Assert.Equal(expected, Zstandard.Decompress(await Collect(w => Zstandard.CompressAsync(fs, w))));
     }
 }

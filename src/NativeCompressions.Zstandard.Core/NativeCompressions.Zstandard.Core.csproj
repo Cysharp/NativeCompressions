@@ -21,14 +21,12 @@
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Throws.cs" Link="Internal\Throws.cs" />
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\SegmentedArrayProvider.cs" Link="Internal\SegmentedArrayProvider.cs" />
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\PipeWriterExtensions.cs" Link="Internal\PipeWriterExtensions.cs" />
-    <!-- netstandard2.1 polyfills: Array.MaxLength, GC.AllocateUninitializedArray, ValueTask.FromCanceled, File.OpenHandle -->
+    <!-- netstandard2.1 polyfills: Array.MaxLength, GC.AllocateUninitializedArray, ValueTask.FromCanceled -->
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Polyfill\StaticExtensions.cs" Link="Internal\Polyfill\StaticExtensions.cs" />
     <!-- netstandard2.0 polyfills: Stream Span / Memory overloads and DisposeAsync -->
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Polyfill\StreamExtensions.cs" Link="Internal\Polyfill\StreamExtensions.cs" />
     <!-- pre .NET 8 polyfill for Stream.BeginRead / BeginWrite -->
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Polyfill\TaskToAsyncResult.cs" Link="Internal\Polyfill\TaskToAsyncResult.cs" />
-    <!-- netstandard2.1 reads a SafeFileHandle through a FileStream without taking ownership of the handle -->
-    <Compile Include="..\NativeCompressions.LZ4.Core\Internal\NonOwningFileStream.cs" Link="Internal\NonOwningFileStream.cs" />
   </ItemGroup>
 
   <ItemGroup>

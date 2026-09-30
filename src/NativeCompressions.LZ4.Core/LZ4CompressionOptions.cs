@@ -4,6 +4,8 @@ using System.Runtime.InteropServices;
 namespace NativeCompressions;
 
 // LZ4F_preferences_t(LZ4F_frameInfo_t) + dictionary ref
+// frameType of LZ4F_frameInfo_t is left out. lz4frame reports it for a frame it reads but always writes
+// a regular frame, so an option for it could only be ignored.
 
 [StructLayout(LayoutKind.Auto)]
 public readonly record struct LZ4CompressionOptions
@@ -19,7 +21,6 @@ public readonly record struct LZ4CompressionOptions
     readonly BlockSizeId blockSizeID;
     readonly BlockMode blockMode;
     readonly ContentChecksum contentChecksumFlag;
-    readonly FrameType frameType;
     readonly ulong contentSize;
     readonly uint dictionaryID;
     readonly BlockChecksum blockChecksumFlag;
@@ -53,9 +54,6 @@ public readonly record struct LZ4CompressionOptions
     /// <summary>1: add a 32-bit checksum of frame's decompressed data; 0 == default (disabled)</summary>
     public ContentChecksum ContentChecksumFlag { get => contentChecksumFlag; init => contentChecksumFlag = value; }
 
-    /// <summary>LZ4F_frame or LZ4F_skippableFrame</summary>
-    public FrameType FrameType { get => frameType; init => frameType = value; }
-
     /// <summary>
     /// The length of the content, recorded in the frame header; 0 == not declared, nothing is recorded.
     /// A declared length has to be the exact length of the content: where the length of the source is known
@@ -86,6 +84,8 @@ public readonly record struct LZ4CompressionOptions
         }
     }
 
+    internal LZ4Dictionary.Lease AcquireDictionary() => compressionDictionary == null ? default : compressionDictionary.Acquire();
+
     // The declared length must match the length of the source, when that is known.
     internal void ThrowIfContentSizeDiffers(long sourceLength)
     {
@@ -107,7 +107,7 @@ public readonly record struct LZ4CompressionOptions
                 blockSizeID = (LZ4F_blockSizeID_t)blockSizeID,
                 blockMode = (LZ4F_blockMode_t)blockMode,
                 contentChecksumFlag = (LZ4F_contentChecksum_t)contentChecksumFlag,
-                frameType = (LZ4F_frameType_t)frameType,
+                frameType = LZ4F_frameType_t.LZ4F_frame,
                 contentSize = contentSize,
                 dictID = dictionaryID,
                 blockChecksumFlag = (LZ4F_blockChecksum_t)blockChecksumFlag,

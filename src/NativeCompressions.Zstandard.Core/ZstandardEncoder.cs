@@ -19,9 +19,9 @@ public sealed unsafe class ZstandardEncoder : IDisposable
     // Released by Dispose or the finalizer.
     ZSTD_CCtx_s* cctx;
 
-    // The native context only references the dictionary. The encoder holds a reference on it (AddReference)
+    // The native context only references the dictionary. The encoder holds a lease on it
     // from the moment the context refers to it until nothing native can read it any more.
-    ZstandardDictionary? dictionary;
+    ZstandardDictionary.Lease dictionary;
 
     // Pinned prefix set by SetPrefix. zstd references the memory, so it stays pinned until Reset, Dispose or the next SetPrefix.
     MemoryHandle prefixHandle;
@@ -36,11 +36,6 @@ public sealed unsafe class ZstandardEncoder : IDisposable
 
     // Set by SetSourceLength for the next frame, -1 when nothing is declared.
     long declaredLength = -1;
-
-    // Worker threads of an unfinished frame keep reading its prefix and dictionary until the native context is freed.
-    // What they may still read is kept here until then.
-    List<MemoryHandle>? retiredPrefixes;
-    List<ZstandardDictionary>? retiredDictionaries;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardEncoder"/> with default settings.
@@ -66,9 +61,8 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         this.cctx = CreateContext();
         try
         {
-            Configure(cctx, compressionOptions);
+            this.dictionary = Configure(cctx, compressionOptions);
             this.options = compressionOptions;
-            this.dictionary = compressionOptions.Dictionary;
         }
         catch
         {
@@ -77,34 +71,20 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         }
     }
 
-    // Applies the options. On return the dictionary of the options is referenced, on failure it is not.
-    static void Configure(ZSTD_CCtx_s* context, in ZstandardCompressionOptions options)
+    // Applies the options and returns the lease on their dictionary. On failure nothing is leased.
+    static ZstandardDictionary.Lease Configure(ZSTD_CCtx_s* context, in ZstandardCompressionOptions options)
     {
-        var dictionary = options.Dictionary;
-        dictionary?.AddReference();
+        var lease = options.AcquireDictionary();
         try
         {
-            options.SetParameter(context);
+            options.SetParameter(context, lease);
         }
         catch
         {
-            dictionary?.ReleaseReference();
+            lease.Dispose();
             throw;
         }
-    }
-
-    ~ZstandardEncoder()
-    {
-        // Finalizer runs only when the object is unreachable, so no race with Dispose.
-        var context = cctx;
-        if (context != null)
-        {
-            cctx = null;
-            ZSTD_freeCCtx(context);
-        }
-        prefixHandle.Dispose();
-        ReleaseRetired();
-        dictionary?.ReleaseReference();
+        return lease;
     }
 
     /// <summary>
@@ -182,7 +162,7 @@ public sealed unsafe class ZstandardEncoder : IDisposable
 
             if (Zstandard.IsError(remaining))
             {
-                frameInProgress = true; // workers may still hold jobs of the failed frame
+                frameInProgress = true; // the failed frame stays unfinished until Reset
                 bytesWritten = 0;
                 bytesConsumed = 0;
                 return OperationStatus.InvalidData;
@@ -235,20 +215,13 @@ public sealed unsafe class ZstandardEncoder : IDisposable
     {
         var context = GetContext();
 
-        if (HasRunningWorkers)
-        {
-            ReplaceContext(options);
-        }
-        else
-        {
-            var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_only);
-            Zstandard.ThrowIfError(result);
+        var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_only);
+        Zstandard.ThrowIfError(result);
 
-            // A session reset keeps an unused prefix referenced by the native context, so drop that reference before unpinning.
-            if (HasPrefix)
-            {
-                Zstandard.ThrowIfError(ZSTD_CCtx_refCDict(context, null));
-            }
+        // A session reset keeps an unused prefix referenced by the native context, so drop that reference before unpinning.
+        if (HasPrefix)
+        {
+            Zstandard.ThrowIfError(ZSTD_CCtx_refCDict(context, null));
         }
 
         ReleasePrefix();
@@ -261,31 +234,24 @@ public sealed unsafe class ZstandardEncoder : IDisposable
     {
         var context = GetContext();
 
-        if (HasRunningWorkers)
+        ZstandardDictionary.Lease next;
+        try
         {
-            // the fresh context is configured before it replaces the current one, a failure changes nothing
-            ReplaceContext(options);
+            var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
+            Zstandard.ThrowIfError(result);
+            next = Configure(context, options);
         }
-        else
+        catch
         {
-            try
-            {
-                var result = ZSTD_CCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
-                Zstandard.ThrowIfError(result);
-                Configure(context, options);
-            }
-            catch
-            {
-                // Some parameters are applied and some are not. The context is replaced by one with the previous
-                // options, so the native parameters and the options kept here never disagree.
-                RestoreOptions();
-                throw;
-            }
+            // Some parameters are applied and some are not. The context is replaced by one with the previous
+            // options, so the native parameters and the options kept here never disagree.
+            RestoreOptions();
+            throw;
+        }
 
-            // no workers are running, nothing reads the previous dictionary
-            dictionary?.ReleaseReference();
-            dictionary = options.Dictionary;
-        }
+        // the reset dropped the reference to the previous dictionary
+        dictionary.Dispose();
+        dictionary = next;
 
         ReleasePrefix();
         this.options = options;
@@ -312,17 +278,13 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         declaredLength = -1;
     }
 
-    // With worker threads, the jobs of an unfinished frame keep running after a reset and read the prefix and
-    // the dictionary of that frame. zstd waits for them only when the next frame is compressed with workers again,
-    // a small next frame is compressed without. Freeing the context is the one call that always stops them.
-    bool HasRunningWorkers => frameInProgress && options.NbWorkers > 0;
-
     void ReplaceContext(in ZstandardCompressionOptions newOptions)
     {
         var fresh = CreateContext();
+        ZstandardDictionary.Lease next;
         try
         {
-            Configure(fresh, newOptions);
+            next = Configure(fresh, newOptions);
         }
         catch
         {
@@ -332,11 +294,10 @@ public sealed unsafe class ZstandardEncoder : IDisposable
 
         var old = cctx;
         cctx = fresh;
-        ZSTD_freeCCtx(old); // returns after the workers have stopped
+        ZSTD_freeCCtx(old);
 
-        ReleaseRetired();
-        dictionary?.ReleaseReference();
-        dictionary = newOptions.Dictionary;
+        dictionary.Dispose();
+        dictionary = next;
     }
 
     /// <summary>
@@ -377,19 +338,10 @@ public sealed unsafe class ZstandardEncoder : IDisposable
             Zstandard.ThrowIfError(result);
         }
 
-        // zstd accepts a prefix only between frames. After a failed frame that is also the case while
-        // workers may still run, then the previous prefix and dictionary are kept instead of released.
-        if (HasRunningWorkers)
-        {
-            RetirePrefix();
-            RetireDictionary();
-        }
-        else
-        {
-            ReleasePrefix();
-            dictionary?.ReleaseReference();
-            dictionary = null;
-        }
+        // zstd accepts a prefix only between frames, so nothing reads the previous prefix and dictionary any more
+        ReleasePrefix();
+        dictionary.Dispose();
+        dictionary = default;
 
         prefixHandle = handle;
         hasPrefix = true;
@@ -412,42 +364,17 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         hasPrefix = false;
     }
 
-    void RetirePrefix()
+    ~ZstandardEncoder()
     {
-        if (!hasPrefix) return;
-
-        (retiredPrefixes ??= new()).Add(prefixHandle);
-        prefixHandle = default;
-        hasPrefix = false;
-    }
-
-    void RetireDictionary()
-    {
-        if (dictionary == null) return;
-
-        (retiredDictionaries ??= new()).Add(dictionary);
-        dictionary = null;
-    }
-
-    void ReleaseRetired()
-    {
-        if (retiredPrefixes != null)
+        // Finalizer runs only when the object is unreachable, so no race with Dispose.
+        var context = cctx;
+        if (context != null)
         {
-            foreach (var handle in retiredPrefixes)
-            {
-                handle.Dispose();
-            }
-            retiredPrefixes = null;
+            cctx = null;
+            ZSTD_freeCCtx(context);
         }
-
-        if (retiredDictionaries != null)
-        {
-            foreach (var retired in retiredDictionaries)
-            {
-                retired.ReleaseReference();
-            }
-            retiredDictionaries = null;
-        }
+        prefixHandle.Dispose();
+        dictionary.Dispose();
     }
 
     /// <summary>
@@ -467,11 +394,10 @@ public sealed unsafe class ZstandardEncoder : IDisposable
             ZSTD_freeCCtx(context);
         }
 
-        // freeing the context stops its worker threads, nothing reads the prefix and the dictionary after that
+        // the context is gone, nothing reads the prefix and the dictionary after that
         ReleasePrefix();
-        ReleaseRetired();
-        dictionary?.ReleaseReference();
-        dictionary = null;
+        dictionary.Dispose();
+        dictionary = default;
         GC.SuppressFinalize(this);
     }
 

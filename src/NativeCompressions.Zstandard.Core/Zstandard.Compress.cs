@@ -74,6 +74,7 @@ public static partial class Zstandard
         fixed (byte* dest = destination)
         {
             nuint bytesWritten;
+            using var lease = compressionOptions.AcquireDictionary();
             var context = ZSTD_createCCtx();
             if (context == null)
             {
@@ -82,14 +83,13 @@ public static partial class Zstandard
 
             try
             {
-                compressionOptions.SetParameter(context);
+                compressionOptions.SetParameter(context, lease);
                 bytesWritten = ZSTD_compress2(context, dest, (nuint)destination.Length, src, (nuint)source.Length);
             }
             finally
             {
                 ZSTD_freeCCtx(context);
             }
-            GC.KeepAlive(compressionOptions.Dictionary);
 
             ThrowIfError(bytesWritten);
             return (int)bytesWritten;

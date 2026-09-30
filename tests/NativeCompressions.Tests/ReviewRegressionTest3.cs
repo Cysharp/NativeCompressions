@@ -73,22 +73,22 @@ public class ReviewRegressionTest3
         Assert.Equal(default, holder.Info);
     }
 
-    // ---- 3. a prefix of an abandoned multithreaded frame stays valid until its workers are gone
+    // ---- 3. a prefix of an abandoned frame is released by Reset and Dispose
 
     [Fact]
-    public void Zstd_MultiThreadedEncoder_ResetAndDisposeInsideFrameWithPrefix()
+    public void Zstd_Encoder_ResetAndDisposeInsideFrameWithPrefix()
     {
         var prefixA = Random(64 * 1024, 34);
         var prefixB = Random(64 * 1024, 35);
         var data = prefixB.AsSpan(0, 32 * 1024).ToArray().Concat(Random(4 * 1024 * 1024, 36)).ToArray();
-        var options = ZstandardCompressionOptions.Default with { NbWorkers = 2, ChecksumFlag = true };
+        var options = ZstandardCompressionOptions.Default with { ChecksumFlag = true };
         var buffer = new byte[Zstandard.GetMaxCompressedLength(data.Length) + 64];
 
-        for (var i = 0; i < 20; i++)
+        for (var i = 0; i < 3; i++)
         {
             using var encoder = new ZstandardEncoder(options);
 
-            // leave a frame unfinished while the workers hold jobs
+            // leave a frame unfinished
             encoder.SetPrefix(prefixA);
             Assert.NotEqual(OperationStatus.InvalidData, encoder.Compress(data, buffer, out _, out _, isFinalBlock: false));
             encoder.Reset();

@@ -56,7 +56,7 @@ public class ReviewRegressionTest4
         Assert.NotEqual(OperationStatus.InvalidData, encoder.Compress(data, buffer, out _, out _, isFinalBlock: false));
     }
 
-    // ---- 1. resetting an unfinished multithreaded frame must stop its workers before the prefix is released
+    // ---- 1. resetting an unfinished frame releases the prefix and keeps the parameters
 
     sealed class ObservedMemoryManager(byte[] data) : MemoryManager<byte>
     {
@@ -82,12 +82,10 @@ public class ReviewRegressionTest4
         protected override void Dispose(bool disposing) { }
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(2)]
-    public void Zstd_ResetInsideFrame_ThenSmallFrame(int workers)
+    [Fact]
+    public void Zstd_ResetInsideFrame_ThenSmallFrame()
     {
-        var options = ZstandardCompressionOptions.Default with { NbWorkers = workers, ChecksumFlag = true, CompressionLevel = 5 };
+        var options = ZstandardCompressionOptions.Default with { ChecksumFlag = true, CompressionLevel = 5 };
         var big = Compressible(8 * 1024 * 1024, 41);
         var prefix = new ObservedMemoryManager(Random(64 * 1024, 42));
 
@@ -96,22 +94,18 @@ public class ReviewRegressionTest4
         StartFrame(encoder, big);
         Assert.Equal(0, prefix.Unpinned);
 
-        // with workers the native context is replaced here, which waits for them
         encoder.Reset();
         Assert.Equal(1, prefix.Unpinned);
 
-        // a small frame is compressed without workers and would not wait for the old ones
         var empty = new byte[64];
         Assert.Equal(OperationStatus.Done, encoder.Close(empty, out var written));
         Assert.Empty(Zstandard.Decompress(empty.AsSpan(0, written)));
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(2)]
-    public void Zstd_ResetInsideFrame_KeepsParameters(int workers)
+    [Fact]
+    public void Zstd_ResetInsideFrame_KeepsParameters()
     {
-        var options = ZstandardCompressionOptions.Default with { NbWorkers = workers, ChecksumFlag = true, CompressionLevel = 7, ContentSizeFlag = false };
+        var options = ZstandardCompressionOptions.Default with { ChecksumFlag = true, CompressionLevel = 7, ContentSizeFlag = false };
         var big = Compressible(8 * 1024 * 1024, 43);
         var data = Compressible(3 * 1024 * 1024, 44);
 
@@ -130,14 +124,12 @@ public class ReviewRegressionTest4
         Assert.Equal(data, Zstandard.Decompress(actual));
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(2)]
-    public void Zstd_ResetInsideFrame_KeepsDictionary(int workers)
+    [Fact]
+    public void Zstd_ResetInsideFrame_KeepsDictionary()
     {
         var dictionaryContent = Random(32 * 1024, 45);
         using var dictionary = ZstandardDictionary.Create(dictionaryContent);
-        var options = ZstandardCompressionOptions.Default with { NbWorkers = workers, Dictionary = dictionary };
+        var options = ZstandardCompressionOptions.Default with { Dictionary = dictionary };
         var big = Compressible(8 * 1024 * 1024, 46);
         var data = dictionaryContent.AsSpan(0, 16 * 1024).ToArray().Concat(Random(1024, 47)).ToArray(); // mostly found in the dictionary
 
@@ -157,13 +149,11 @@ public class ReviewRegressionTest4
         Assert.Equal(data, Zstandard.Decompress(actual, ZstandardDecompressionOptions.Default with { Dictionary = dictionary }));
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(2)]
-    public void Zstd_ResetInsideFrame_PrefixHadReplacedDictionary(int workers)
+    [Fact]
+    public void Zstd_ResetInsideFrame_PrefixHadReplacedDictionary()
     {
         using var dictionary = ZstandardDictionary.Create(Random(32 * 1024, 48));
-        var options = ZstandardCompressionOptions.Default with { NbWorkers = workers, Dictionary = dictionary };
+        var options = ZstandardCompressionOptions.Default with { Dictionary = dictionary };
         var big = Compressible(8 * 1024 * 1024, 49);
         var data = Compressible(100_000, 50);
 
@@ -176,13 +166,11 @@ public class ReviewRegressionTest4
         Assert.Equal(data, Zstandard.Decompress(CompressAll(encoder, data)));
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(2)]
-    public void Zstd_ResetWithOptionsInsideFrame_AppliesNewOptions(int workers)
+    [Fact]
+    public void Zstd_ResetWithOptionsInsideFrame_AppliesNewOptions()
     {
-        var first = ZstandardCompressionOptions.Default with { NbWorkers = workers, CompressionLevel = 1 };
-        var second = ZstandardCompressionOptions.Default with { NbWorkers = workers, CompressionLevel = 9, ChecksumFlag = true };
+        var first = ZstandardCompressionOptions.Default with { CompressionLevel = 1 };
+        var second = ZstandardCompressionOptions.Default with { CompressionLevel = 9, ChecksumFlag = true };
         var big = Compressible(8 * 1024 * 1024, 52);
         var data = Compressible(3 * 1024 * 1024, 53);
 
@@ -294,14 +282,14 @@ public class ReviewRegressionTest4
 
         using var encoder = new ZstandardEncoder();
 
-        // the level and the workers are applied before the dictionary is rejected
-        var broken = ZstandardCompressionOptions.Default with { CompressionLevel = 19, NbWorkers = 1, Dictionary = disposed };
+        // the level is applied before the dictionary is rejected
+        var broken = ZstandardCompressionOptions.Default with { CompressionLevel = 19, Dictionary = disposed };
         Assert.ThrowsAny<Exception>(() => encoder.Reset(broken));
 
         encoder.Reset();
         Assert.True(expected.AsSpan().SequenceEqual(CompressAll(encoder, data)));
 
-        // an unfinished frame after that has no workers to wait for, and none are running
+        // an unfinished frame after that is reset the same way
         var prefix = new ObservedMemoryManager(Random(64 * 1024, 58));
         encoder.SetPrefix(prefix.Memory);
         StartFrame(encoder, Compressible(8 * 1024 * 1024, 59));
@@ -313,7 +301,7 @@ public class ReviewRegressionTest4
     [Fact]
     public void Zstd_FailedResetWithOptionsInsideFrame_ChangesNothing()
     {
-        var options = ZstandardCompressionOptions.Default with { NbWorkers = 2, CompressionLevel = 5 };
+        var options = ZstandardCompressionOptions.Default with { CompressionLevel = 5 };
         var data = Compressible(3 * 1024 * 1024, 60);
         var disposed = ZstandardDictionary.Create(Random(1024, 61));
         disposed.Dispose();
@@ -334,13 +322,11 @@ public class ReviewRegressionTest4
 
     // ---- recheck 2, 2. a dictionary replaced by a prefix may be disposed by its owner
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(2)]
-    public void Zstd_ResetInsideFrame_DictionaryDisposedAfterSetPrefix(int workers)
+    [Fact]
+    public void Zstd_ResetInsideFrame_DictionaryDisposedAfterSetPrefix()
     {
         var dictionary = ZstandardDictionary.Create(Random(32 * 1024, 63));
-        var options = ZstandardCompressionOptions.Default with { NbWorkers = workers, Dictionary = dictionary };
+        var options = ZstandardCompressionOptions.Default with { Dictionary = dictionary };
         var data = Compressible(100_000, 64);
 
         using var encoder = new ZstandardEncoder(options);

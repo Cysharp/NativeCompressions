@@ -32,19 +32,19 @@ public static partial class LZ4
                 }
                 else
                 {
+                    using var lease = dictionary.Acquire();
                     LZ4F_cctx_s* cctx = default;
                     var code = LZ4F_createCompressionContext(&cctx, LZ4.FrameVersion);
                     LZ4.ThrowIfError(code);
                     try
                     {
-                        var bytesWrittenOrErrorCode = LZ4F_compressFrame_usingCDict(cctx, dest, (nuint)buffer.Length, src, (nuint)source.Length, dictionary.Handle, &pref);
+                        var bytesWrittenOrErrorCode = LZ4F_compressFrame_usingCDict(cctx, dest, (nuint)buffer.Length, src, (nuint)source.Length, lease.Compression, &pref);
                         ThrowIfError(bytesWrittenOrErrorCode);
                         return buffer.AsSpan(0, (int)bytesWrittenOrErrorCode).ToArray();
                     }
                     finally
                     {
                         LZ4F_freeCompressionContext(cctx);
-                        GC.KeepAlive(dictionary); // its finalizer frees the native dictionary
                     }
                 }
             }
@@ -74,19 +74,19 @@ public static partial class LZ4
             }
             else
             {
+                using var lease = dictionary.Acquire();
                 LZ4F_cctx_s* cctx = default;
                 var code = LZ4F_createCompressionContext(&cctx, LZ4.FrameVersion);
                 LZ4.ThrowIfError(code);
                 try
                 {
-                    var bytesWrittenOrErrorCode = LZ4F_compressFrame_usingCDict(cctx, dest, (nuint)destination.Length, src, (nuint)source.Length, dictionary.Handle, &pref);
+                    var bytesWrittenOrErrorCode = LZ4F_compressFrame_usingCDict(cctx, dest, (nuint)destination.Length, src, (nuint)source.Length, lease.Compression, &pref);
                     ThrowIfError(bytesWrittenOrErrorCode);
                     return (int)bytesWrittenOrErrorCode;
                 }
                 finally
                 {
                     LZ4F_freeCompressionContext(cctx);
-                    GC.KeepAlive(dictionary); // its finalizer frees the native dictionary
                 }
             }
         }

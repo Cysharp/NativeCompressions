@@ -1,4 +1,3 @@
-using Microsoft.Win32.SafeHandles;
 using NativeCompressions.Internal;
 using System.Buffers;
 using System.IO.Pipelines;
@@ -10,8 +9,6 @@ public static partial class LZ4
     // Every DecompressAsync overload turns its source into a PipeReader and runs DecompressCoreAsync,
     // so they share one behavior: concatenated frames (and skippable frames) are all decoded, the same
     // as LZ4Stream and the one-shot Decompress. Invalid data and input that ends inside a frame throw LZ4Exception.
-
-    static readonly StreamPipeReaderOptions LargeBufferLeaveOpenPipeReaderOptions = new StreamPipeReaderOptions(bufferSize: 65536, leaveOpen: true);
 
     const int DecompressOutputSizeHint = 65536;
 
@@ -41,34 +38,6 @@ public static partial class LZ4
         }
     }
 
-    public static ValueTask DecompressAsync(SafeFileHandle source, PipeWriter destination, LZ4DecompressionOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        return DecompressAsync(source, 0, destination, options, cancellationToken);
-    }
-
-    public static async ValueTask DecompressAsync(SafeFileHandle source, long offset, PipeWriter destination, LZ4DecompressionOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        if (offset < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(offset));
-        }
-
-#if NETSTANDARD
-        var stream = NonOwningFileStream.Open(source, offset); // not disposed, it does not own the handle
-#else
-        var stream = new RandomAccessReadStream(source, offset);
-#endif
-        var reader = PipeReader.Create(stream, LargeBufferLeaveOpenPipeReaderOptions);
-        try
-        {
-            await DecompressCoreAsync(reader, destination, options ?? LZ4DecompressionOptions.Default, cancellationToken);
-        }
-        finally
-        {
-            await reader.CompleteAsync(); // returns the buffers of the reader, also after a failure
-        }
-    }
-
     public static async ValueTask DecompressAsync(Stream source, PipeWriter destination, LZ4DecompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
         if (source is MemoryStream ms && ms.TryGetBuffer(out var buffer))
@@ -85,22 +54,6 @@ public static partial class LZ4
             ms.Position = ms.Length;
             return;
         }
-
-#if !NETSTANDARD
-        if (source is FileStream fs && fs.CanSeek)
-        {
-            // A position at or past the end is a legal EOF and is left where it is, the same as for MemoryStream.
-            if (fs.Position >= fs.Length)
-            {
-                await DecompressAsync(ReadOnlyMemory<byte>.Empty, destination, options, cancellationToken);
-                return;
-            }
-
-            await DecompressAsync(fs.SafeFileHandle, fs.Position, destination, options, cancellationToken);
-            fs.Position = fs.Length; // the handle was read directly, leave the stream at the end like a normal read would
-            return;
-        }
-#endif
 
         var reader = PipeReader.Create(source, LeaveOpenPipeReaderOptions);
         try
@@ -120,12 +73,12 @@ public static partial class LZ4
 
     public static async ValueTask DecompressAsync(string sourceFilePath, string destinationFilePath, LZ4DecompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
+        using var source = OpenSource(sourceFilePath);
         using var destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
         var destinationWriter = PipeWriter.Create(destinationStream);
         try
         {
-            await DecompressAsync(sourceHandle, destinationWriter, options, cancellationToken);
+            await DecompressAsync(source, destinationWriter, options, cancellationToken);
         }
         finally
         {
@@ -135,8 +88,8 @@ public static partial class LZ4
 
     public static async ValueTask DecompressAsync(string sourceFilePath, PipeWriter destination, LZ4DecompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        await DecompressAsync(sourceHandle, destination, options, cancellationToken);
+        using var source = OpenSource(sourceFilePath);
+        await DecompressAsync(source, destination, options, cancellationToken);
     }
 
     // ---- core
@@ -145,6 +98,7 @@ public static partial class LZ4
     {
         using var decoder = new LZ4Decoder(options.WithoutStableDst());
         var status = OperationStatus.NeedMoreData;
+        var progress = new FeedProgress();
 
         ReadResult result = default;
         while (!result.IsCompleted)
@@ -152,13 +106,22 @@ public static partial class LZ4
             result = await source.ReadAsync(cancellationToken);
             if (result.IsCanceled) throw new OperationCanceledException();
 
+            // The reader is advanced by what the decoder took, also when the destination fails on the way.
+            // Otherwise the reader would stay in the middle of a read and refuse the next one.
             var buffer = result.Buffer;
-            foreach (var segment in buffer)
+            progress.Consumed = 0;
+            try
             {
-                if (segment.IsEmpty) continue;
-                status = await FeedAsync(decoder, segment, destination, cancellationToken);
+                foreach (var segment in buffer)
+                {
+                    if (segment.IsEmpty) continue;
+                    status = await FeedAsync(decoder, segment, destination, cancellationToken, progress);
+                }
             }
-            source.AdvanceTo(buffer.End);
+            finally
+            {
+                source.AdvanceTo(buffer.GetPosition(progress.Consumed), buffer.End);
+            }
         }
 
         // input is exhausted, write out what the decoder still holds
@@ -188,7 +151,8 @@ public static partial class LZ4
     // Feeds one chunk of compressed input and writes whatever it decodes to destination.
     // A frame may end and the next one start anywhere inside the chunk. Everything decoded is flushed before
     // returning, so the caller can wait for more input without holding data back.
-    static async ValueTask<OperationStatus> FeedAsync(LZ4Decoder decoder, ReadOnlyMemory<byte> chunk, PipeWriter destination, CancellationToken cancellationToken)
+    // progress, when given, counts the bytes of chunk the decoder took, also when this method fails
+    static async ValueTask<OperationStatus> FeedAsync(LZ4Decoder decoder, ReadOnlyMemory<byte> chunk, PipeWriter destination, CancellationToken cancellationToken, FeedProgress? progress = null)
     {
         var status = OperationStatus.NeedMoreData;
         var pending = 0; // bytes advanced but not yet flushed
@@ -199,6 +163,7 @@ public static partial class LZ4
             var dest = destination.GetMemory(DecompressOutputSizeHint);
             status = decoder.Decompress(chunk.Span, dest.Span, out var bytesConsumed, out var bytesWritten);
             chunk = chunk.Slice(bytesConsumed);
+            if (progress != null) progress.Consumed += bytesConsumed;
             destination.Advance(bytesWritten);
             pending += bytesWritten;
 
@@ -229,5 +194,11 @@ public static partial class LZ4
         }
 
         return status;
+    }
+
+    // How much of the input of one read the decoder took so far.
+    sealed class FeedProgress
+    {
+        public long Consumed;
     }
 }

@@ -131,13 +131,13 @@ public static partial class Zstandard
             }
             else
             {
+                using var lease = decompressionOptions.Dictionary.Acquire();
                 var context = ZSTD_createDCtx();
                 if (context == null) throw new ZstandardException("Failed to create decompression context");
 
                 try
                 {
-                    bytesWritten = ZSTD_decompress_usingDDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, decompressionOptions.Dictionary.DecompressionHandle);
-                    GC.KeepAlive(decompressionOptions.Dictionary);
+                    bytesWritten = ZSTD_decompress_usingDDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, lease.Decompression);
                 }
                 finally
                 {
