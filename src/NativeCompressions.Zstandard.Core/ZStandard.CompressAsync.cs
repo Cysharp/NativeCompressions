@@ -18,6 +18,8 @@ public static partial class Zstandard
 
     public static async ValueTask CompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, ZstandardEncoder encoder, CancellationToken cancellationToken = default)
     {
+        // checked before anything is compressed, output already handed to the destination cannot be taken back
+        cancellationToken.ThrowIfCancellationRequested();
         var sizeHint = GetBufferSize(source.Length, MinimumBufferSize);
 
         var status = OperationStatus.DestinationTooSmall;
@@ -46,6 +48,8 @@ public static partial class Zstandard
 
     public static async ValueTask CompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, ZstandardEncoder encoder, CancellationToken cancellationToken = default)
     {
+        // checked before anything is compressed, output already handed to the destination cannot be taken back
+        cancellationToken.ThrowIfCancellationRequested();
         var sizeHint = GetBufferSize(source.Length, MinimumBufferSize);
         var dest = destination.GetSpan(sizeHint);
         var writtenInDest = 0;
@@ -144,6 +148,8 @@ public static partial class Zstandard
 
     public static async ValueTask CompressAsync(PipeReader source, PipeWriter destination, ZstandardEncoder encoder, CancellationToken cancellationToken = default)
     {
+        // checked before anything is compressed, output already handed to the destination cannot be taken back
+        cancellationToken.ThrowIfCancellationRequested();
         var sizeHint = MinimumBufferSize;
 
         var writtenInDest = 0;
@@ -191,7 +197,7 @@ public static partial class Zstandard
             }
             finally
             {
-                source.AdvanceTo(buffer.GetPosition(consumed), buffer.End);
+                source.AdvanceTo(buffer.GetPosition(consumed)); // examined only up to there, so what is left is readable right away
             }
 
             // Everything compressed so far goes out before more input is awaited. The other end may be

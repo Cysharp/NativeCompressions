@@ -96,6 +96,8 @@ public static partial class LZ4
 
     static async ValueTask DecompressCoreAsync(PipeReader source, PipeWriter destination, LZ4DecompressionOptions options, CancellationToken cancellationToken)
     {
+        // checked before anything is decoded, output already handed to the destination cannot be taken back
+        cancellationToken.ThrowIfCancellationRequested();
         using var decoder = new LZ4Decoder(options.WithoutStableDst());
         var status = OperationStatus.NeedMoreData;
         var progress = new FeedProgress();
@@ -120,7 +122,7 @@ public static partial class LZ4
             }
             finally
             {
-                source.AdvanceTo(buffer.GetPosition(progress.Consumed), buffer.End);
+                source.AdvanceTo(buffer.GetPosition(progress.Consumed)); // examined only up to there, so what is left is readable right away
             }
         }
 

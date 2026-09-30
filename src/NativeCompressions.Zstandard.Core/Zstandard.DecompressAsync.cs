@@ -18,6 +18,8 @@ public static partial class Zstandard
 
     public static async ValueTask DecompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
+        // checked before anything is decoded, output already handed to the destination cannot be taken back
+        cancellationToken.ThrowIfCancellationRequested();
         var status = await FeedAsync(decoder, source, destination, MinimumBufferSize, cancellationToken);
         await FinishAsync(decoder, status, source.Length > 0, destination, MinimumBufferSize, cancellationToken);
     }
@@ -30,6 +32,8 @@ public static partial class Zstandard
 
     public static async ValueTask DecompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
+        // checked before anything is decoded, output already handed to the destination cannot be taken back
+        cancellationToken.ThrowIfCancellationRequested();
         var status = OperationStatus.NeedMoreData;
         var anyInput = false;
         foreach (var segment in source)
@@ -84,6 +88,8 @@ public static partial class Zstandard
 
     public static async ValueTask DecompressAsync(PipeReader source, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
+        // checked before anything is decoded, output already handed to the destination cannot be taken back
+        cancellationToken.ThrowIfCancellationRequested();
         var status = OperationStatus.NeedMoreData;
         var anyInput = false;
         var progress = new FeedProgress();
@@ -109,7 +115,7 @@ public static partial class Zstandard
             }
             finally
             {
-                source.AdvanceTo(buffer.GetPosition(progress.Consumed), buffer.End);
+                source.AdvanceTo(buffer.GetPosition(progress.Consumed)); // examined only up to there, so what is left is readable right away
             }
         }
 

@@ -157,7 +157,8 @@ public sealed class LZ4Stream : Stream
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
 
-        if (buffer == null) return;
+        // An encoder handed in by the caller may hold data this stream never saw, so the buffer is rented here too.
+        buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxFlushBufferLength());
 
         // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
         var written = encoder!.Flush(buffer);
@@ -177,7 +178,9 @@ public sealed class LZ4Stream : Stream
         // Checked before the encoder is touched. Output taken from the encoder cannot be put back,
         // so a cancelled write after that would lose it.
         cancellationToken.ThrowIfCancellationRequested();
-        if (buffer == null) return;
+
+        // An encoder handed in by the caller may hold data this stream never saw, so the buffer is rented here too.
+        buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxFlushBufferLength());
 
         // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
         var written = encoder!.Flush(buffer);

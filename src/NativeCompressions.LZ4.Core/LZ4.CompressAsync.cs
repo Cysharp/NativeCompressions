@@ -106,6 +106,8 @@ public static partial class LZ4
     // the frame fails to close when the input turns out to be a different length.
     static async ValueTask CompressCoreAsync(PipeReader source, long? knownLength, PipeWriter destination, LZ4CompressionOptions? givenOptions, CancellationToken cancellationToken)
     {
+        // checked before anything is compressed, output already handed to the destination cannot be taken back
+        cancellationToken.ThrowIfCancellationRequested();
         var options = givenOptions ?? LZ4CompressionOptions.Default;
         if (knownLength != null)
         {
@@ -154,7 +156,7 @@ public static partial class LZ4
             }
             finally
             {
-                source.AdvanceTo(input.GetPosition(consumed), input.End);
+                source.AdvanceTo(input.GetPosition(consumed)); // examined only up to there, so what is left is readable right away
             }
         }
 

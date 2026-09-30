@@ -342,6 +342,8 @@ https://github.com/Cysharp/NativeCompressions.git?path=src/NativeCompressions.Un
 
 During an iOS player build it rewrites the library names to `__Internal` in the build output, before IL2CPP runs. The assemblies in your project are not modified, so the Editor and other platforms are unaffected. This limitation is Unity specific. .NET for iOS and .NET MAUI use the `net10.0-ios` build of the Core assemblies, which already uses `__Internal`.
 
+The iOS Simulator on Apple Silicon is not supported in Unity. The packages ship an `iossimulator-arm64` library, but the runtime settings above do not register it, so NuGetForUnity does not import it. Unity links every iOS plugin into one build and cannot pick the simulator library over the device library of the same architecture. Use a device build, or the Intel simulator (`ios-x64`) on a Rosetta Editor.
+
 License
 ---
 This library is licensed under the MIT License.
