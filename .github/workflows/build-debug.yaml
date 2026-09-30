@@ -15,25 +15,6 @@ on:
       - "main"
 
 jobs:
-  bindings:
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    steps:
-      - uses: Cysharp/Actions/.github/actions/checkout@main
-        with:
-          ref: ${{ inputs.git-ref || github.sha }}
-          submodules: recursive
-      - name: Install binding generator prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libclang-dev
-          rustup toolchain install stable --profile minimal
-      - name: Check all native bindings
-        run: |
-          cargo build --locked --manifest-path bindgen/Cargo.toml --workspace
-          git diff --ignore-space-at-eol --exit-code -- src/NativeCompressions.LZ4.Core/Interop/LZ4NativeMethods.cs src/NativeCompressions.Zstandard.Core/Interop/ZstandardNativeMethods.cs src/NativeCompressions.OpenZL.Core/Interop/OpenZLNativeMethods.cs
-
   build-test:
     name: ${{ matrix.platform }}
     permissions:

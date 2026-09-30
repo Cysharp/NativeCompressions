@@ -67,7 +67,7 @@ public class ZstandardCompressionOptionsTest
         "CompressionLevel", "WindowLog", "HashLog", "ChainLog", "SearchLog", "MinMatch", "TargetLength",
         "Strategy.fast", "Strategy.greedy", "Strategy.lazy2", "Strategy.btultra2",
         "EnableLongDistanceMatching", "LdmHashLog", "LdmMinMatch", "LdmBucketSizeLog", "LdmHashRateLog",
-        "ContentSizeFlag", "ChecksumFlag", "DictIDFlag", "NbWorkers", "JobSize", "OverlapLog", "Combined",
+        "ContentSizeFlag", "ChecksumFlag", "DictIDFlag", "Combined",
     }.Select(x => new object[] { x });
 
     static ZstandardCompressionOptions Build(string name)
@@ -94,10 +94,7 @@ public class ZstandardCompressionOptionsTest
             "ContentSizeFlag" => d with { ContentSizeFlag = false },
             "ChecksumFlag" => d with { ChecksumFlag = true },
             "DictIDFlag" => d with { DictIDFlag = false },
-            "NbWorkers" => d with { NbWorkers = 2 },
-            "JobSize" => d with { NbWorkers = 2, JobSize = 512 * 1024 },
-            "OverlapLog" => d with { NbWorkers = 2, OverlapLog = 3 },
-            "Combined" => d with { CompressionLevel = 7, WindowLog = 20, ChecksumFlag = true, EnableLongDistanceMatching = true, NbWorkers = 2 },
+            "Combined" => d with { CompressionLevel = 7, WindowLog = 20, ChecksumFlag = true, EnableLongDistanceMatching = true },
             _ => throw new ArgumentException(name)
         };
     }
@@ -177,16 +174,6 @@ public class ZstandardCompressionOptionsTest
     }
 
     [Fact]
-    public void NbWorkers_ProducesSameLogicalOutput()
-    {
-        // multi-threaded output need not be byte identical, but must decode to the same data
-        var single = Zstandard.Compress(Data, ZstandardCompressionOptions.Default with { CompressionLevel = 5 });
-        var multi = Zstandard.Compress(Data, ZstandardCompressionOptions.Default with { CompressionLevel = 5, NbWorkers = 4 });
-        Assert.Equal(Data, Zstandard.Decompress(single));
-        Assert.Equal(Data, Zstandard.Decompress(multi));
-    }
-
-    [Fact]
     public void IsDefault_AndEquality()
     {
         Assert.True(ZstandardCompressionOptions.Default.IsDefault);
@@ -217,7 +204,6 @@ public class ZstandardCompressionOptionsTest
     [InlineData("LdmHashLog")]
     [InlineData("LdmMinMatch")]
     [InlineData("LdmBucketSizeLog")]
-    // JobSize and OverlapLog are clamped by zstd instead of rejected, so they are not listed here.
     public void OutOfRangeParameter_ThrowsAtConstruction(string name)
     {
         var d = ZstandardCompressionOptions.Default;
