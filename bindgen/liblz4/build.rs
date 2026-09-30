@@ -24,7 +24,8 @@ const NOT_EXPORTED: &[&str] = &[
 ];
 
 fn main() -> Result<(), Box<dyn Error>> {
-   bindgen::Builder::default()
+    println!("cargo:rerun-if-changed=../../lz4/lib");
+    bindgen::Builder::default()
         .header("../../lz4/lib/lz4.c")
         .header("../../lz4/lib/lz4hc.c")
         .header("../../lz4/lib/lz4frame.c")

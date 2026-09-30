@@ -66,6 +66,14 @@ namespace NativeCompressions.Interop
         public static extern ZL_ErrorContext* ZL_OperationContext_getDefaultErrorContext(ZL_OperationContext_s* opCtx);
 
         /// <summary>
+        ///  @returns true iff the provided rich error info in @p error is owned by this
+        ///           operation context and is still live.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_OperationContext_ownsError", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.U1)]
+        public static extern bool ZL_OperationContext_ownsError(ZL_OperationContext_s* opCtx, ZL_Error_s* error);
+
+        /// <summary>
         ///  Actual implementation function which accepts all of the explicit arguments
         ///  that are set up for you by the macros elsewhere. Prefer to use those macros
         ///  rather than this function directly.
@@ -106,6 +114,13 @@ namespace NativeCompressions.Interop
         [DllImport(__DllName, EntryPoint = "ZL_E_addFrame", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern ZL_Error_s ZL_E_addFrame(ZL_ErrorContext* ctx, ZL_Error_s error, ZL_ErrorInfo_u backup, byte* file, byte* func, int line, byte* fmt);
 
+        /// <summary>
+        ///  You can however clear out the error info pointer to help avoid errors when
+        ///  the context object has been freed.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_E_clearInfo", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern void ZL_E_clearInfo(ZL_Error_s* err);
+
         [DllImport(__DllName, EntryPoint = "ZL_ErrorCode_toString", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern byte* ZL_ErrorCode_toString(ZL_ErrorCode code);
 
@@ -114,6 +129,54 @@ namespace NativeCompressions.Interop
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZL_returnError", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern ZL_Result_size_t_u ZL_returnError(ZL_ErrorCode err);
+
+        /// <summary>
+        ///  Creates an empty cache with the default 256 MiB entry-payload budget.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_CodecOutputCache_create", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern ZL_CodecOutputCache_s* ZL_CodecOutputCache_create();
+
+        /// <summary>
+        ///  Creates an empty cache with the specified entry-payload budget.
+        ///  Zero creates a live cache that cannot store entries; cacheable invocations
+        ///  still perform hashing and lookups when it is attached. Reaching @p maxBytes
+        ///  skips new entries; it does not fail compression.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_CodecOutputCache_createWithBudget", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern ZL_CodecOutputCache_s* ZL_CodecOutputCache_createWithBudget(nuint maxBytes);
+
+        /// <summary>
+        ///  Frees a cache and all stored entries. Accepts NULL.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_CodecOutputCache_free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern void ZL_CodecOutputCache_free(ZL_CodecOutputCache_s* cache);
+
+        /// <summary>
+        ///  Drops all cached results. Accepts NULL.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_CodecOutputCache_reset", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern void ZL_CodecOutputCache_reset(ZL_CodecOutputCache_s* cache);
+
+        /// <summary>
+        ///  Sets the entry-payload budget for the private cache used automatically by
+        ///  tryGraph. Automatic caching is disabled by default. A positive value enables
+        ///  it with the specified budget; zero disables it.
+        ///
+        ///  Changing the budget drops the existing private cache. Call this function
+        ///  only between compressions. The setting persists until changed or the
+        ///  context is freed; ZL_CParam_stickyParameters and ZL_CCtx_resetParameters()
+        ///  do not affect it. A caller-attached cache is unaffected and remains active.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_CCtx_setTryGraphCacheBudget", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern ZL_Result_size_t_u ZL_CCtx_setTryGraphCacheBudget(ZL_CCtx_s* cctx, nuint maxBytes);
+
+        /// <summary>
+        ///  Attaches a borrowed cache to @p cctx. Passing NULL detaches it; automatic
+        ///  tryGraph caching remains controlled by ZL_CCtx_setTryGraphCacheBudget(). The
+        ///  cache must outlive every compression that uses the context.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_CCtx_setCodecOutputCache", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern ZL_Result_size_t_u ZL_CCtx_setCodecOutputCache(ZL_CCtx_s* cctx, ZL_CodecOutputCache_s* cache);
 
         [DllImport(__DllName, EntryPoint = "ZL_Data_id", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern ZL_DataID ZL_Data_id(Stream_s* in_);
@@ -539,6 +602,45 @@ namespace NativeCompressions.Interop
         public static extern void ZL_TypedRef_free(ZL_Input_s* tref);
 
         /// <summary>
+        ///  No-op dematerialization function.
+        ///  Use this as a placeholder when there are no resources or memory to free.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_NOOP_DEMATERIALIZE", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern void ZL_NOOP_DEMATERIALIZE(ZL_Materializer_s* matCtx, void* materialized);
+
+        /// <summary>
+        ///  Managed space allocation (Materializers ONLY):
+        ///  Materialization may request arena space to hold materialized objects. It is
+        ///  allowed to request multiple buffers of any size. Returned buffers are not
+        ///  initialized, and cannot be freed individually. All buffers are
+        ///  automatically released at end of the owning @ref ZL_Compressor's lifetime.
+        ///
+        ///  @note Always returns NULL during dematerialization.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_Materializer_allocate", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern void* ZL_Materializer_allocate(ZL_Materializer_s* matCtx, nuint size);
+
+        /// <summary>
+        ///  Scratch space allocation (Materializers ONLY):
+        ///  When the materializer needs some buffer space for some local operation,
+        ///  it can request such space from the engine. It is allowed to
+        ///  request multiple buffers of any size. Returned buffers are not
+        ///  initialized, and cannot be freed individually. All scratch buffers are
+        ///  automatically released at the end of the materializer's execution.
+        ///
+        ///  @note Always returns NULL during dematerialization.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_Materializer_getScratchSpace", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern void* ZL_Materializer_getScratchSpace(ZL_Materializer_s* matCtx, nuint size);
+
+        /// <summary>
+        ///  @returns true if @p id is non-NULL and not ZL_MPARAM_ID_NULL.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_MParamID_hasValue", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.U1)]
+        public static extern bool ZL_MParamID_hasValue(ZL_MParamID* id);
+
+        /// <summary>
         ///  Inserts a placeholder for the Automated Compressor Explorer (ACE) to
         ///  replace with an automatically generated graph. It accepts a single input of
         ///  any type.
@@ -588,50 +690,13 @@ namespace NativeCompressions.Interop
         /// <summary>
         ///  Parameterized brute force selector that selects the best successor from a
         ///  user-provided list of candidates.
-        ///  @param successors the list of successors to select from. Each successor must
-        ///  be equipped to handle the input stream type.
+        ///  @param successors the list of successors to select from. Successors that
+        ///  can't handle the input stream type are skipped; if none apply the selector
+        ///  falls back to @ref ZL_GRAPH_STORE.
+        ///  @returns @ref ZL_GRAPH_BRUTE_FORCE parameterized with @p successors.
         /// </summary>
-        [DllImport(__DllName, EntryPoint = "ZL_Compressor_registerBruteForceSelectorGraph", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ZL_GraphID ZL_Compressor_registerBruteForceSelectorGraph(ZL_Compressor_s* cgraph, ZL_GraphID* successors, nuint numSuccessors);
-
-        /// <summary>
-        ///  No-op dematerialization function.
-        ///  Use this as a placeholder when there are no resources or memory to free.
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "ZL_NOOP_DEMATERIALIZE", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern void ZL_NOOP_DEMATERIALIZE(ZL_Materializer_s* matCtx, void* materialized);
-
-        /// <summary>
-        ///  Managed space allocation (Materializers ONLY):
-        ///  Materialization may request arena space to hold materialized objects. It is
-        ///  allowed to request multiple buffers of any size. Returned buffers are not
-        ///  initialized, and cannot be freed individually. All buffers are
-        ///  automatically released at end of the owning @ref ZL_Compressor's lifetime.
-        /// 
-        ///  @note Always returns NULL during dematerialization.
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "ZL_Materializer_allocate", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern void* ZL_Materializer_allocate(ZL_Materializer_s* matCtx, nuint size);
-
-        /// <summary>
-        ///  Scratch space allocation (Materializers ONLY):
-        ///  When the materializer needs some buffer space for some local operation,
-        ///  it can request such space from the engine. It is allowed to
-        ///  request multiple buffers of any size. Returned buffers are not
-        ///  initialized, and cannot be freed individually. All scratch buffers are
-        ///  automatically released at the end of the materializer's execution.
-        /// 
-        ///  @note Always returns NULL during dematerialization.
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "ZL_Materializer_getScratchSpace", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern void* ZL_Materializer_getScratchSpace(ZL_Materializer_s* matCtx, nuint size);
-
-        /// <summary>
-        ///  @returns true if @p id is non-NULL and not ZL_MPARAM_ID_NULL.
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "ZL_MParamID_hasValue", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        [return: MarshalAs(UnmanagedType.U1)]
-        public static extern bool ZL_MParamID_hasValue(ZL_MParamID* id);
+        [DllImport(__DllName, EntryPoint = "ZL_Compressor_buildBruteForceSelectorGraph", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern ZL_Result_ZL_GraphID_u ZL_Compressor_buildBruteForceSelectorGraph(ZL_Compressor_s* cgraph, ZL_GraphID* successors, nuint numSuccessors);
 
         /// <summary>
         ///  Registers a function graph given the @p desc.
@@ -673,6 +738,22 @@ namespace NativeCompressions.Interop
 
         [DllImport(__DllName, EntryPoint = "ZL_Graph_getLocalRefParam", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern ZL_RefParam ZL_Graph_getLocalRefParam(ZL_Graph_s* gctx, int refParamId);
+
+        /// <summary>
+        ///  Bulk consultation request of *all* Local Parameters. This can be useful when
+        ///  one is trying to access all the Local Parameters at once for a codec using
+        ///  the encoder.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_Graph_getLocalParams", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern ZL_LocalParams* ZL_Graph_getLocalParams(ZL_Graph_s* gctx);
+
+        /// <summary>
+        ///  @returns The materialized MParam object associated with this graph, if
+        ///  there is one. Otherwise NULL. MParams are compression-only resources
+        ///  that are not required at decompression time.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_Graph_getMParam", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern void* ZL_Graph_getMParam(ZL_Graph_s* gctx);
 
         /// <summary>
         ///  Determines whether @nodeid is supported given the applied global parameters
@@ -904,6 +985,18 @@ namespace NativeCompressions.Interop
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZL_Compressor_registerDivideByNode", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern ZL_NodeID ZL_Compressor_registerDivideByNode(ZL_Compressor_s* cgraph, ulong divisor);
+
+        /// <summary>
+        ///  Sets the destination of @p edge to @p entropyGraph with the parameters
+        ///  @p minGainBytes and @p minGainPct.
+        ///
+        ///  @param minGainBytes The value for ZL_ENTROPY_MIN_GAIN_BYTES_PID or &lt; 0 to
+        ///  leave unset.
+        ///  @param minGainPct The value for ZL_ENTROPY_MIN_GAIN_PCT_PID or &lt; 0 to leave
+        ///  unset.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_Edge_setEntropyDestination", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern ZL_Result_size_t_u ZL_Edge_setEntropyDestination(ZL_Edge_s* edge, ZL_GraphID entropyGraph, int minGainBytes, int minGainPct);
 
         /// <summary>
         ///  DEPRECATED: Use ZL_GRAPH_FIELD_LZ instead.
@@ -1257,6 +1350,12 @@ namespace NativeCompressions.Interop
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZL_Compressor_registerZstdGraph_withLevel", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern ZL_GraphID ZL_Compressor_registerZstdGraph_withLevel(ZL_Compressor_s* cgraph, int compressionLevel);
+
+        /// <summary>
+        ///  @return A trainable zstd graph with the default compression level
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_Compressor_buildTrainableZstdGraph", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern ZL_Result_ZL_GraphID_u ZL_Compressor_buildTrainableZstdGraph(ZL_Compressor_s* cgraph);
 
         /// <summary>
         ///  @brief Create a new @ref ZL_Compressor.
@@ -1741,14 +1840,19 @@ namespace NativeCompressions.Interop
 
         /// <summary>
         ///  Reads the serialized compressor represented by @p serialized and pushes
-        ///  the graph structure and configuration it describes into @p compressor.
+        ///  the graph structure and configuration it describes into @p compressor. If the
+        ///  compressor requires a dict bundle, it should be passed as a "fat" bundle via
+        ///  @p fatBundle (if no bundle is required, pass NULL). See @ref
+        ///  ZL_Compressor_loadDictBundle() for more details.
         /// 
         ///  In order for materialization to succeed, the @p compressor must already have
         ///  all of the custom transforms, graph functions, selectors, etc. registered
         ///  that were available when the compressor was serialized. You can use @ref
         ///  ZL_CompressorDeserializer_getDependencies() to determine what non-serialized
         ///  graph components are needed on the destination compressor. You can then set
-        ///  those components up before invoking this operation on that compressor.
+        ///  those components up before invoking this operation on that compressor. @ref
+        ///  ZL_CompressorDeserializer_getDependencies() should also be used to determine
+        ///  if a bundle is required.
         /// 
         ///  See the documentation above for a more thorough discussion of these
         ///  requirements and how best to structure a compressor to meet them.
@@ -1758,7 +1862,7 @@ namespace NativeCompressions.Interop
         ///  (via @ref ZL_Compressor_free) and not to try to re-use it.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZL_CompressorDeserializer_deserialize", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern ZL_Result_size_t_u ZL_CompressorDeserializer_deserialize(ZL_CompressorDeserializer_s* deserializer, ZL_Compressor_s* compressor, void* serialized, nuint serializedSize);
+        public static extern ZL_Result_size_t_u ZL_CompressorDeserializer_deserialize(ZL_CompressorDeserializer_s* deserializer, ZL_Compressor_s* compressor, void* serialized, nuint serializedSize, void* fatBundle, nuint fatBundleSize);
 
         /// <summary>
         ///  Read the serialized compressor from @p serialized and find all of the nodes
@@ -1930,6 +2034,15 @@ namespace NativeCompressions.Interop
         [DllImport(__DllName, EntryPoint = "ZL_Selector_getCParam", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern int ZL_Selector_getCParam(ZL_Selector_s* selCtx, ZL_CParam gparam);
 
+        /// <summary>
+        ///  Determines whether @p nodeid is supported given the applied global
+        ///  compression parameters. Notably, `ZL_CParam_formatVersion` determines
+        ///  whether a node is valid for the selected encoding version.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_Selector_isNodeSupported", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.U1)]
+        public static extern bool ZL_Selector_isNodeSupported(ZL_Selector_s* selCtx, ZL_NodeID nodeid);
+
         [DllImport(__DllName, EntryPoint = "ZL_Selector_getLocalIntParam", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern ZL_IntParam ZL_Selector_getLocalIntParam(ZL_Selector_s* selCtx, int intParamId);
 
@@ -2036,7 +2149,8 @@ namespace NativeCompressions.Interop
 
         /// <summary>
         ///  @returns The materialized dictionary object associated with this node, if
-        ///  there is one. Otherwise NULL.
+        ///  there is one. Returns NULL if there is no dict or if the frame format is
+        ///  less than ZL_MATERIALIZED_DICT_VERSION_MIN.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZL_Encoder_getMaterializedDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern void* ZL_Encoder_getMaterializedDict(ZL_Encoder_s* eictx);
@@ -2141,6 +2255,15 @@ namespace NativeCompressions.Interop
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZL_DCtx_free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern void ZL_DCtx_free(ZL_DCtx_s* dctx);
+
+        /// <summary>
+        ///  @brief Attach a dict loader to the decompression context.
+        ///
+        ///  The dict loader is referenced (not owned) by the DCtx. The caller must
+        ///  ensure the dict loader outlives the DCtx.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_DCtx_refDictLoader", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern void ZL_DCtx_refDictLoader(ZL_DCtx_s* dctx, ZL_DictLoader_s* loader);
 
         /// <summary>
         ///  @brief Sets global parameters via the decompression context.
@@ -2338,6 +2461,15 @@ namespace NativeCompressions.Interop
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZL_FrameInfo_getComment", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern ZL_Result_ZL_Comment_u ZL_FrameInfo_getComment(ZL_FrameInfo* zfi);
+
+        /// <summary>
+        ///  @brief Gets the dict bundle ID referenced by the frame, if any.
+        ///
+        ///  @returns A pointer to the bundle ID stored in @p zfi, or NULL if the frame
+        ///  does not reference a dict bundle.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_FrameInfo_getBundleID", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern ZL_BundleID* ZL_FrameInfo_getBundleID(ZL_FrameInfo* zfi);
 
         /// <summary>
         ///  @brief Decompresses typed content from frames with a single typed output
@@ -2657,6 +2789,17 @@ namespace NativeCompressions.Interop
         public static extern void* ZL_Decoder_getState(ZL_Decoder_s* dictx);
 
         /// <summary>
+        ///  @returns The materialized dictionary object resolved for this node from the
+        ///           dict loader attached to the active DCtx, if there is one, otherwise
+        ///           NULL.
+        ///
+        ///  NOTE: If the frame format &lt; ZL_MATERIALIZED_DICT_VERSION_MIN, this will
+        ///  necessarily return NULL.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_Decoder_getMaterializedDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern void* ZL_Decoder_getMaterializedDict(ZL_Decoder_s* dictx);
+
+        /// <summary>
         ///  Calls @p callback on every graph registered in the @p compressor.
         ///  If @p callback returns an error, short-circuit and return that error.
         ///  @returns Success if all callbacks succeed, or the first error.
@@ -2908,6 +3051,20 @@ namespace NativeCompressions.Interop
         public static extern ZL_Result_size_t_u ZL_Compressor_Node_getDictIndex(ZL_Compressor_s* cgraph, ZL_NodeID node);
 
         /// <summary>
+        ///  @returns The minimum library version to deserialize a compressor containing
+        ///  this node, or an error if the node is not a valid standard node.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_Compressor_Node_getMinLibraryVersion", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern ZL_Result_size_t_u ZL_Compressor_Node_getMinLibraryVersion(ZL_Compressor_s* compressor, ZL_NodeID node);
+
+        /// <summary>
+        ///  @returns The minimum library version to deserialize a compressor containing
+        ///  this standard graph, or an error if the graph ID is out of bounds.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_Compressor_Graph_getMinLibraryVersion", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern ZL_Result_size_t_u ZL_Compressor_Graph_getMinLibraryVersion(ZL_Compressor_s* compressor, ZL_GraphID gid);
+
+        /// <summary>
         ///  @returns The MParam ID associated with the @p node or ZL_MPARAM_ID_NULL if no
         ///  MParam is associated.
         /// </summary>
@@ -2927,6 +3084,20 @@ namespace NativeCompressions.Interop
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZL_Compressor_Node_getMParamObj", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern void* ZL_Compressor_Node_getMParamObj(ZL_Compressor_s* cgraph, ZL_NodeID node);
+
+        /// <summary>
+        ///  @returns A pointer to the *unmaterialized* MParam associated with the @p
+        ///  graph, or NULL if no MParam is associated.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_Compressor_Graph_getMParam", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern ZL_MParam* ZL_Compressor_Graph_getMParam(ZL_Compressor_s* cgraph, ZL_GraphID graph);
+
+        /// <summary>
+        ///  @returns The *materialized* Mparam object associated with the @p graph or
+        ///  NULL if no MParam is associated.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZL_Compressor_Graph_getMParamObj", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern void* ZL_Compressor_Graph_getMParamObj(ZL_Compressor_s* cgraph, ZL_GraphID graph);
 
         /// <summary>
         ///  @returns The number of unique MParam blobs stored in the @p compressor.
@@ -3374,6 +3545,12 @@ namespace NativeCompressions.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    public unsafe partial struct ZL_DictLoader_s
+    {
+        public fixed byte _unused[1];
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     public unsafe partial struct ZL_OpaquePtr
     {
         /// <summary>
@@ -3620,6 +3797,12 @@ namespace NativeCompressions.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    public unsafe partial struct ZL_CodecOutputCache_s
+    {
+        public fixed byte _unused[1];
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     public unsafe partial struct ZL_IntMetadata
     {
         public int isPresent;
@@ -3811,90 +3994,6 @@ namespace NativeCompressions.Interop
     }
 
     /// <summary>
-    ///  @brief Descriptor for materializing and dematerializing local params
-    /// 
-    ///  This structure defines functions to materialize an in-memory object from
-    ///  local parameters and to dematerialize (free) that object.
-    /// 
-    ///  Materialized objects are available as a @ref ZL_RefParam via the typical
-    ///  local params access methods. Specify the retrieval key with the paramId
-    ///  field.
-    /// </summary>
-    [StructLayout(LayoutKind.Sequential)]
-    public unsafe partial struct ZL_MaterializerDesc_s
-    {
-        /// <summary>
-        ///  @brief A custom function that materializes an in-memory object from a
-        ///  provided @p params object.
-        /// 
-        ///  This function may arbitrarily use none, any, or all of the provided
-        ///  local params to generate the materialized object, but the generation
-        ///  MUST be deterministic and hermetic. In particular, materialization shall
-        ///  not depend on variables other than the provided @ref ZL_LocalParams
-        ///  object.
-        /// 
-        ///  Materialized object lifetimes will be managed by the @ref ZL_Compressor
-        ///  on which the node is registered/parameterized. Objects will be
-        ///  materialized around the time of node registration/parameterization and
-        ///  will remain allocated for the lifetime of the associated @ref
-        ///  ZL_Compressor.
-        /// 
-        ///  Do NOT rely on the materialization function being called at any specific
-        ///  time to do side-effect work. Doing so will result in undefined behavior.
-        /// 
-        ///  The @ref ZL_Compressor may arbitrarily share the same materialized object
-        ///  between multiple nodes with the same @p params and the @ref ZL_CCtx may
-        ///  provide concurrent access to materialized objects. DO NOT attempt to
-        ///  modify the materialized object after creation, either directly or via API
-        ///  getters.
-        /// 
-        ///  @param matCtx A pointer to a materializer context object associated with
-        ///  the @ref ZL_Compressor. The materialization function may use this to
-        ///  request managed memory from the ZL_Compressor as an alternative to
-        ///  managing allocations itself and via the dematerializeFn.
-        ///  @param params  A pointer to the local params object to materialize. The
-        ///  provided params have no lifetime guarantees past the invocation of this
-        ///  function. You may not hold references into the params object in the
-        ///  materialized object.
-        /// 
-        ///  @returns A ZL_RESULT containing a pointer to the materialized object on
-        ///  success, or an error. Returning NULL as a valid result (when there's
-        ///  nothing to materialize) should be wrapped in ZL_WRAP_VALUE(NULL). Ensure
-        ///  the function declares a result scope with ZL_RESULT_DECLARE_SCOPE or you
-        ///  will get a compiler error.
-        /// </summary>
-#if NETSTANDARD2_0
-        public void* materializeFn; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
-#else
-        public delegate* unmanaged[Cdecl]<ZL_Materializer_s*, ZL_LocalParams*, ZL_Result_ZL_VoidPtr_u> materializeFn;
-#endif
-        /// <summary>
-        ///  @brief A custom function that destructs a materialized object.
-        /// 
-        ///  You should use this to deallocate all non-arena memory and free any held
-        ///  resources. As a convenience, if there are no resources or memory to free,
-        ///  you may use ZL_NOOP_DEMATERIALIZE as a placeholder.
-        /// </summary>
-#if NETSTANDARD2_0
-        public void* dematerializeFn; // .NET Framework cannot marshal a pointer to a struct holding a function pointer
-#else
-        public delegate* unmanaged[Cdecl]<ZL_Materializer_s*, void*, void> dematerializeFn;
-#endif
-        /// <summary>
-        ///  The paramId to use for the materialized param. If there is an existing
-        ///  param that uses this paramId, the registration will fail.
-        /// </summary>
-        public int paramId;
-        /// <summary>
-        ///  Optionally an opaque pointer that can be queried with
-        ///  ZL_Materializer_getOpaquePtr(). OpenZL does not take ownership of this
-        ///  pointer. If lifetime extension is needed, it should be managed by the
-        ///  `ZL_OpaquePtr` in the outer `ZL_MIEncoderDesc`.
-        /// </summary>
-        public void* opaque;
-    }
-
-    /// <summary>
     ///  @brief Descriptor for materializing and dematerializing resource objects
     ///  (dicts and MParams).
     /// 
@@ -3906,7 +4005,7 @@ namespace NativeCompressions.Interop
     ///  materialization.
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    public unsafe partial struct ZL_MaterializerDesc2
+    public unsafe partial struct ZL_MaterializerDesc
     {
         /// <summary>
         ///  @brief A custom function that materializes an in-memory object from a
@@ -4003,18 +4102,27 @@ namespace NativeCompressions.Interop
         public nuint nbCustomNodes;
         public ZL_LocalParams localParams;
         /// <summary>
-        ///  Optional materializer descriptor for materialized local params.
-        ///  If both materializeFn and dematerializeFn are non-null, the materializer
-        ///  will be used to create materialized objects from local params.
-        /// </summary>
-        public ZL_MaterializerDesc_s materializer;
-        /// <summary>
         ///  Optionally an opaque pointer that can be queried with
         ///  ZL_Graph_getOpaquePtr().
         ///  OpenZL unconditionally takes ownership of this pointer, even if
         ///  registration fails, and it lives for the lifetime of the compressor.
         /// </summary>
         public ZL_OpaquePtr opaque;
+        /// <summary>
+        ///  Optional materializer for compression-only materialized parameters
+        ///  (MParams). If materializeFn is non-null, it will be called during
+        ///  compressor deserialization to create the materialized object from
+        ///  the serialized MParam blob. Unlike dicts, MParams are NOT required
+        ///  at decompression time.
+        /// </summary>
+        public ZL_MaterializerDesc mparamMat;
+        /// <summary>
+        ///  Optional MParam associated with this graph. The provided content blob
+        ///  will be materialized as dictated by @p mparamMat . OpenZL will not take
+        ///  ownership of the content provided. The caller is free to free the buffer
+        ///  anytime after registering the graph.
+        /// </summary>
+        public ZL_MParam mparam;
     }
 
     /// <summary>
@@ -4273,6 +4381,11 @@ namespace NativeCompressions.Interop
         ///  NULL means don't override
         /// </summary>
         public ZL_LocalParams* localParams;
+        /// <summary>
+        ///  Optional MParam blob to (re)materialize on the target graph. Empty
+        ///  content means don't override the graph's MParam.
+        /// </summary>
+        public ZL_MParam mparam;
     }
 
     /// <summary>
@@ -4301,6 +4414,12 @@ namespace NativeCompressions.Interop
         ///  NULL means don't override
         /// </summary>
         public ZL_LocalParams* localParams;
+        /// <summary>
+        ///  Optional per-instance MParam blob. It is materialized at registration
+        ///  using the base graph's materializer (mparamMat). Empty content means no
+        ///  MParam.
+        /// </summary>
+        public ZL_MParam mparam;
     }
 
     /// <summary>
@@ -4313,6 +4432,7 @@ namespace NativeCompressions.Interop
         public nuint num_graphs;
         public byte** node_names;
         public nuint num_nodes;
+        public ZL_BundleID bundle_id;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -4398,12 +4518,6 @@ namespace NativeCompressions.Interop
         public ZL_GraphID* customGraphs;
         public nuint nbCustomGraphs;
         public ZL_LocalParams localParams;
-        /// <summary>
-        ///  Optional materializer descriptor for materialized local params.
-        ///  If both materializeFn and dematerializeFn are non-null, the materializer
-        ///  will be used to create materialized objects from local params.
-        /// </summary>
-        public ZL_MaterializerDesc_s materializer;
         /// <summary>
         ///  Optional, the name of the graph rooted by the selector.
         /// </summary>
@@ -4534,18 +4648,12 @@ namespace NativeCompressions.Interop
         /// </summary>
         public ZL_OpaquePtr opaque;
         /// <summary>
-        ///  Optional materializer descriptor for materialized local params.
-        ///  If both materializeFn and dematerializeFn are non-null, the materializer
-        ///  will be used to create materialized objects from local params.
-        /// </summary>
-        public ZL_MaterializerDesc_s materializer;
-        /// <summary>
         ///  Optional materializer descriptor for materialized dicts.
         ///  If both materializeFn and dematerializeFn are non-null, the materializer
         ///  will be used to create materialized objects. Create a node with
         ///  materialization using ZL_Compressor_parameterizeNode().
         /// </summary>
-        public ZL_MaterializerDesc2 dictMat;
+        public ZL_MaterializerDesc dictMat;
         /// <summary>
         ///  Optional dictionary ID associated with this encoder.
         ///  When set, identifies the dictionary that this encoder requires.
@@ -4560,7 +4668,7 @@ namespace NativeCompressions.Interop
         ///   the serialized MParam blob. Unlike dicts, MParams are NOT required
         ///   at decompression time.
         /// </summary>
-        public ZL_MaterializerDesc2 mparamMat;
+        public ZL_MaterializerDesc mparamMat;
         /// <summary>
         ///  Optional MParam associated with this encoder. The provided content blob
         ///  will be materialized as dictated by @p mparamMat . OpenZL will not take
@@ -4909,30 +5017,34 @@ namespace NativeCompressions.Interop
         ZL_StandardGraphID_store = 2,
         ZL_StandardGraphID_fse = 3,
         ZL_StandardGraphID_huffman = 4,
-        ZL_StandardGraphID_entropy = 5,
-        ZL_StandardGraphID_constant = 6,
-        ZL_StandardGraphID_zstd = 7,
-        ZL_StandardGraphID_bitpack = 8,
-        ZL_StandardGraphID_flatpack = 9,
-        ZL_StandardGraphID_field_lz = 10,
-        ZL_StandardGraphID_compress_generic = 11,
-        ZL_StandardGraphID_select_generic_lz_backend = 12,
-        ZL_StandardGraphID_segment_numeric = 13,
-        ZL_StandardGraphID_select_numeric = 14,
-        ZL_StandardGraphID_ml_selector = 15,
-        ZL_StandardGraphID_clustering = 16,
-        ZL_StandardGraphID_try_parse_int = 17,
-        ZL_StandardGraphID_simple_data_description_language = 18,
-        ZL_StandardGraphID_simple_data_description_language_v2 = 19,
-        ZL_StandardGraphID_lz4 = 20,
-        ZL_StandardGraphID_partition_bitpack = 21,
-        ZL_StandardGraphID_segment_num8_from_serial = 22,
-        ZL_StandardGraphID_segment_num16_from_serial = 23,
-        ZL_StandardGraphID_segment_num32_from_serial = 24,
-        ZL_StandardGraphID_segment_num64_from_serial = 25,
-        ZL_StandardGraphID_lz = 26,
-        ZL_StandardGraphID_segment_serial = 27,
-        ZL_StandardGraphID_public_end = 28,
+        ZL_StandardGraphID_huffman_huf0 = 5,
+        ZL_StandardGraphID_huffman_pivco = 6,
+        ZL_StandardGraphID_entropy = 7,
+        ZL_StandardGraphID_constant = 8,
+        ZL_StandardGraphID_zstd = 9,
+        ZL_StandardGraphID_bitpack = 10,
+        ZL_StandardGraphID_flatpack = 11,
+        ZL_StandardGraphID_field_lz = 12,
+        ZL_StandardGraphID_compress_generic = 13,
+        ZL_StandardGraphID_select_generic_lz_backend = 14,
+        ZL_StandardGraphID_segment_numeric = 15,
+        ZL_StandardGraphID_select_numeric = 16,
+        ZL_StandardGraphID_ml_selector = 17,
+        ZL_StandardGraphID_clustering = 18,
+        ZL_StandardGraphID_try_parse_int = 19,
+        ZL_StandardGraphID_simple_data_description_language = 20,
+        ZL_StandardGraphID_simple_data_description_language_v2 = 21,
+        ZL_StandardGraphID_lz4 = 22,
+        ZL_StandardGraphID_partition_bitpack = 23,
+        ZL_StandardGraphID_segment_num8_from_serial = 24,
+        ZL_StandardGraphID_segment_num16_from_serial = 25,
+        ZL_StandardGraphID_segment_num32_from_serial = 26,
+        ZL_StandardGraphID_segment_num64_from_serial = 27,
+        ZL_StandardGraphID_lz = 28,
+        ZL_StandardGraphID_segment_serial = 29,
+        ZL_StandardGraphID_transformer_numeric = 30,
+        ZL_StandardGraphID_brute_force = 31,
+        ZL_StandardGraphID_public_end = 32,
     }
 
     public enum ZL_StandardNodeID : int
@@ -4990,7 +5102,9 @@ namespace NativeCompressions.Interop
         ZL_StandardNodeID_sentinel_num = 51,
         ZL_StandardNodeID_lz = 52,
         ZL_StandardNodeID_mux_lengths = 53,
-        ZL_StandardNodeID_public_end = 54,
+        ZL_StandardNodeID_sparse_num = 54,
+        ZL_StandardNodeID_sparse_num_auto = 55,
+        ZL_StandardNodeID_public_end = 56,
     }
 
     /// <summary>

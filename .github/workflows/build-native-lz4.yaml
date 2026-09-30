@@ -653,13 +653,22 @@ jobs:
 
           echo "::endgroup::"
 
+      - name: Install binding generator prerequisites
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+          rustup toolchain install stable --profile minimal
+      - name: Regenerate native bindings
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: cargo build --locked --manifest-path bindgen/Cargo.toml -p liblz4
       - name: Check generated changes
         id: changes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          git add lz4 src/NativeCompressions.LZ4.Runtime/runtimes
+          git add lz4 src/NativeCompressions.LZ4.Runtime/runtimes bindgen/liblz4/src/lz4.rs src/NativeCompressions.LZ4.Core/Interop/LZ4NativeMethods.cs
           if git diff --cached --quiet; then
             echo "No LZ4 submodule or binary changes." >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -676,7 +685,7 @@ jobs:
           if [ -n "$PR_URL" ]; then
             git fetch origin "$REMOTE_SHA"
             BASE_REF="$REMOTE_SHA"
-            if git diff --cached --quiet "$BASE_REF" -- lz4 src/NativeCompressions.LZ4.Runtime/runtimes; then
+            if git diff --cached --quiet "$BASE_REF" -- lz4 src/NativeCompressions.LZ4.Runtime/runtimes bindgen/liblz4/src/lz4.rs src/NativeCompressions.LZ4.Core/Interop/LZ4NativeMethods.cs; then
               echo "Existing PR already contains these LZ4 binaries: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
@@ -720,7 +729,7 @@ jobs:
           git push --force-with-lease="refs/heads/$NEW_BRANCH_NAME:$REMOTE_SHA" origin "HEAD:refs/heads/$NEW_BRANCH_NAME"
 
           cat <<'EOF' > artifacts/pr_body.txt
-          This PR updates the LZ4 submodule and/or generated native libraries.
+          This PR updates the LZ4 submodule and/or generated native libraries. New releases also regenerate the bindings from the updated headers.
           Binary-only changes can occur without a new upstream release.
 
           ## Changed files
