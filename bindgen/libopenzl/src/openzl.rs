@@ -12,7 +12,6 @@ pub const _HAS_CXX17: u32 = 0;
 pub const _HAS_CXX20: u32 = 0;
 pub const _HAS_CXX23: u32 = 0;
 pub const _HAS_CXX26: u32 = 0;
-pub const _HAS_NODISCARD: u32 = 0;
 pub const _ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE: u32 = 1;
 pub const _CRT_BUILD_DESKTOP_APP: u32 = 1;
 pub const _ARGMAX: u32 = 100;
@@ -31,6 +30,13 @@ pub const _CRT_SECURE_CPP_OVERLOAD_SECURE_NAMES: u32 = 1;
 pub const _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES_MEMORY: u32 = 0;
 pub const _CRT_SECURE_CPP_OVERLOAD_SECURE_NAMES_MEMORY: u32 = 0;
 pub const _STATIC_INLINE_UCRT_FUNCTIONS: u32 = 0;
+pub const WCHAR_MIN: u32 = 0;
+pub const WCHAR_MAX: u32 = 65535;
+pub const WINT_MIN: u32 = 0;
+pub const WINT_MAX: u32 = 65535;
+pub const __bool_true_false_are_defined: u32 = 1;
+pub const true_: u32 = 1;
+pub const false_: u32 = 0;
 pub const EPERM: u32 = 1;
 pub const ENOENT: u32 = 2;
 pub const ESRCH: u32 = 3;
@@ -206,29 +212,23 @@ pub const ZL_ErrorCode_dict_corruption__desc_str: &[u8; 31] = b"Dictionary corru
 pub const ZL_ErrorCode_dict_materialization__desc_str: &[u8; 35] =
     b"Dictionary materialization failure\0";
 pub const ZL_ENABLE_ERR_IF_ARG_PRINTING: u32 = 0;
-pub const WCHAR_MIN: u32 = 0;
-pub const WCHAR_MAX: u32 = 65535;
-pub const WINT_MIN: u32 = 0;
-pub const WINT_MAX: u32 = 65535;
 pub const ZL_LIBRARY_VERSION_MAJOR: u32 = 0;
-pub const ZL_LIBRARY_VERSION_MINOR: u32 = 2;
+pub const ZL_LIBRARY_VERSION_MINOR: u32 = 3;
 pub const ZL_LIBRARY_VERSION_PATCH: u32 = 0;
-pub const ZL_LIBRARY_VERSION_NUMBER: u32 = 200;
+pub const ZL_LIBRARY_VERSION_NUMBER: u32 = 300;
 pub const ZL_MIN_FORMAT_VERSION: u32 = 8;
-pub const ZL_MAX_FORMAT_VERSION: u32 = 24;
+pub const ZL_MAX_FORMAT_VERSION: u32 = 27;
 pub const ZL_CHUNK_VERSION_MIN: u32 = 21;
 pub const ZL_TYPED_INPUT_VERSION_MIN: u32 = 14;
+pub const ZL_MATERIALIZED_DICT_VERSION_MIN: u32 = 25;
 pub const ZL_IS_FBCODE: u32 = 0;
 pub const ZL_FBCODE_IS_RELEASE: u32 = 0;
 pub const ZL_MIN_CHUNK_SIZE: u32 = 32768;
 pub const ZL_CHUNK_OVERHEAD_MAX: u32 = 16;
-pub const ZL_FRAME_OVERHEAD_MAX: u32 = 32;
+pub const ZL_FRAME_OVERHEAD_MAX: u32 = 64;
 pub const ZL_COMPRESSIONLEVEL_DEFAULT: u32 = 6;
 pub const ZL_DECOMPRESSIONLEVEL_DEFAULT: u32 = 3;
 pub const ZL_MINSTREAMSIZE_DEFAULT: u32 = 10;
-pub const __bool_true_false_are_defined: u32 = 1;
-pub const true_: u32 = 1;
-pub const false_: u32 = 0;
 pub const ZL_CONVERT_SERIAL_TO_STRUCT_SIZE_PID: u32 = 1;
 pub const ZL_DISPATCH_PARSINGFN_PID: u32 = 519;
 pub const ZL_DISPATCH_INSTRUCTIONS_PID: u32 = 520;
@@ -236,6 +236,8 @@ pub const ZL_DISPATCH_CHANNEL_ID: u32 = 83;
 pub const ZL_DISPATCH_STRING_NUM_OUTPUTS_PID: u32 = 47;
 pub const ZL_DISPATCH_STRING_INDICES_PID: u32 = 48;
 pub const ZL_DIVIDE_BY_PID: u32 = 112;
+pub const ZL_ENTROPY_MIN_GAIN_BYTES_PID: u32 = 66;
+pub const ZL_ENTROPY_MIN_GAIN_PCT_PID: u32 = 80;
 pub const ZL_FIELD_LZ_COMPRESSION_LEVEL_OVERRIDE_PID: u32 = 181;
 pub const ZL_FIELD_LZ_LITERALS_GRAPH_OVERRIDE_INDEX_PID: u32 = 0;
 pub const ZL_FIELD_LZ_TOKENS_GRAPH_OVERRIDE_INDEX_PID: u32 = 1;
@@ -243,12 +245,27 @@ pub const ZL_FIELD_LZ_OFFSETS_GRAPH_OVERRIDE_INDEX_PID: u32 = 2;
 pub const ZL_FIELD_LZ_EXTRA_LITERAL_LENGTHS_GRAPH_OVERRIDE_INDEX_PID: u32 = 3;
 pub const ZL_FIELD_LZ_EXTRA_MATCH_LENGTHS_GRAPH_OVERRIDE_INDEX_PID: u32 = 4;
 pub const ZL_LZ_MIN_MATCH_LENGTH_METADATA_ID: u32 = 77;
+pub const ZL_LZPARAM_WINDOWLOG_MIN: u32 = 10;
+pub const ZL_LZPARAM_WINDOWLOG_MAX: u32 = 28;
+pub const ZL_LZPARAM_ACCELERATION_MIN: u32 = 1;
+pub const ZL_LZPARAM_ACCELERATION_MAX: u32 = 10000;
+pub const ZL_LZPARAM_HASHLOG1_MIN: u32 = 10;
+pub const ZL_LZPARAM_HASHLOG1_MAX: u32 = 23;
+pub const ZL_LZPARAM_HASHLOG2_MIN: u32 = 10;
+pub const ZL_LZPARAM_HASHLOG2_MAX: u32 = 23;
+pub const ZL_LZPARAM_HASHLENGTH_MIN: u32 = 4;
+pub const ZL_LZPARAM_HASHLENGTH_MAX: u32 = 7;
+pub const ZL_LZPARAM_SEARCHLOG_MIN: u32 = 1;
+pub const ZL_LZPARAM_SEARCHLOG_MAX: u32 = 4;
+pub const ZL_LZPARAM_COMPRESSIONLEVEL_MIN: i32 = -10000;
+pub const ZL_LZPARAM_COMPRESSIONLEVEL_MAX: u32 = 7;
 pub const ZL_LZ4_COMPRESSION_LEVEL_OVERRIDE_PID: u32 = 0;
 pub const ZL_MUX_LENGTHS_SPLIT_POINT_PID: u32 = 0;
 pub const ZL_MUX_LENGTHS_MATCH_LENGTH_BIAS_PID: u32 = 1;
 pub const ZL_SDDL_DESCRIPTION_PID: u32 = 522;
 pub const ZL_SENTINEL_INDICES_PID: u32 = 130;
 pub const ZL_SENTINEL_VALUE_PID: u32 = 131;
+pub const ZL_SPARSE_NUM_DOMINANT_VALUE_PID: u32 = 132;
 pub const ZL_SPLIT_BYRANGE_MIN_SEGMENT_SIZE_PID: u32 = 324;
 pub const ZL_SPLIT_CHANNEL_ID: u32 = 867;
 pub const ZL_TOKENIZE_SORT_PID: u32 = 0;
@@ -297,6 +314,120 @@ const _: () = {
     ["Offset of field: ZL_RBuffer::start"][::std::mem::offset_of!(ZL_RBuffer, start) - 0usize];
     ["Offset of field: ZL_RBuffer::size"][::std::mem::offset_of!(ZL_RBuffer, size) - 8usize];
 };
+pub type va_list = *mut ::std::os::raw::c_char;
+unsafe extern "C" {
+    pub fn __va_start(arg1: *mut *mut ::std::os::raw::c_char, ...);
+}
+pub type __vcrt_bool = bool;
+unsafe extern "C" {
+    pub fn __security_init_cookie();
+}
+unsafe extern "C" {
+    pub fn __security_check_cookie(_StackCookie: usize);
+}
+unsafe extern "C" {
+    pub fn __report_gsfailure(_StackCookie: usize) -> !;
+}
+unsafe extern "C" {
+    pub static mut __security_cookie: usize;
+}
+pub type __crt_bool = bool;
+unsafe extern "C" {
+    pub fn _invalid_parameter_noinfo();
+}
+unsafe extern "C" {
+    pub fn _invalid_parameter_noinfo_noreturn() -> !;
+}
+unsafe extern "C" {
+    pub fn _invoke_watson(
+        _Expression: *const wchar_t,
+        _FunctionName: *const wchar_t,
+        _FileName: *const wchar_t,
+        _LineNo: ::std::os::raw::c_uint,
+        _Reserved: usize,
+    ) -> !;
+}
+pub type errno_t = ::std::os::raw::c_int;
+pub type wint_t = ::std::os::raw::c_ushort;
+pub type wctype_t = ::std::os::raw::c_ushort;
+pub type __time32_t = ::std::os::raw::c_long;
+pub type __time64_t = ::std::os::raw::c_longlong;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct __crt_locale_data_public {
+    pub _locale_pctype: *const ::std::os::raw::c_ushort,
+    pub _locale_mb_cur_max: ::std::os::raw::c_int,
+    pub _locale_lc_codepage: ::std::os::raw::c_uint,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of __crt_locale_data_public"]
+        [::std::mem::size_of::<__crt_locale_data_public>() - 16usize];
+    ["Alignment of __crt_locale_data_public"]
+        [::std::mem::align_of::<__crt_locale_data_public>() - 8usize];
+    ["Offset of field: __crt_locale_data_public::_locale_pctype"]
+        [::std::mem::offset_of!(__crt_locale_data_public, _locale_pctype) - 0usize];
+    ["Offset of field: __crt_locale_data_public::_locale_mb_cur_max"]
+        [::std::mem::offset_of!(__crt_locale_data_public, _locale_mb_cur_max) - 8usize];
+    ["Offset of field: __crt_locale_data_public::_locale_lc_codepage"]
+        [::std::mem::offset_of!(__crt_locale_data_public, _locale_lc_codepage) - 12usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct __crt_locale_pointers {
+    pub locinfo: *mut __crt_locale_data,
+    pub mbcinfo: *mut __crt_multibyte_data,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of __crt_locale_pointers"][::std::mem::size_of::<__crt_locale_pointers>() - 16usize];
+    ["Alignment of __crt_locale_pointers"]
+        [::std::mem::align_of::<__crt_locale_pointers>() - 8usize];
+    ["Offset of field: __crt_locale_pointers::locinfo"]
+        [::std::mem::offset_of!(__crt_locale_pointers, locinfo) - 0usize];
+    ["Offset of field: __crt_locale_pointers::mbcinfo"]
+        [::std::mem::offset_of!(__crt_locale_pointers, mbcinfo) - 8usize];
+};
+pub type _locale_t = *mut __crt_locale_pointers;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Mbstatet {
+    pub _Wchar: ::std::os::raw::c_ulong,
+    pub _Byte: ::std::os::raw::c_ushort,
+    pub _State: ::std::os::raw::c_ushort,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of _Mbstatet"][::std::mem::size_of::<_Mbstatet>() - 8usize];
+    ["Alignment of _Mbstatet"][::std::mem::align_of::<_Mbstatet>() - 4usize];
+    ["Offset of field: _Mbstatet::_Wchar"][::std::mem::offset_of!(_Mbstatet, _Wchar) - 0usize];
+    ["Offset of field: _Mbstatet::_Byte"][::std::mem::offset_of!(_Mbstatet, _Byte) - 4usize];
+    ["Offset of field: _Mbstatet::_State"][::std::mem::offset_of!(_Mbstatet, _State) - 6usize];
+};
+pub type mbstate_t = _Mbstatet;
+pub type time_t = __time64_t;
+pub type rsize_t = usize;
+unsafe extern "C" {
+    pub fn _wassert(_Message: *const wchar_t, _File: *const wchar_t, _Line: ::std::os::raw::c_uint);
+}
+pub type int_least8_t = ::std::os::raw::c_schar;
+pub type int_least16_t = ::std::os::raw::c_short;
+pub type int_least32_t = ::std::os::raw::c_int;
+pub type int_least64_t = ::std::os::raw::c_longlong;
+pub type uint_least8_t = ::std::os::raw::c_uchar;
+pub type uint_least16_t = ::std::os::raw::c_ushort;
+pub type uint_least32_t = ::std::os::raw::c_uint;
+pub type uint_least64_t = ::std::os::raw::c_ulonglong;
+pub type int_fast8_t = ::std::os::raw::c_schar;
+pub type int_fast16_t = ::std::os::raw::c_int;
+pub type int_fast32_t = ::std::os::raw::c_int;
+pub type int_fast64_t = ::std::os::raw::c_longlong;
+pub type uint_fast8_t = ::std::os::raw::c_uchar;
+pub type uint_fast16_t = ::std::os::raw::c_uint;
+pub type uint_fast32_t = ::std::os::raw::c_uint;
+pub type uint_fast64_t = ::std::os::raw::c_ulonglong;
+pub type intmax_t = ::std::os::raw::c_longlong;
+pub type uintmax_t = ::std::os::raw::c_ulonglong;
 pub type ZL_IDType = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -475,6 +606,12 @@ pub struct ZL_DictLoader_s {
     _unused: [u8; 0],
 }
 pub type ZL_DictLoader = ZL_DictLoader_s;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ZL_FatBundleDictLoader_s {
+    _unused: [u8; 0],
+}
+pub type ZL_FatBundleDictLoader = ZL_FatBundleDictLoader_s;
 #[repr(i32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum ZL_TernaryParam {
@@ -554,102 +691,6 @@ const _: () = {
 #[doc = " @brief Typedef for void pointer to satisfy ZL_RESULT_OF requirements.\n\n ZL_RESULT_OF requires a bare type name, so we need a typedef for void*. You\n should use ZL_RESULT_OF(VoidPtr) instead of ZL_RESULT_OF(void*) and similarly\n with ZL_RESULT_DECLARE_SCOPE"]
 pub type ZL_VoidPtr = *mut ::std::os::raw::c_void;
 pub type ZL_ConstVoidPtr = *const ::std::os::raw::c_void;
-pub type va_list = *mut ::std::os::raw::c_char;
-unsafe extern "C" {
-    pub fn __va_start(arg1: *mut *mut ::std::os::raw::c_char, ...);
-}
-pub type __vcrt_bool = bool;
-unsafe extern "C" {
-    pub fn __security_init_cookie();
-}
-unsafe extern "C" {
-    pub fn __security_check_cookie(_StackCookie: usize);
-}
-unsafe extern "C" {
-    pub fn __report_gsfailure(_StackCookie: usize) -> !;
-}
-unsafe extern "C" {
-    pub static mut __security_cookie: usize;
-}
-pub type __crt_bool = bool;
-unsafe extern "C" {
-    pub fn _invalid_parameter_noinfo();
-}
-unsafe extern "C" {
-    pub fn _invalid_parameter_noinfo_noreturn() -> !;
-}
-unsafe extern "C" {
-    pub fn _invoke_watson(
-        _Expression: *const wchar_t,
-        _FunctionName: *const wchar_t,
-        _FileName: *const wchar_t,
-        _LineNo: ::std::os::raw::c_uint,
-        _Reserved: usize,
-    ) -> !;
-}
-pub type errno_t = ::std::os::raw::c_int;
-pub type wint_t = ::std::os::raw::c_ushort;
-pub type wctype_t = ::std::os::raw::c_ushort;
-pub type __time32_t = ::std::os::raw::c_long;
-pub type __time64_t = ::std::os::raw::c_longlong;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct __crt_locale_data_public {
-    pub _locale_pctype: *const ::std::os::raw::c_ushort,
-    pub _locale_mb_cur_max: ::std::os::raw::c_int,
-    pub _locale_lc_codepage: ::std::os::raw::c_uint,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of __crt_locale_data_public"]
-        [::std::mem::size_of::<__crt_locale_data_public>() - 16usize];
-    ["Alignment of __crt_locale_data_public"]
-        [::std::mem::align_of::<__crt_locale_data_public>() - 8usize];
-    ["Offset of field: __crt_locale_data_public::_locale_pctype"]
-        [::std::mem::offset_of!(__crt_locale_data_public, _locale_pctype) - 0usize];
-    ["Offset of field: __crt_locale_data_public::_locale_mb_cur_max"]
-        [::std::mem::offset_of!(__crt_locale_data_public, _locale_mb_cur_max) - 8usize];
-    ["Offset of field: __crt_locale_data_public::_locale_lc_codepage"]
-        [::std::mem::offset_of!(__crt_locale_data_public, _locale_lc_codepage) - 12usize];
-};
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct __crt_locale_pointers {
-    pub locinfo: *mut __crt_locale_data,
-    pub mbcinfo: *mut __crt_multibyte_data,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of __crt_locale_pointers"][::std::mem::size_of::<__crt_locale_pointers>() - 16usize];
-    ["Alignment of __crt_locale_pointers"]
-        [::std::mem::align_of::<__crt_locale_pointers>() - 8usize];
-    ["Offset of field: __crt_locale_pointers::locinfo"]
-        [::std::mem::offset_of!(__crt_locale_pointers, locinfo) - 0usize];
-    ["Offset of field: __crt_locale_pointers::mbcinfo"]
-        [::std::mem::offset_of!(__crt_locale_pointers, mbcinfo) - 8usize];
-};
-pub type _locale_t = *mut __crt_locale_pointers;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Mbstatet {
-    pub _Wchar: ::std::os::raw::c_ulong,
-    pub _Byte: ::std::os::raw::c_ushort,
-    pub _State: ::std::os::raw::c_ushort,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of _Mbstatet"][::std::mem::size_of::<_Mbstatet>() - 8usize];
-    ["Alignment of _Mbstatet"][::std::mem::align_of::<_Mbstatet>() - 4usize];
-    ["Offset of field: _Mbstatet::_Wchar"][::std::mem::offset_of!(_Mbstatet, _Wchar) - 0usize];
-    ["Offset of field: _Mbstatet::_Byte"][::std::mem::offset_of!(_Mbstatet, _Byte) - 4usize];
-    ["Offset of field: _Mbstatet::_State"][::std::mem::offset_of!(_Mbstatet, _State) - 6usize];
-};
-pub type mbstate_t = _Mbstatet;
-pub type time_t = __time64_t;
-pub type rsize_t = usize;
-unsafe extern "C" {
-    pub fn _wassert(_Message: *const wchar_t, _File: *const wchar_t, _Line: ::std::os::raw::c_uint);
-}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ZL_DynamicErrorInfo_s {
@@ -1582,6 +1623,13 @@ unsafe extern "C" {
         opCtx: *mut ZL_OperationContext,
     ) -> *mut ZL_ErrorContext;
 }
+unsafe extern "C" {
+    #[doc = " @returns true iff the provided rich error info in @p error is owned by this\n          operation context and is still live."]
+    pub fn ZL_OperationContext_ownsError(
+        opCtx: *const ZL_OperationContext,
+        error: *mut ZL_Error,
+    ) -> bool;
+}
 #[doc = " ZL_StaticErrorInfo *"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1681,6 +1729,10 @@ const _: () = {
     ["Offset of field: ZL_Error_Array::size"]
         [::std::mem::offset_of!(ZL_Error_Array, size) - 8usize];
 };
+unsafe extern "C" {
+    #[doc = " You can however clear out the error info pointer to help avoid errors when\n the context object has been freed."]
+    pub fn ZL_E_clearInfo(err: *mut ZL_Error);
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ZL_Result_ZL_GraphID_inner {
@@ -1836,6 +1888,117 @@ pub type ZL_Result_ZL_ConstVoidPtr = ZL_Result_ZL_ConstVoidPtr_u;
 pub type ZL_Result_ZL_ConstVoidPtr_fake_type_needs_semicolon = ::std::os::raw::c_int;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct ZL_Result_uint16_t_inner {
+    pub _code: ZL_ErrorCode,
+    pub _value: u16,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of ZL_Result_uint16_t_inner"]
+        [::std::mem::size_of::<ZL_Result_uint16_t_inner>() - 8usize];
+    ["Alignment of ZL_Result_uint16_t_inner"]
+        [::std::mem::align_of::<ZL_Result_uint16_t_inner>() - 4usize];
+    ["Offset of field: ZL_Result_uint16_t_inner::_code"]
+        [::std::mem::offset_of!(ZL_Result_uint16_t_inner, _code) - 0usize];
+    ["Offset of field: ZL_Result_uint16_t_inner::_value"]
+        [::std::mem::offset_of!(ZL_Result_uint16_t_inner, _value) - 4usize];
+};
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union ZL_Result_uint16_t_u {
+    pub _code: ZL_ErrorCode,
+    pub _value: ZL_Result_uint16_t_inner,
+    pub _error: ZL_Error,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of ZL_Result_uint16_t_u"][::std::mem::size_of::<ZL_Result_uint16_t_u>() - 16usize];
+    ["Alignment of ZL_Result_uint16_t_u"][::std::mem::align_of::<ZL_Result_uint16_t_u>() - 8usize];
+    ["Offset of field: ZL_Result_uint16_t_u::_code"]
+        [::std::mem::offset_of!(ZL_Result_uint16_t_u, _code) - 0usize];
+    ["Offset of field: ZL_Result_uint16_t_u::_value"]
+        [::std::mem::offset_of!(ZL_Result_uint16_t_u, _value) - 0usize];
+    ["Offset of field: ZL_Result_uint16_t_u::_error"]
+        [::std::mem::offset_of!(ZL_Result_uint16_t_u, _error) - 0usize];
+};
+pub type ZL_Result_uint16_t = ZL_Result_uint16_t_u;
+pub type ZL_Result_uint16_t_fake_type_needs_semicolon = ::std::os::raw::c_int;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ZL_Result_uint32_t_inner {
+    pub _code: ZL_ErrorCode,
+    pub _value: u32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of ZL_Result_uint32_t_inner"]
+        [::std::mem::size_of::<ZL_Result_uint32_t_inner>() - 8usize];
+    ["Alignment of ZL_Result_uint32_t_inner"]
+        [::std::mem::align_of::<ZL_Result_uint32_t_inner>() - 4usize];
+    ["Offset of field: ZL_Result_uint32_t_inner::_code"]
+        [::std::mem::offset_of!(ZL_Result_uint32_t_inner, _code) - 0usize];
+    ["Offset of field: ZL_Result_uint32_t_inner::_value"]
+        [::std::mem::offset_of!(ZL_Result_uint32_t_inner, _value) - 4usize];
+};
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union ZL_Result_uint32_t_u {
+    pub _code: ZL_ErrorCode,
+    pub _value: ZL_Result_uint32_t_inner,
+    pub _error: ZL_Error,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of ZL_Result_uint32_t_u"][::std::mem::size_of::<ZL_Result_uint32_t_u>() - 16usize];
+    ["Alignment of ZL_Result_uint32_t_u"][::std::mem::align_of::<ZL_Result_uint32_t_u>() - 8usize];
+    ["Offset of field: ZL_Result_uint32_t_u::_code"]
+        [::std::mem::offset_of!(ZL_Result_uint32_t_u, _code) - 0usize];
+    ["Offset of field: ZL_Result_uint32_t_u::_value"]
+        [::std::mem::offset_of!(ZL_Result_uint32_t_u, _value) - 0usize];
+    ["Offset of field: ZL_Result_uint32_t_u::_error"]
+        [::std::mem::offset_of!(ZL_Result_uint32_t_u, _error) - 0usize];
+};
+pub type ZL_Result_uint32_t = ZL_Result_uint32_t_u;
+pub type ZL_Result_uint32_t_fake_type_needs_semicolon = ::std::os::raw::c_int;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ZL_Result_uint64_t_inner {
+    pub _code: ZL_ErrorCode,
+    pub _value: u64,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of ZL_Result_uint64_t_inner"]
+        [::std::mem::size_of::<ZL_Result_uint64_t_inner>() - 16usize];
+    ["Alignment of ZL_Result_uint64_t_inner"]
+        [::std::mem::align_of::<ZL_Result_uint64_t_inner>() - 8usize];
+    ["Offset of field: ZL_Result_uint64_t_inner::_code"]
+        [::std::mem::offset_of!(ZL_Result_uint64_t_inner, _code) - 0usize];
+    ["Offset of field: ZL_Result_uint64_t_inner::_value"]
+        [::std::mem::offset_of!(ZL_Result_uint64_t_inner, _value) - 8usize];
+};
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union ZL_Result_uint64_t_u {
+    pub _code: ZL_ErrorCode,
+    pub _value: ZL_Result_uint64_t_inner,
+    pub _error: ZL_Error,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of ZL_Result_uint64_t_u"][::std::mem::size_of::<ZL_Result_uint64_t_u>() - 16usize];
+    ["Alignment of ZL_Result_uint64_t_u"][::std::mem::align_of::<ZL_Result_uint64_t_u>() - 8usize];
+    ["Offset of field: ZL_Result_uint64_t_u::_code"]
+        [::std::mem::offset_of!(ZL_Result_uint64_t_u, _code) - 0usize];
+    ["Offset of field: ZL_Result_uint64_t_u::_value"]
+        [::std::mem::offset_of!(ZL_Result_uint64_t_u, _value) - 0usize];
+    ["Offset of field: ZL_Result_uint64_t_u::_error"]
+        [::std::mem::offset_of!(ZL_Result_uint64_t_u, _error) - 0usize];
+};
+pub type ZL_Result_uint64_t = ZL_Result_uint64_t_u;
+pub type ZL_Result_uint64_t_fake_type_needs_semicolon = ::std::os::raw::c_int;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct ZL_Result_size_t_inner {
     pub _code: ZL_ErrorCode,
     pub _value: usize,
@@ -1878,24 +2041,40 @@ unsafe extern "C" {
     #[doc = " @returns a specific ZL_ErrorCode as a ZL_Report return type."]
     pub fn ZL_returnError(err: ZL_ErrorCode) -> ZL_Report;
 }
-pub type int_least8_t = ::std::os::raw::c_schar;
-pub type int_least16_t = ::std::os::raw::c_short;
-pub type int_least32_t = ::std::os::raw::c_int;
-pub type int_least64_t = ::std::os::raw::c_longlong;
-pub type uint_least8_t = ::std::os::raw::c_uchar;
-pub type uint_least16_t = ::std::os::raw::c_ushort;
-pub type uint_least32_t = ::std::os::raw::c_uint;
-pub type uint_least64_t = ::std::os::raw::c_ulonglong;
-pub type int_fast8_t = ::std::os::raw::c_schar;
-pub type int_fast16_t = ::std::os::raw::c_int;
-pub type int_fast32_t = ::std::os::raw::c_int;
-pub type int_fast64_t = ::std::os::raw::c_longlong;
-pub type uint_fast8_t = ::std::os::raw::c_uchar;
-pub type uint_fast16_t = ::std::os::raw::c_uint;
-pub type uint_fast32_t = ::std::os::raw::c_uint;
-pub type uint_fast64_t = ::std::os::raw::c_ulonglong;
-pub type intmax_t = ::std::os::raw::c_longlong;
-pub type uintmax_t = ::std::os::raw::c_ulonglong;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ZL_CodecOutputCache_s {
+    _unused: [u8; 0],
+}
+#[doc = " Memoizes deterministic standard-codec invocations.\n\n A cache is disabled until attached to a compression context with\n ZL_CCtx_setCodecOutputCache(). Cache hits reproduce the same codec outputs\n and transform header without invoking the codec again. Custom codecs,\n dictionary-backed codecs, codecs with reference or materialized parameters,\n codecs consuming or producing string streams, and codecs that do not take\n exactly one input are not cached. Non-single-input invocations run normally\n without a cache lookup or insertion.\n\n Copy parameters are keyed by their copied bytes only. State reachable\n through pointers embedded in those bytes is not part of the key.\n Callback-backed parameterized standard nodes, including custom tokenize and\n dispatch nodes, are therefore unsupported.\n\n The cache is mutable and single-writer. It may be reused by multiple\n compression contexts sequentially, but must not be used concurrently."]
+pub type ZL_CodecOutputCache = ZL_CodecOutputCache_s;
+unsafe extern "C" {
+    #[doc = " Creates an empty cache with the default 256 MiB entry-payload budget."]
+    pub fn ZL_CodecOutputCache_create() -> *mut ZL_CodecOutputCache;
+}
+unsafe extern "C" {
+    #[doc = " Creates an empty cache with the specified entry-payload budget.\n Zero creates a live cache that cannot store entries; cacheable invocations\n still perform hashing and lookups when it is attached. Reaching @p maxBytes\n skips new entries; it does not fail compression."]
+    pub fn ZL_CodecOutputCache_createWithBudget(maxBytes: usize) -> *mut ZL_CodecOutputCache;
+}
+unsafe extern "C" {
+    #[doc = " Frees a cache and all stored entries. Accepts NULL."]
+    pub fn ZL_CodecOutputCache_free(cache: *mut ZL_CodecOutputCache);
+}
+unsafe extern "C" {
+    #[doc = " Drops all cached results. Accepts NULL."]
+    pub fn ZL_CodecOutputCache_reset(cache: *mut ZL_CodecOutputCache);
+}
+unsafe extern "C" {
+    #[doc = " Sets the entry-payload budget for the private cache used automatically by\n tryGraph. Automatic caching is disabled by default. A positive value enables\n it with the specified budget; zero disables it.\n\n Changing the budget drops the existing private cache. Call this function\n only between compressions. The setting persists until changed or the\n context is freed; ZL_CParam_stickyParameters and ZL_CCtx_resetParameters()\n do not affect it. A caller-attached cache is unaffected and remains active."]
+    pub fn ZL_CCtx_setTryGraphCacheBudget(cctx: *mut ZL_CCtx, maxBytes: usize) -> ZL_Report;
+}
+unsafe extern "C" {
+    #[doc = " Attaches a borrowed cache to @p cctx. Passing NULL detaches it; automatic\n tryGraph caching remains controlled by ZL_CCtx_setTryGraphCacheBudget(). The\n cache must outlive every compression that uses the context."]
+    pub fn ZL_CCtx_setCodecOutputCache(
+        cctx: *mut ZL_CCtx,
+        cache: *mut ZL_CodecOutputCache,
+    ) -> ZL_Report;
+}
 #[repr(i32)]
 #[doc = " Any Data object has necessary a Type.\n The least specific Type is `ZL_Type_serial`,\n which means it's just a blob of bytes.\n Codecs can only accept and produce specified data Types.\n In contrast, Selectors & Graphs may optionally accept multiple data Types,\n using bitmap masking (example: `ZL_Type_struct | ZL_Type_numeric`)."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -2561,6 +2740,80 @@ unsafe extern "C" {
     pub fn ZL_TypedRef_free(tref: *mut ZL_TypedRef);
 }
 unsafe extern "C" {
+    #[doc = " No-op dematerialization function.\n Use this as a placeholder when there are no resources or memory to free."]
+    pub fn ZL_NOOP_DEMATERIALIZE(
+        matCtx: *mut ZL_Materializer,
+        materialized: *mut ::std::os::raw::c_void,
+    );
+}
+unsafe extern "C" {
+    #[doc = " Managed space allocation (Materializers ONLY):\n Materialization may request arena space to hold materialized objects. It is\n allowed to request multiple buffers of any size. Returned buffers are not\n initialized, and cannot be freed individually. All buffers are\n automatically released at end of the owning @ref ZL_Compressor's lifetime.\n\n @note Always returns NULL during dematerialization."]
+    pub fn ZL_Materializer_allocate(
+        matCtx: *mut ZL_Materializer,
+        size: usize,
+    ) -> *mut ::std::os::raw::c_void;
+}
+unsafe extern "C" {
+    #[doc = " Scratch space allocation (Materializers ONLY):\n When the materializer needs some buffer space for some local operation,\n it can request such space from the engine. It is allowed to\n request multiple buffers of any size. Returned buffers are not\n initialized, and cannot be freed individually. All scratch buffers are\n automatically released at the end of the materializer's execution.\n\n @note Always returns NULL during dematerialization."]
+    pub fn ZL_Materializer_getScratchSpace(
+        matCtx: *mut ZL_Materializer,
+        size: usize,
+    ) -> *mut ::std::os::raw::c_void;
+}
+#[doc = " @brief Descriptor for materializing and dematerializing resource objects\n (dicts and MParams).\n\n Defines functions to create an in-memory object from a raw source buffer\n (materializeFn) and to free that object (dematerializeFn). Used for both\n dictionary objects (required at compression and decompression) and MParam\n objects (compression-only). Note that the registration APIs allow for\n different materializers for compression-time and decompression-time dict\n materialization."]
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ZL_MaterializerDesc {
+    #[doc = " @brief A custom function that materializes an in-memory object from a\n provided @p src buffer. Separate function interfaces are provided for\n compression-time and decompression-time materialization. These can be the\n same function or different functions, depending on the specific codec\n implementation.\n\n The generation MUST be deterministic and hermetic. Materialization shall\n not depend on variables other than the provided @p src buffer.\n\n Materialized object lifetimes will be managed by the @ref ZL_DictLoader\n or @ref ZL_Compressor on which the materialization scheme is registered.\n\n Do NOT rely on the materialization function being called at any specific\n time to do side-effect work. Doing so will result in undefined behavior.\n\n DO NOT attempt to modify the materialized object after creation, either\n directly or via API getters.\n\n @param matCtx A pointer to a materializer context object. The\n materialization function may use this to request managed memory as an\n alternative to managing allocations itself and via the dematerializeFn.\n @param src  A pointer to the buffer from which to materialize. The\n provided buffer has no lifetime guarantees past the invocation of this\n function. You may not hold references into @p src in the materialized\n object.\n\n @returns A ZL_RESULT containing a pointer to the materialized object on\n success, or an error. Returning NULL as a valid result (when there's\n nothing to materialize) should be wrapped in ZL_WRAP_VALUE(NULL). Ensure\n the function declares a result scope with ZL_RESULT_DECLARE_SCOPE or you\n will get a compiler error."]
+    pub materializeFn: ::std::option::Option<
+        unsafe extern "C" fn(
+            matCtx: *mut ZL_Materializer,
+            src: *const ::std::os::raw::c_void,
+            srcSize: usize,
+        ) -> ZL_Result_ZL_VoidPtr,
+    >,
+    #[doc = " @brief A custom function that destructs a materialized object.\n\n You should use this to deallocate all non-arena memory and free any held\n resources. As a convenience, if there are no resources or memory to free,\n you may use ZL_NOOP_DEMATERIALIZE as a placeholder."]
+    pub dematerializeFn: ::std::option::Option<
+        unsafe extern "C" fn(
+            matCtx: *mut ZL_Materializer,
+            materialized: *mut ::std::os::raw::c_void,
+        ),
+    >,
+    #[doc = " Optionally an opaque pointer that can be queried with\n ZL_Materializer_getOpaquePtr().\n OpenZL unconditionally takes ownership of this pointer, even if\n registration fails, and it lives for the lifetime of the owning\n compressor/dict store."]
+    pub opaque: ZL_OpaquePtr,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of ZL_MaterializerDesc"][::std::mem::size_of::<ZL_MaterializerDesc>() - 40usize];
+    ["Alignment of ZL_MaterializerDesc"][::std::mem::align_of::<ZL_MaterializerDesc>() - 8usize];
+    ["Offset of field: ZL_MaterializerDesc::materializeFn"]
+        [::std::mem::offset_of!(ZL_MaterializerDesc, materializeFn) - 0usize];
+    ["Offset of field: ZL_MaterializerDesc::dematerializeFn"]
+        [::std::mem::offset_of!(ZL_MaterializerDesc, dematerializeFn) - 8usize];
+    ["Offset of field: ZL_MaterializerDesc::opaque"]
+        [::std::mem::offset_of!(ZL_MaterializerDesc, opaque) - 16usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ZL_MParam {
+    pub content: *const ::std::os::raw::c_void,
+    pub size: usize,
+    #[doc = " For advanced use cases, you can specify a custom ID for this MParam. If\n unset, a default ID will be assigned."]
+    pub mparamID: ZL_MParamID,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of ZL_MParam"][::std::mem::size_of::<ZL_MParam>() - 48usize];
+    ["Alignment of ZL_MParam"][::std::mem::align_of::<ZL_MParam>() - 8usize];
+    ["Offset of field: ZL_MParam::content"][::std::mem::offset_of!(ZL_MParam, content) - 0usize];
+    ["Offset of field: ZL_MParam::size"][::std::mem::offset_of!(ZL_MParam, size) - 8usize];
+    ["Offset of field: ZL_MParam::mparamID"][::std::mem::offset_of!(ZL_MParam, mparamID) - 16usize];
+};
+unsafe extern "C" {
+    #[doc = " @returns true if @p id is non-NULL and not ZL_MPARAM_ID_NULL."]
+    pub fn ZL_MParamID_hasValue(id: *const ZL_MParamID) -> bool;
+}
+unsafe extern "C" {
     #[doc = " Inserts a placeholder for the Automated Compressor Explorer (ACE) to\n replace with an automatically generated graph. It accepts a single input of\n any type.\n\n Before training, this graph will just forward to `ZL_GRAPH_COMPRESS_GENERIC`.\n After training the top-level graph, ACE will replace this component with an\n automatically generated graph that performs well on the training data.\n\n If the same ACE GraphID is used multiple times within a graph, all the inputs\n get passed to the same training, and only a single graph is generated. If\n there are multiple ACE graphs in a top-level graph, each created with a call\n to `ZL_Compressor_buildACEGraph()`, then each unique GraphID will be replaced\n with a trained graph optimized for the inputs passed to that specific\n GraphID.\n\n Input 0: Any type\n\n @returns The placeholder ACE graphID."]
     pub fn ZL_Compressor_buildACEGraph(compressor: *mut ZL_Compressor) -> ZL_GraphID;
 }
@@ -2589,30 +2842,34 @@ pub enum ZL_StandardGraphID {
     ZL_StandardGraphID_store = 2,
     ZL_StandardGraphID_fse = 3,
     ZL_StandardGraphID_huffman = 4,
-    ZL_StandardGraphID_entropy = 5,
-    ZL_StandardGraphID_constant = 6,
-    ZL_StandardGraphID_zstd = 7,
-    ZL_StandardGraphID_bitpack = 8,
-    ZL_StandardGraphID_flatpack = 9,
-    ZL_StandardGraphID_field_lz = 10,
-    ZL_StandardGraphID_compress_generic = 11,
-    ZL_StandardGraphID_select_generic_lz_backend = 12,
-    ZL_StandardGraphID_segment_numeric = 13,
-    ZL_StandardGraphID_select_numeric = 14,
-    ZL_StandardGraphID_ml_selector = 15,
-    ZL_StandardGraphID_clustering = 16,
-    ZL_StandardGraphID_try_parse_int = 17,
-    ZL_StandardGraphID_simple_data_description_language = 18,
-    ZL_StandardGraphID_simple_data_description_language_v2 = 19,
-    ZL_StandardGraphID_lz4 = 20,
-    ZL_StandardGraphID_partition_bitpack = 21,
-    ZL_StandardGraphID_segment_num8_from_serial = 22,
-    ZL_StandardGraphID_segment_num16_from_serial = 23,
-    ZL_StandardGraphID_segment_num32_from_serial = 24,
-    ZL_StandardGraphID_segment_num64_from_serial = 25,
-    ZL_StandardGraphID_lz = 26,
-    ZL_StandardGraphID_segment_serial = 27,
-    ZL_StandardGraphID_public_end = 28,
+    ZL_StandardGraphID_huffman_huf0 = 5,
+    ZL_StandardGraphID_huffman_pivco = 6,
+    ZL_StandardGraphID_entropy = 7,
+    ZL_StandardGraphID_constant = 8,
+    ZL_StandardGraphID_zstd = 9,
+    ZL_StandardGraphID_bitpack = 10,
+    ZL_StandardGraphID_flatpack = 11,
+    ZL_StandardGraphID_field_lz = 12,
+    ZL_StandardGraphID_compress_generic = 13,
+    ZL_StandardGraphID_select_generic_lz_backend = 14,
+    ZL_StandardGraphID_segment_numeric = 15,
+    ZL_StandardGraphID_select_numeric = 16,
+    ZL_StandardGraphID_ml_selector = 17,
+    ZL_StandardGraphID_clustering = 18,
+    ZL_StandardGraphID_try_parse_int = 19,
+    ZL_StandardGraphID_simple_data_description_language = 20,
+    ZL_StandardGraphID_simple_data_description_language_v2 = 21,
+    ZL_StandardGraphID_lz4 = 22,
+    ZL_StandardGraphID_partition_bitpack = 23,
+    ZL_StandardGraphID_segment_num8_from_serial = 24,
+    ZL_StandardGraphID_segment_num16_from_serial = 25,
+    ZL_StandardGraphID_segment_num32_from_serial = 26,
+    ZL_StandardGraphID_segment_num64_from_serial = 27,
+    ZL_StandardGraphID_lz = 28,
+    ZL_StandardGraphID_segment_serial = 29,
+    ZL_StandardGraphID_transformer_numeric = 30,
+    ZL_StandardGraphID_brute_force = 31,
+    ZL_StandardGraphID_public_end = 32,
 }
 #[repr(i32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -2670,7 +2927,9 @@ pub enum ZL_StandardNodeID {
     ZL_StandardNodeID_sentinel_num = 51,
     ZL_StandardNodeID_lz = 52,
     ZL_StandardNodeID_mux_lengths = 53,
-    ZL_StandardNodeID_public_end = 54,
+    ZL_StandardNodeID_sparse_num = 54,
+    ZL_StandardNodeID_sparse_num_auto = 55,
+    ZL_StandardNodeID_public_end = 56,
 }
 pub const ZL_Bitunpack_numBits: _bindgen_ty_1 = _bindgen_ty_1::ZL_Bitunpack_numBits;
 #[repr(i32)]
@@ -2685,125 +2944,12 @@ unsafe extern "C" {
     ) -> ZL_NodeID;
 }
 unsafe extern "C" {
-    #[doc = " Parameterized brute force selector that selects the best successor from a\n user-provided list of candidates.\n @param successors the list of successors to select from. Each successor must\n be equipped to handle the input stream type."]
-    pub fn ZL_Compressor_registerBruteForceSelectorGraph(
+    #[doc = " Parameterized brute force selector that selects the best successor from a\n user-provided list of candidates.\n @param successors the list of successors to select from. Successors that\n can't handle the input stream type are skipped; if none apply the selector\n falls back to @ref ZL_GRAPH_STORE.\n @returns @ref ZL_GRAPH_BRUTE_FORCE parameterized with @p successors."]
+    pub fn ZL_Compressor_buildBruteForceSelectorGraph(
         cgraph: *mut ZL_Compressor,
         successors: *const ZL_GraphID,
         numSuccessors: usize,
-    ) -> ZL_GraphID;
-}
-#[doc = " @brief Descriptor for materializing and dematerializing local params\n\n This structure defines functions to materialize an in-memory object from\n local parameters and to dematerialize (free) that object.\n\n Materialized objects are available as a @ref ZL_RefParam via the typical\n local params access methods. Specify the retrieval key with the paramId\n field."]
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ZL_MaterializerDesc_s {
-    #[doc = " @brief A custom function that materializes an in-memory object from a\n provided @p params object.\n\n This function may arbitrarily use none, any, or all of the provided\n local params to generate the materialized object, but the generation\n MUST be deterministic and hermetic. In particular, materialization shall\n not depend on variables other than the provided @ref ZL_LocalParams\n object.\n\n Materialized object lifetimes will be managed by the @ref ZL_Compressor\n on which the node is registered/parameterized. Objects will be\n materialized around the time of node registration/parameterization and\n will remain allocated for the lifetime of the associated @ref\n ZL_Compressor.\n\n Do NOT rely on the materialization function being called at any specific\n time to do side-effect work. Doing so will result in undefined behavior.\n\n The @ref ZL_Compressor may arbitrarily share the same materialized object\n between multiple nodes with the same @p params and the @ref ZL_CCtx may\n provide concurrent access to materialized objects. DO NOT attempt to\n modify the materialized object after creation, either directly or via API\n getters.\n\n @param matCtx A pointer to a materializer context object associated with\n the @ref ZL_Compressor. The materialization function may use this to\n request managed memory from the ZL_Compressor as an alternative to\n managing allocations itself and via the dematerializeFn.\n @param params  A pointer to the local params object to materialize. The\n provided params have no lifetime guarantees past the invocation of this\n function. You may not hold references into the params object in the\n materialized object.\n\n @returns A ZL_RESULT containing a pointer to the materialized object on\n success, or an error. Returning NULL as a valid result (when there's\n nothing to materialize) should be wrapped in ZL_WRAP_VALUE(NULL). Ensure\n the function declares a result scope with ZL_RESULT_DECLARE_SCOPE or you\n will get a compiler error."]
-    pub materializeFn: ::std::option::Option<
-        unsafe extern "C" fn(
-            matCtx: *mut ZL_Materializer,
-            params: *const ZL_LocalParams,
-        ) -> ZL_Result_ZL_VoidPtr,
-    >,
-    #[doc = " @brief A custom function that destructs a materialized object.\n\n You should use this to deallocate all non-arena memory and free any held\n resources. As a convenience, if there are no resources or memory to free,\n you may use ZL_NOOP_DEMATERIALIZE as a placeholder."]
-    pub dematerializeFn: ::std::option::Option<
-        unsafe extern "C" fn(
-            matCtx: *mut ZL_Materializer,
-            materialized: *mut ::std::os::raw::c_void,
-        ),
-    >,
-    #[doc = " The paramId to use for the materialized param. If there is an existing\n param that uses this paramId, the registration will fail."]
-    pub paramId: ::std::os::raw::c_int,
-    #[doc = " Optionally an opaque pointer that can be queried with\n ZL_Materializer_getOpaquePtr(). OpenZL does not take ownership of this\n pointer. If lifetime extension is needed, it should be managed by the\n `ZL_OpaquePtr` in the outer `ZL_MIEncoderDesc`."]
-    pub opaque: *const ::std::os::raw::c_void,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of ZL_MaterializerDesc_s"][::std::mem::size_of::<ZL_MaterializerDesc_s>() - 32usize];
-    ["Alignment of ZL_MaterializerDesc_s"]
-        [::std::mem::align_of::<ZL_MaterializerDesc_s>() - 8usize];
-    ["Offset of field: ZL_MaterializerDesc_s::materializeFn"]
-        [::std::mem::offset_of!(ZL_MaterializerDesc_s, materializeFn) - 0usize];
-    ["Offset of field: ZL_MaterializerDesc_s::dematerializeFn"]
-        [::std::mem::offset_of!(ZL_MaterializerDesc_s, dematerializeFn) - 8usize];
-    ["Offset of field: ZL_MaterializerDesc_s::paramId"]
-        [::std::mem::offset_of!(ZL_MaterializerDesc_s, paramId) - 16usize];
-    ["Offset of field: ZL_MaterializerDesc_s::opaque"]
-        [::std::mem::offset_of!(ZL_MaterializerDesc_s, opaque) - 24usize];
-};
-#[doc = " @brief Descriptor for materializing and dematerializing local params\n\n This structure defines functions to materialize an in-memory object from\n local parameters and to dematerialize (free) that object.\n\n Materialized objects are available as a @ref ZL_RefParam via the typical\n local params access methods. Specify the retrieval key with the paramId\n field."]
-pub type ZL_MaterializerDesc = ZL_MaterializerDesc_s;
-unsafe extern "C" {
-    #[doc = " No-op dematerialization function.\n Use this as a placeholder when there are no resources or memory to free."]
-    pub fn ZL_NOOP_DEMATERIALIZE(
-        matCtx: *mut ZL_Materializer,
-        materialized: *mut ::std::os::raw::c_void,
-    );
-}
-unsafe extern "C" {
-    #[doc = " Managed space allocation (Materializers ONLY):\n Materialization may request arena space to hold materialized objects. It is\n allowed to request multiple buffers of any size. Returned buffers are not\n initialized, and cannot be freed individually. All buffers are\n automatically released at end of the owning @ref ZL_Compressor's lifetime.\n\n @note Always returns NULL during dematerialization."]
-    pub fn ZL_Materializer_allocate(
-        matCtx: *mut ZL_Materializer,
-        size: usize,
-    ) -> *mut ::std::os::raw::c_void;
-}
-unsafe extern "C" {
-    #[doc = " Scratch space allocation (Materializers ONLY):\n When the materializer needs some buffer space for some local operation,\n it can request such space from the engine. It is allowed to\n request multiple buffers of any size. Returned buffers are not\n initialized, and cannot be freed individually. All scratch buffers are\n automatically released at the end of the materializer's execution.\n\n @note Always returns NULL during dematerialization."]
-    pub fn ZL_Materializer_getScratchSpace(
-        matCtx: *mut ZL_Materializer,
-        size: usize,
-    ) -> *mut ::std::os::raw::c_void;
-}
-#[doc = " @brief Descriptor for materializing and dematerializing resource objects\n (dicts and MParams).\n\n Defines functions to create an in-memory object from a raw source buffer\n (materializeFn) and to free that object (dematerializeFn). Used for both\n dictionary objects (required at compression and decompression) and MParam\n objects (compression-only). Note that the registration APIs allow for\n different materializers for compression-time and decompression-time dict\n materialization."]
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ZL_MaterializerDesc2 {
-    #[doc = " @brief A custom function that materializes an in-memory object from a\n provided @p src buffer. Separate function interfaces are provided for\n compression-time and decompression-time materialization. These can be the\n same function or different functions, depending on the specific codec\n implementation.\n\n The generation MUST be deterministic and hermetic. Materialization shall\n not depend on variables other than the provided @p src buffer.\n\n Materialized object lifetimes will be managed by the @ref ZL_DictLoader\n or @ref ZL_Compressor on which the materialization scheme is registered.\n\n Do NOT rely on the materialization function being called at any specific\n time to do side-effect work. Doing so will result in undefined behavior.\n\n DO NOT attempt to modify the materialized object after creation, either\n directly or via API getters.\n\n @param matCtx A pointer to a materializer context object. The\n materialization function may use this to request managed memory as an\n alternative to managing allocations itself and via the dematerializeFn.\n @param src  A pointer to the buffer from which to materialize. The\n provided buffer has no lifetime guarantees past the invocation of this\n function. You may not hold references into @p src in the materialized\n object.\n\n @returns A ZL_RESULT containing a pointer to the materialized object on\n success, or an error. Returning NULL as a valid result (when there's\n nothing to materialize) should be wrapped in ZL_WRAP_VALUE(NULL). Ensure\n the function declares a result scope with ZL_RESULT_DECLARE_SCOPE or you\n will get a compiler error."]
-    pub materializeFn: ::std::option::Option<
-        unsafe extern "C" fn(
-            matCtx: *mut ZL_Materializer,
-            src: *const ::std::os::raw::c_void,
-            srcSize: usize,
-        ) -> ZL_Result_ZL_VoidPtr,
-    >,
-    #[doc = " @brief A custom function that destructs a materialized object.\n\n You should use this to deallocate all non-arena memory and free any held\n resources. As a convenience, if there are no resources or memory to free,\n you may use ZL_NOOP_DEMATERIALIZE as a placeholder."]
-    pub dematerializeFn: ::std::option::Option<
-        unsafe extern "C" fn(
-            matCtx: *mut ZL_Materializer,
-            materialized: *mut ::std::os::raw::c_void,
-        ),
-    >,
-    #[doc = " Optionally an opaque pointer that can be queried with\n ZL_Materializer_getOpaquePtr().\n OpenZL unconditionally takes ownership of this pointer, even if\n registration fails, and it lives for the lifetime of the owning\n compressor/dict store."]
-    pub opaque: ZL_OpaquePtr,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of ZL_MaterializerDesc2"][::std::mem::size_of::<ZL_MaterializerDesc2>() - 40usize];
-    ["Alignment of ZL_MaterializerDesc2"][::std::mem::align_of::<ZL_MaterializerDesc2>() - 8usize];
-    ["Offset of field: ZL_MaterializerDesc2::materializeFn"]
-        [::std::mem::offset_of!(ZL_MaterializerDesc2, materializeFn) - 0usize];
-    ["Offset of field: ZL_MaterializerDesc2::dematerializeFn"]
-        [::std::mem::offset_of!(ZL_MaterializerDesc2, dematerializeFn) - 8usize];
-    ["Offset of field: ZL_MaterializerDesc2::opaque"]
-        [::std::mem::offset_of!(ZL_MaterializerDesc2, opaque) - 16usize];
-};
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ZL_MParam {
-    pub content: *const ::std::os::raw::c_void,
-    pub size: usize,
-    #[doc = " For advanced use cases, you can specify a custom ID for this MParam. If\n unset, a default ID will be assigned."]
-    pub mparamID: ZL_MParamID,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of ZL_MParam"][::std::mem::size_of::<ZL_MParam>() - 48usize];
-    ["Alignment of ZL_MParam"][::std::mem::align_of::<ZL_MParam>() - 8usize];
-    ["Offset of field: ZL_MParam::content"][::std::mem::offset_of!(ZL_MParam, content) - 0usize];
-    ["Offset of field: ZL_MParam::size"][::std::mem::offset_of!(ZL_MParam, size) - 8usize];
-    ["Offset of field: ZL_MParam::mparamID"][::std::mem::offset_of!(ZL_MParam, mparamID) - 16usize];
-};
-unsafe extern "C" {
-    #[doc = " @returns true if @p id is non-NULL and not ZL_MPARAM_ID_NULL."]
-    pub fn ZL_MParamID_hasValue(id: *const ZL_MParamID) -> bool;
+    ) -> ZL_Result_ZL_GraphID;
 }
 #[doc = " The function signature for function graphs.\n\n @param graph The graph object containing the graph context\n @param inputs The inputs passed into the function graph to compress\n @param nbInputs The number of inputs in @p inputs"]
 pub type ZL_FunctionGraphFn = ::std::option::Option<
@@ -2833,14 +2979,16 @@ pub struct ZL_FunctionGraphDesc {
     pub customNodes: *const ZL_NodeID,
     pub nbCustomNodes: usize,
     pub localParams: ZL_LocalParams,
-    #[doc = " Optional materializer descriptor for materialized local params.\n If both materializeFn and dematerializeFn are non-null, the materializer\n will be used to create materialized objects from local params."]
-    pub materializer: ZL_MaterializerDesc,
     #[doc = " Optionally an opaque pointer that can be queried with\n ZL_Graph_getOpaquePtr().\n OpenZL unconditionally takes ownership of this pointer, even if\n registration fails, and it lives for the lifetime of the compressor."]
     pub opaque: ZL_OpaquePtr,
+    #[doc = " Optional materializer for compression-only materialized parameters\n (MParams). If materializeFn is non-null, it will be called during\n compressor deserialization to create the materialized object from\n the serialized MParam blob. Unlike dicts, MParams are NOT required\n at decompression time."]
+    pub mparamMat: ZL_MaterializerDesc,
+    #[doc = " Optional MParam associated with this graph. The provided content blob\n will be materialized as dictated by @p mparamMat . OpenZL will not take\n ownership of the content provided. The caller is free to free the buffer\n anytime after registering the graph."]
+    pub mparam: ZL_MParam,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of ZL_FunctionGraphDesc"][::std::mem::size_of::<ZL_FunctionGraphDesc>() - 184usize];
+    ["Size of ZL_FunctionGraphDesc"][::std::mem::size_of::<ZL_FunctionGraphDesc>() - 240usize];
     ["Alignment of ZL_FunctionGraphDesc"][::std::mem::align_of::<ZL_FunctionGraphDesc>() - 8usize];
     ["Offset of field: ZL_FunctionGraphDesc::name"]
         [::std::mem::offset_of!(ZL_FunctionGraphDesc, name) - 0usize];
@@ -2864,10 +3012,12 @@ const _: () = {
         [::std::mem::offset_of!(ZL_FunctionGraphDesc, nbCustomNodes) - 72usize];
     ["Offset of field: ZL_FunctionGraphDesc::localParams"]
         [::std::mem::offset_of!(ZL_FunctionGraphDesc, localParams) - 80usize];
-    ["Offset of field: ZL_FunctionGraphDesc::materializer"]
-        [::std::mem::offset_of!(ZL_FunctionGraphDesc, materializer) - 128usize];
     ["Offset of field: ZL_FunctionGraphDesc::opaque"]
-        [::std::mem::offset_of!(ZL_FunctionGraphDesc, opaque) - 160usize];
+        [::std::mem::offset_of!(ZL_FunctionGraphDesc, opaque) - 128usize];
+    ["Offset of field: ZL_FunctionGraphDesc::mparamMat"]
+        [::std::mem::offset_of!(ZL_FunctionGraphDesc, mparamMat) - 152usize];
+    ["Offset of field: ZL_FunctionGraphDesc::mparam"]
+        [::std::mem::offset_of!(ZL_FunctionGraphDesc, mparam) - 192usize];
 };
 unsafe extern "C" {
     #[doc = " Registers a function graph given the @p desc.\n\n @note This is a new variant of @ref ZL_Compressor_registerFunctionGraph that\n reports errors using OpenZL's ZL_Report error system.\n\n @param desc The description of the graph, must be non-null.\n\n @return The new graph ID, or an error."]
@@ -2906,6 +3056,14 @@ unsafe extern "C" {
         gctx: *const ZL_Graph,
         refParamId: ::std::os::raw::c_int,
     ) -> ZL_RefParam;
+}
+unsafe extern "C" {
+    #[doc = " Bulk consultation request of *all* Local Parameters. This can be useful when\n one is trying to access all the Local Parameters at once for a codec using\n the encoder."]
+    pub fn ZL_Graph_getLocalParams(gctx: *const ZL_Graph) -> *const ZL_LocalParams;
+}
+unsafe extern "C" {
+    #[doc = " @returns The materialized MParam object associated with this graph, if\n there is one. Otherwise NULL. MParams are compression-only resources\n that are not required at decompression time."]
+    pub fn ZL_Graph_getMParam(gctx: *const ZL_Graph) -> *const ::std::os::raw::c_void;
 }
 unsafe extern "C" {
     #[doc = " Determines whether @nodeid is supported given the applied global parameters\n for the compression.\n Notably the ZL_CParam_formatVersion parameter can determine if a node is\n valid for the given encoding version."]
@@ -3311,6 +3469,15 @@ unsafe extern "C" {
     ) -> ZL_NodeID;
 }
 unsafe extern "C" {
+    #[doc = " Sets the destination of @p edge to @p entropyGraph with the parameters\n @p minGainBytes and @p minGainPct.\n\n @param minGainBytes The value for ZL_ENTROPY_MIN_GAIN_BYTES_PID or < 0 to\n leave unset.\n @param minGainPct The value for ZL_ENTROPY_MIN_GAIN_PCT_PID or < 0 to leave\n unset."]
+    pub fn ZL_Edge_setEntropyDestination(
+        edge: *mut ZL_Edge,
+        entropyGraph: ZL_GraphID,
+        minGainBytes: ::std::os::raw::c_int,
+        minGainPct: ::std::os::raw::c_int,
+    ) -> ZL_Report;
+}
+unsafe extern "C" {
     #[doc = " DEPRECATED: Use ZL_GRAPH_FIELD_LZ instead.\n @returns ZL_GRAPH_FIELD_LZ"]
     pub fn ZL_Compressor_registerFieldLZGraph(cgraph: *mut ZL_Compressor) -> ZL_GraphID;
 }
@@ -3327,6 +3494,50 @@ unsafe extern "C" {
         cgraph: *mut ZL_Compressor,
         literalsGraph: ZL_GraphID,
     ) -> ZL_GraphID;
+}
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZL_LzStrategy {
+    ZL_LzStrategy_fast = 1,
+    ZL_LzStrategy_doubleFast = 2,
+    ZL_LzStrategy_greedy = 3,
+    ZL_LzStrategy_lazy = 4,
+    ZL_LzStrategy_lazy2 = 5,
+}
+#[repr(i32)]
+#[doc = " Parameters that control the behavior of ZL_NODE_LZ and ZL_GRAPH_LZ.\n\n Parameters will be clamped to their min & max values where relevant (see\n below)."]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ZL_LzParam {
+    #[doc = " If set, it overrides the ZL_GCParam_compressionLevel, otherwise\n it defaults to the global compression level.\n\n The compression level controls the default parameters and successor\n graphs. If compression level has no effect on parameters or successor\n graphs that are explicitly overridden.\n\n @note 0 means use the default value."]
+    ZL_LzParam_compressionLevel = 1,
+    #[doc = " The acceleration parameter controls how quickly the match finder\n skips over the input. Only one in every `acceleration` bytes of\n the input is checked for matches. The default value is derived\n from the compression level. If the compression level is >= 0,\n then it defaults to 1. Otherwise it defaults to -compression_level.\n\n @note 0 means use the default value of 1."]
+    ZL_LzParam_acceleration = 100,
+    #[doc = " The log2 of the maximum lookback window in LZ match finding.\n windowSize = 1u << windowLog.\n\n The default value is set depending on the compression level and source\n size, and is capped at the source size.\n\n @note 0 means use the default value.\n\n @note If the window size is <= 64K, then LZ will use 16-bit offsets\n rather than 32-bit offsets."]
+    ZL_LzParam_windowLog = 101,
+    #[doc = " The ZL_LzStrategy to use for compression.\n\n The greedy, lazy & lazy2 strategies search several match candidates per\n position in a single table, so they ignore ZL_LzParam_hashLog2 and are\n controlled by ZL_LzParam_searchLog instead.\n\n @note 0 means use the default value."]
+    ZL_LzParam_strategy = 102,
+    #[doc = " The log2 of the primary hash table in LZ match finding. Higher values use\n more memory, but potentially improve compression.\n\n @note 0 means use the default value."]
+    ZL_LzParam_hashLog1 = 103,
+    #[doc = " The log2 of the secondary hash table in LZ match finding. Higher values\n use more memory, but potentially improve compression.\n\n @note 0 means use the default value.\n @note This will be ignored if the strategy doesn't use the secondary\n table."]
+    ZL_LzParam_hashLog2 = 104,
+    #[doc = " The number of bytes to hash in match finding hash tables. This is\n effectively the minimum match length that the match finder searches for\n (though it may find shorter matches by happenstance).\n\n @note 0 means use the default value."]
+    ZL_LzParam_hashLength = 105,
+    #[doc = " The log2 of the number of match candidates examined at each searched\n position. Higher values improve compression at the cost of speed.\n\n @note 0 means use the default value.\n @note This is only used by the greedy, lazy & lazy2 strategies. The\n other strategies keep a single candidate per hash table entry."]
+    ZL_LzParam_searchLog = 106,
+    #[doc = " If set, the customGraph at this index is used to compress the literals,\n rather than sending them to the default graph."]
+    ZL_LzParam_literalsGraphIdx = 1000,
+    #[doc = " If set, the customGraph at this index is used to compress the offsets,\n rather than sending them to the default graph."]
+    ZL_LzParam_offsetsGraphIdx = 1001,
+    #[doc = " If set, the customGraph at this index is used to compress the muxed\n bytes (first output of ZL_NODE_MUX_LENGTHS), rather than sending them to\n the default graph.\n\n @note Not used if ZL_LzParam_muxLengthsGraphIdx is set."]
+    ZL_LzParam_muxedBytesGraphIdx = 1002,
+    #[doc = " If set, the customGraph at this index is used to compress the overflow\n lengths (second output of ZL_NODE_MUX_LENGTHS), rather than sending them\n to the default graph.\n\n @note Not used if ZL_LzParam_muxLengthsGraphIdx is set."]
+    ZL_LzParam_overflowLengthsGraphIdx = 1003,
+    #[doc = " If set, the custom graph at this index is used to compress the literal\n lengths and match lengths, rather than sending them to\n ZL_NODE_MUX_LENGTHS.\n\n @note Must be a multi-input graph that accepts two 16-bit numeric inputs."]
+    ZL_LzParam_muxLengthsGraphIdx = 1004,
+    #[doc = " Entropy backend graphs will only be invoked if they can save this many\n bytes. This overrides the default value which is 0.5% of the input size\n + 50 bytes.\n\n Increasing this value will speed up decompression at the cost of\n compressed size."]
+    ZL_LzParam_minGainForEntropyBytes = 10000,
+    #[doc = " Entropy backend graphs will only be invoked if they can save this percent\n of their input size. This overrides the default value, which is 1%.\n\n Increasing this value will speed up decompression at the cost of\n compressed size."]
+    ZL_LzParam_minGainForEntropyPct = 10001,
 }
 unsafe extern "C" {
     #[doc = " @returns ZL_GRAPH_LZ4 with overridden compression level"]
@@ -3549,6 +3760,12 @@ unsafe extern "C" {
     ) -> ZL_GraphID;
 }
 unsafe extern "C" {
+    #[doc = " @return A trainable zstd graph with the default compression level"]
+    pub fn ZL_Compressor_buildTrainableZstdGraph(
+        cgraph: *mut ZL_Compressor,
+    ) -> ZL_Result_ZL_GraphID;
+}
+unsafe extern "C" {
     #[doc = " @brief Create a new @ref ZL_Compressor.\n\n The @ref ZL_Compressor must be freed with @ref ZL_Compressor_free.\n\n @returns The @ref ZL_Compressor pointer or `NULL` on error."]
     pub fn ZL_Compressor_create() -> *mut ZL_Compressor;
 }
@@ -3762,10 +3979,12 @@ pub struct ZL_GraphParameters_s {
     pub nbCustomNodes: usize,
     #[doc = " NULL means don't override"]
     pub localParams: *const ZL_LocalParams,
+    #[doc = " Optional MParam blob to (re)materialize on the target graph. Empty\n content means don't override the graph's MParam."]
+    pub mparam: ZL_MParam,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of ZL_GraphParameters_s"][::std::mem::size_of::<ZL_GraphParameters_s>() - 48usize];
+    ["Size of ZL_GraphParameters_s"][::std::mem::size_of::<ZL_GraphParameters_s>() - 96usize];
     ["Alignment of ZL_GraphParameters_s"][::std::mem::align_of::<ZL_GraphParameters_s>() - 8usize];
     ["Offset of field: ZL_GraphParameters_s::name"]
         [::std::mem::offset_of!(ZL_GraphParameters_s, name) - 0usize];
@@ -3779,6 +3998,8 @@ const _: () = {
         [::std::mem::offset_of!(ZL_GraphParameters_s, nbCustomNodes) - 32usize];
     ["Offset of field: ZL_GraphParameters_s::localParams"]
         [::std::mem::offset_of!(ZL_GraphParameters_s, localParams) - 40usize];
+    ["Offset of field: ZL_GraphParameters_s::mparam"]
+        [::std::mem::offset_of!(ZL_GraphParameters_s, mparam) - 48usize];
 };
 #[doc = " @defgroup Group_Compressor_GraphCustomization Graph Customization\n\n Graphs can be customized to override their name, local parameters, custom\n nodes and custom graphs. This is an advanced use case, and mainly an\n implementation detail of graphs. Most graphs which accept parameters provide\n helper functions to correctly parameterize the graph.\n\n @{"]
 pub type ZL_GraphParameters = ZL_GraphParameters_s;
@@ -3805,11 +4026,13 @@ pub struct ZL_ParameterizedGraphDesc {
     pub nbCustomNodes: usize,
     #[doc = " NULL means don't override"]
     pub localParams: *const ZL_LocalParams,
+    #[doc = " Optional per-instance MParam blob. It is materialized at registration\n using the base graph's materializer (mparamMat). Empty content means no\n MParam."]
+    pub mparam: ZL_MParam,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of ZL_ParameterizedGraphDesc"]
-        [::std::mem::size_of::<ZL_ParameterizedGraphDesc>() - 56usize];
+        [::std::mem::size_of::<ZL_ParameterizedGraphDesc>() - 104usize];
     ["Alignment of ZL_ParameterizedGraphDesc"]
         [::std::mem::align_of::<ZL_ParameterizedGraphDesc>() - 8usize];
     ["Offset of field: ZL_ParameterizedGraphDesc::name"]
@@ -3826,6 +4049,8 @@ const _: () = {
         [::std::mem::offset_of!(ZL_ParameterizedGraphDesc, nbCustomNodes) - 40usize];
     ["Offset of field: ZL_ParameterizedGraphDesc::localParams"]
         [::std::mem::offset_of!(ZL_ParameterizedGraphDesc, localParams) - 48usize];
+    ["Offset of field: ZL_ParameterizedGraphDesc::mparam"]
+        [::std::mem::offset_of!(ZL_ParameterizedGraphDesc, mparam) - 56usize];
 };
 unsafe extern "C" {
     #[doc = " @brief Create a new GraphID by the one from @p gid,\n just replacing the @p localParams by the provided ones. Used to create\n custom variants of Standard Graphs for example.\n\n @note the original @gid still exists and remains accessible.\n @note @localParams==NULL means \"do not change the parameters\",\n       in which case, this function simply returns @gid.\n\n @return The GraphID of the newly created graph, or ZL_GRAPH_ILLEGAL on\n error.\n\n @param gid The GraphID to clone.\n @param localParams The local parameters to use inside the graph."]
@@ -3976,12 +4201,14 @@ unsafe extern "C" {
     pub fn ZL_CompressorDeserializer_free(deserializer: *mut ZL_CompressorDeserializer);
 }
 unsafe extern "C" {
-    #[doc = " Reads the serialized compressor represented by @p serialized and pushes\n the graph structure and configuration it describes into @p compressor.\n\n In order for materialization to succeed, the @p compressor must already have\n all of the custom transforms, graph functions, selectors, etc. registered\n that were available when the compressor was serialized. You can use @ref\n ZL_CompressorDeserializer_getDependencies() to determine what non-serialized\n graph components are needed on the destination compressor. You can then set\n those components up before invoking this operation on that compressor.\n\n See the documentation above for a more thorough discussion of these\n requirements and how best to structure a compressor to meet them.\n\n If this operation fails, the compressor may be left in an indeterminate\n state. The best thing to do is to just throw this compressor away\n (via @ref ZL_Compressor_free) and not to try to re-use it."]
+    #[doc = " Reads the serialized compressor represented by @p serialized and pushes\n the graph structure and configuration it describes into @p compressor. If the\n compressor requires a dict bundle, it should be passed as a \"fat\" bundle via\n @p fatBundle (if no bundle is required, pass NULL). See @ref\n ZL_Compressor_loadDictBundle() for more details.\n\n In order for materialization to succeed, the @p compressor must already have\n all of the custom transforms, graph functions, selectors, etc. registered\n that were available when the compressor was serialized. You can use @ref\n ZL_CompressorDeserializer_getDependencies() to determine what non-serialized\n graph components are needed on the destination compressor. You can then set\n those components up before invoking this operation on that compressor. @ref\n ZL_CompressorDeserializer_getDependencies() should also be used to determine\n if a bundle is required.\n\n See the documentation above for a more thorough discussion of these\n requirements and how best to structure a compressor to meet them.\n\n If this operation fails, the compressor may be left in an indeterminate\n state. The best thing to do is to just throw this compressor away\n (via @ref ZL_Compressor_free) and not to try to re-use it."]
     pub fn ZL_CompressorDeserializer_deserialize(
         deserializer: *mut ZL_CompressorDeserializer,
         compressor: *mut ZL_Compressor,
         serialized: *const ::std::os::raw::c_void,
         serializedSize: usize,
+        fatBundle: *const ::std::os::raw::c_void,
+        fatBundleSize: usize,
     ) -> ZL_Report;
 }
 #[doc = " Doesn't own any memory."]
@@ -3992,11 +4219,12 @@ pub struct ZL_CompressorDeserializer_Dependencies {
     pub num_graphs: usize,
     pub node_names: *const *const ::std::os::raw::c_char,
     pub num_nodes: usize,
+    pub bundle_id: ZL_BundleID,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of ZL_CompressorDeserializer_Dependencies"]
-        [::std::mem::size_of::<ZL_CompressorDeserializer_Dependencies>() - 32usize];
+        [::std::mem::size_of::<ZL_CompressorDeserializer_Dependencies>() - 64usize];
     ["Alignment of ZL_CompressorDeserializer_Dependencies"]
         [::std::mem::align_of::<ZL_CompressorDeserializer_Dependencies>() - 8usize];
     ["Offset of field: ZL_CompressorDeserializer_Dependencies::graph_names"]
@@ -4007,6 +4235,8 @@ const _: () = {
         [::std::mem::offset_of!(ZL_CompressorDeserializer_Dependencies, node_names) - 16usize];
     ["Offset of field: ZL_CompressorDeserializer_Dependencies::num_nodes"]
         [::std::mem::offset_of!(ZL_CompressorDeserializer_Dependencies, num_nodes) - 24usize];
+    ["Offset of field: ZL_CompressorDeserializer_Dependencies::bundle_id"]
+        [::std::mem::offset_of!(ZL_CompressorDeserializer_Dependencies, bundle_id) - 32usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -4017,7 +4247,7 @@ pub struct ZL_Result_ZL_CompressorDeserializer_Dependencies_inner {
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of ZL_Result_ZL_CompressorDeserializer_Dependencies_inner"]
-        [::std::mem::size_of::<ZL_Result_ZL_CompressorDeserializer_Dependencies_inner>() - 40usize];
+        [::std::mem::size_of::<ZL_Result_ZL_CompressorDeserializer_Dependencies_inner>() - 72usize];
     ["Alignment of ZL_Result_ZL_CompressorDeserializer_Dependencies_inner"]
         [::std::mem::align_of::<ZL_Result_ZL_CompressorDeserializer_Dependencies_inner>() - 8usize];
     ["Offset of field: ZL_Result_ZL_CompressorDeserializer_Dependencies_inner::_code"][::std::mem::offset_of!(
@@ -4039,7 +4269,7 @@ pub union ZL_Result_ZL_CompressorDeserializer_Dependencies_u {
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of ZL_Result_ZL_CompressorDeserializer_Dependencies_u"]
-        [::std::mem::size_of::<ZL_Result_ZL_CompressorDeserializer_Dependencies_u>() - 40usize];
+        [::std::mem::size_of::<ZL_Result_ZL_CompressorDeserializer_Dependencies_u>() - 72usize];
     ["Alignment of ZL_Result_ZL_CompressorDeserializer_Dependencies_u"]
         [::std::mem::align_of::<ZL_Result_ZL_CompressorDeserializer_Dependencies_u>() - 8usize];
     ["Offset of field: ZL_Result_ZL_CompressorDeserializer_Dependencies_u::_code"][::std::mem::offset_of!(
@@ -4241,8 +4471,6 @@ pub struct ZL_SelectorDesc {
     pub customGraphs: *const ZL_GraphID,
     pub nbCustomGraphs: usize,
     pub localParams: ZL_LocalParams,
-    #[doc = " Optional materializer descriptor for materialized local params.\n If both materializeFn and dematerializeFn are non-null, the materializer\n will be used to create materialized objects from local params."]
-    pub materializer: ZL_MaterializerDesc,
     #[doc = " Optional, the name of the graph rooted by the selector."]
     pub name: *const ::std::os::raw::c_char,
     #[doc = " Optionally an opaque pointer that can be queried with\n ZL_Selector_getOpaquePtr().\n OpenZL unconditionally takes ownership of this pointer, even if\n registration fails, and it lives for the lifetime of the compressor."]
@@ -4250,7 +4478,7 @@ pub struct ZL_SelectorDesc {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of ZL_SelectorDesc"][::std::mem::size_of::<ZL_SelectorDesc>() - 144usize];
+    ["Size of ZL_SelectorDesc"][::std::mem::size_of::<ZL_SelectorDesc>() - 112usize];
     ["Alignment of ZL_SelectorDesc"][::std::mem::align_of::<ZL_SelectorDesc>() - 8usize];
     ["Offset of field: ZL_SelectorDesc::selector_f"]
         [::std::mem::offset_of!(ZL_SelectorDesc, selector_f) - 0usize];
@@ -4262,12 +4490,10 @@ const _: () = {
         [::std::mem::offset_of!(ZL_SelectorDesc, nbCustomGraphs) - 24usize];
     ["Offset of field: ZL_SelectorDesc::localParams"]
         [::std::mem::offset_of!(ZL_SelectorDesc, localParams) - 32usize];
-    ["Offset of field: ZL_SelectorDesc::materializer"]
-        [::std::mem::offset_of!(ZL_SelectorDesc, materializer) - 80usize];
     ["Offset of field: ZL_SelectorDesc::name"]
-        [::std::mem::offset_of!(ZL_SelectorDesc, name) - 112usize];
+        [::std::mem::offset_of!(ZL_SelectorDesc, name) - 80usize];
     ["Offset of field: ZL_SelectorDesc::opaque"]
-        [::std::mem::offset_of!(ZL_SelectorDesc, opaque) - 120usize];
+        [::std::mem::offset_of!(ZL_SelectorDesc, opaque) - 88usize];
 };
 unsafe extern "C" {
     #[doc = " Register a selector graph given the @p desc.\n\n @note This is a new variant of @ref ZL_Compressor_registerSelectorGraph that\n reports errors using OpenZL's ZL_Report error system.\n\n @param desc The description of the selector, must be non-null.\n\n @return The new graph ID, or an error."]
@@ -4326,6 +4552,10 @@ unsafe extern "C" {
         selCtx: *const ZL_Selector,
         gparam: ZL_CParam,
     ) -> ::std::os::raw::c_int;
+}
+unsafe extern "C" {
+    #[doc = " Determines whether @p nodeid is supported given the applied global\n compression parameters. Notably, `ZL_CParam_formatVersion` determines\n whether a node is valid for the selected encoding version."]
+    pub fn ZL_Selector_isNodeSupported(selCtx: *const ZL_Selector, nodeid: ZL_NodeID) -> bool;
 }
 unsafe extern "C" {
     pub fn ZL_Selector_getLocalIntParam(
@@ -4563,20 +4793,18 @@ pub struct ZL_MIEncoderDesc {
     pub trStateMgr: ZL_CodecStateManager,
     #[doc = " Optionally an opaque pointer that can be queried with\n ZL_Encoder_getOpaquePtr().\n OpenZL unconditionally takes ownership of this pointer, even if\n registration fails, and it lives for the lifetime of the compressor."]
     pub opaque: ZL_OpaquePtr,
-    #[doc = " Optional materializer descriptor for materialized local params.\n If both materializeFn and dematerializeFn are non-null, the materializer\n will be used to create materialized objects from local params."]
-    pub materializer: ZL_MaterializerDesc,
     #[doc = " Optional materializer descriptor for materialized dicts.\n If both materializeFn and dematerializeFn are non-null, the materializer\n will be used to create materialized objects. Create a node with\n materialization using ZL_Compressor_parameterizeNode()."]
-    pub dictMat: ZL_MaterializerDesc2,
+    pub dictMat: ZL_MaterializerDesc,
     #[doc = " Optional dictionary ID associated with this encoder.\n When set, identifies the dictionary that this encoder requires.\n A zero-initialized value (ZL_DICT_ID_NULL) means no dictionary is\n associated."]
     pub dictID: ZL_DictID,
     #[doc = " Optional materializer for compression-only materialized parameters\n  (MParams). If materializeFn is non-null, it will be called during\n  compressor deserialization to create the materialized object from\n  the serialized MParam blob. Unlike dicts, MParams are NOT required\n  at decompression time."]
-    pub mparamMat: ZL_MaterializerDesc2,
+    pub mparamMat: ZL_MaterializerDesc,
     #[doc = " Optional MParam associated with this encoder. The provided content blob\n will be materialized as dictated by @p mparamMat . OpenZL will not take\n ownership of the content provided. The caller is free to free the buffer\n anytime after registering the MIEncoder with\n ZL_Compressor_registerMIEncoder()."]
     pub mparam: ZL_MParam,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of ZL_MIEncoderDesc"][::std::mem::size_of::<ZL_MIEncoderDesc>() - 368usize];
+    ["Size of ZL_MIEncoderDesc"][::std::mem::size_of::<ZL_MIEncoderDesc>() - 336usize];
     ["Alignment of ZL_MIEncoderDesc"][::std::mem::align_of::<ZL_MIEncoderDesc>() - 8usize];
     ["Offset of field: ZL_MIEncoderDesc::gd"]
         [::std::mem::offset_of!(ZL_MIEncoderDesc, gd) - 0usize];
@@ -4590,16 +4818,14 @@ const _: () = {
         [::std::mem::offset_of!(ZL_MIEncoderDesc, trStateMgr) - 128usize];
     ["Offset of field: ZL_MIEncoderDesc::opaque"]
         [::std::mem::offset_of!(ZL_MIEncoderDesc, opaque) - 152usize];
-    ["Offset of field: ZL_MIEncoderDesc::materializer"]
-        [::std::mem::offset_of!(ZL_MIEncoderDesc, materializer) - 176usize];
     ["Offset of field: ZL_MIEncoderDesc::dictMat"]
-        [::std::mem::offset_of!(ZL_MIEncoderDesc, dictMat) - 208usize];
+        [::std::mem::offset_of!(ZL_MIEncoderDesc, dictMat) - 176usize];
     ["Offset of field: ZL_MIEncoderDesc::dictID"]
-        [::std::mem::offset_of!(ZL_MIEncoderDesc, dictID) - 248usize];
+        [::std::mem::offset_of!(ZL_MIEncoderDesc, dictID) - 216usize];
     ["Offset of field: ZL_MIEncoderDesc::mparamMat"]
-        [::std::mem::offset_of!(ZL_MIEncoderDesc, mparamMat) - 280usize];
+        [::std::mem::offset_of!(ZL_MIEncoderDesc, mparamMat) - 248usize];
     ["Offset of field: ZL_MIEncoderDesc::mparam"]
-        [::std::mem::offset_of!(ZL_MIEncoderDesc, mparam) - 320usize];
+        [::std::mem::offset_of!(ZL_MIEncoderDesc, mparam) - 288usize];
 };
 unsafe extern "C" {
     #[doc = " Register a custom encoder that can be used to compress.\n\n @note This is a new variant of @ref ZL_Compressor_registerMIEncoder that\n reports errors using OpenZL's ZL_Report error system.\n\n @warning Using a custom encoder requires the decoder to be registered before\n decompression.\n\n @param desc The description of the encoder.\n\n @returns The new node ID, or an error."]
@@ -4647,7 +4873,7 @@ unsafe extern "C" {
     pub fn ZL_Encoder_getLocalParams(eic: *const ZL_Encoder) -> *const ZL_LocalParams;
 }
 unsafe extern "C" {
-    #[doc = " @returns The materialized dictionary object associated with this node, if\n there is one. Otherwise NULL."]
+    #[doc = " @returns The materialized dictionary object associated with this node, if\n there is one. Returns NULL if there is no dict or if the frame format is\n less than ZL_MATERIALIZED_DICT_VERSION_MIN."]
     pub fn ZL_Encoder_getMaterializedDict(
         eictx: *const ZL_Encoder,
     ) -> *const ::std::os::raw::c_void;
@@ -4723,6 +4949,10 @@ unsafe extern "C" {
 unsafe extern "C" {
     #[doc = " @brief Frees a decompression context.\n\n @param dctx Decompression context to free"]
     pub fn ZL_DCtx_free(dctx: *mut ZL_DCtx);
+}
+unsafe extern "C" {
+    #[doc = " @brief Attach a dict loader to the decompression context.\n\n The dict loader is referenced (not owned) by the DCtx. The caller must\n ensure the dict loader outlives the DCtx."]
+    pub fn ZL_DCtx_refDictLoader(dctx: *mut ZL_DCtx, loader: *mut ZL_DictLoader);
 }
 #[repr(i32)]
 #[doc = " @brief Global decompression parameters."]
@@ -4882,6 +5112,10 @@ pub type ZL_Result_ZL_Comment_fake_type_needs_semicolon = ::std::os::raw::c_int;
 unsafe extern "C" {
     #[doc = " @brief Gets the comment stored in the FrameInfo.\n\n @returns The comment or an error. If no comment is present it\n returns a comment with `size == 0`. The buffer returned is owned by @p zfi"]
     pub fn ZL_FrameInfo_getComment(zfi: *const ZL_FrameInfo) -> ZL_Result_ZL_Comment;
+}
+unsafe extern "C" {
+    #[doc = " @brief Gets the dict bundle ID referenced by the frame, if any.\n\n @returns A pointer to the bundle ID stored in @p zfi, or NULL if the frame\n does not reference a dict bundle."]
+    pub fn ZL_FrameInfo_getBundleID(zfi: *const ZL_FrameInfo) -> *const ZL_BundleID;
 }
 #[doc = " @brief Information about a decompressed typed output."]
 #[repr(C)]
@@ -5254,6 +5488,12 @@ unsafe extern "C" {
     #[doc = " @returns Returns a state, as generated by the Transform's State Manager."]
     pub fn ZL_Decoder_getState(dictx: *const ZL_Decoder) -> *mut ::std::os::raw::c_void;
 }
+unsafe extern "C" {
+    #[doc = " @returns The materialized dictionary object resolved for this node from the\n          dict loader attached to the active DCtx, if there is one, otherwise\n          NULL.\n\n NOTE: If the frame format < ZL_MATERIALIZED_DICT_VERSION_MIN, this will\n necessarily return NULL."]
+    pub fn ZL_Decoder_getMaterializedDict(
+        dictx: *const ZL_Decoder,
+    ) -> *const ::std::os::raw::c_void;
+}
 #[repr(i32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum ZL_GraphType {
@@ -5509,6 +5749,20 @@ unsafe extern "C" {
     ) -> ZL_Report;
 }
 unsafe extern "C" {
+    #[doc = " @returns The minimum library version to deserialize a compressor containing\n this node, or an error if the node is not a valid standard node."]
+    pub fn ZL_Compressor_Node_getMinLibraryVersion(
+        compressor: *const ZL_Compressor,
+        node: ZL_NodeID,
+    ) -> ZL_Report;
+}
+unsafe extern "C" {
+    #[doc = " @returns The minimum library version to deserialize a compressor containing\n this standard graph, or an error if the graph ID is out of bounds."]
+    pub fn ZL_Compressor_Graph_getMinLibraryVersion(
+        compressor: *const ZL_Compressor,
+        gid: ZL_GraphID,
+    ) -> ZL_Report;
+}
+unsafe extern "C" {
     #[doc = " @returns The MParam ID associated with the @p node or ZL_MPARAM_ID_NULL if no\n MParam is associated."]
     pub fn ZL_Compressor_Node_getMParamID(
         cgraph: *const ZL_Compressor,
@@ -5527,6 +5781,20 @@ unsafe extern "C" {
     pub fn ZL_Compressor_Node_getMParamObj(
         cgraph: *const ZL_Compressor,
         node: ZL_NodeID,
+    ) -> *const ::std::os::raw::c_void;
+}
+unsafe extern "C" {
+    #[doc = " @returns A pointer to the *unmaterialized* MParam associated with the @p\n graph, or NULL if no MParam is associated."]
+    pub fn ZL_Compressor_Graph_getMParam(
+        cgraph: *const ZL_Compressor,
+        graph: ZL_GraphID,
+    ) -> *const ZL_MParam;
+}
+unsafe extern "C" {
+    #[doc = " @returns The *materialized* Mparam object associated with the @p graph or\n NULL if no MParam is associated."]
+    pub fn ZL_Compressor_Graph_getMParamObj(
+        cgraph: *const ZL_Compressor,
+        graph: ZL_GraphID,
     ) -> *const ::std::os::raw::c_void;
 }
 unsafe extern "C" {

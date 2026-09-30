@@ -51,8 +51,8 @@ static unsafe class OpenZLNative
     const string Lib = "openzl";
 
     public const int ZL_CParam_formatVersion = 4;
-    public const uint ZL_StandardGraphID_zstd = 7;
-    public const uint ZL_StandardGraphID_lz4 = 20;
+    public const uint ZL_StandardGraphID_zstd = 9;
+    public const uint ZL_StandardGraphID_lz4 = 22;
 
     // ZL_Report: union of { ZL_ErrorCode code; size_t value } and { ZL_ErrorCode code; ZL_ErrorInfo info (pointer) }.
     [StructLayout(LayoutKind.Sequential)]
