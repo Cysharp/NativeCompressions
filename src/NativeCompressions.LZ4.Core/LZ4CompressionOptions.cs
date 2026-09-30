@@ -57,9 +57,11 @@ public readonly record struct LZ4CompressionOptions
     public FrameType FrameType { get => frameType; init => frameType = value; }
 
     /// <summary>
-    /// Size of the uncompressed content recorded in the frame header; 0 == unknown, nothing is recorded.
-    /// For streaming with LZ4Encoder this must be the exact size that will be written.
-    /// For the one-shot Compress methods any non-zero value means "record the size", the real size is written.
+    /// The length of the content, recorded in the frame header; 0 == not declared, nothing is recorded.
+    /// A declared length has to be the exact length of the content: where the length of the source is known
+    /// (the one-shot Compress methods, memory, sequence and file sources of CompressAsync) a different value
+    /// throws ArgumentException up front, otherwise the frame fails to close when the lengths differ.
+    /// The overloads without options record the length whenever the source makes it known.
     /// </summary>
     public ulong ContentSize { get => contentSize; init => contentSize = value; }
 
@@ -84,9 +86,16 @@ public readonly record struct LZ4CompressionOptions
         }
     }
 
-    internal unsafe LZ4F_preferences_t ToPreferences() => ToPreferencesWithContentSize(contentSize);
+    // The declared length must match the length of the source, when that is known.
+    internal void ThrowIfContentSizeDiffers(long sourceLength)
+    {
+        if (contentSize != 0 && contentSize != (ulong)sourceLength)
+        {
+            throw new ArgumentException($"ContentSize {contentSize} differs from the length of the source, {sourceLength}. Declare the exact length or leave it 0.", "options");
+        }
+    }
 
-    internal unsafe LZ4F_preferences_t ToPreferencesWithContentSize(ulong contentSize)
+    internal unsafe LZ4F_preferences_t ToPreferences()
     {
         var prefs = new LZ4F_preferences_t
         {
@@ -99,7 +108,7 @@ public readonly record struct LZ4CompressionOptions
                 blockMode = (LZ4F_blockMode_t)blockMode,
                 contentChecksumFlag = (LZ4F_contentChecksum_t)contentChecksumFlag,
                 frameType = (LZ4F_frameType_t)frameType,
-                contentSize = contentSize, // override content size
+                contentSize = contentSize,
                 dictID = dictionaryID,
                 blockChecksumFlag = (LZ4F_blockChecksum_t)blockChecksumFlag,
             }

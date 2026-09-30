@@ -8,8 +8,9 @@ namespace NativeCompressions;
 public static partial class LZ4
 {
     // Every CompressAsync overload turns its source into a PipeReader and runs CompressCoreAsync, so they share
-    // one behavior. Sources with a known length (memory, sequence, file) record it in the frame header and
-    // get a block size chosen for that length.
+    // one behavior. Sources with a known length (memory, sequence, file) get a block size chosen for that length.
+    // Without options the known length is recorded in the frame header. With options, ContentSize is what the
+    // caller asked for: it must match a known length, and for a stream or pipe it is checked when the frame closes.
 
     static readonly StreamPipeReaderOptions LeaveOpenPipeReaderOptions = new StreamPipeReaderOptions(leaveOpen: true);
 
@@ -18,7 +19,7 @@ public static partial class LZ4
         var reader = PipeReader.Create(new ReadOnlySequence<byte>(source));
         try
         {
-            await CompressCoreAsync(reader, source.Length, destination, options ?? LZ4CompressionOptions.Default, cancellationToken);
+            await CompressCoreAsync(reader, source.Length, destination, options, cancellationToken);
         }
         finally
         {
@@ -31,7 +32,7 @@ public static partial class LZ4
         var reader = PipeReader.Create(source);
         try
         {
-            await CompressCoreAsync(reader, source.Length, destination, options ?? LZ4CompressionOptions.Default, cancellationToken);
+            await CompressCoreAsync(reader, source.Length, destination, options, cancellationToken);
         }
         finally
         {
@@ -66,7 +67,7 @@ public static partial class LZ4
         var reader = PipeReader.Create(stream, LargeBufferLeaveOpenPipeReaderOptions);
         try
         {
-            await CompressCoreAsync(reader, length, destination, options ?? LZ4CompressionOptions.Default, cancellationToken);
+            await CompressCoreAsync(reader, length, destination, options, cancellationToken);
         }
         finally
         {
@@ -107,10 +108,13 @@ public static partial class LZ4
         }
 #endif
 
+        // any other seekable stream (a MemoryStream without an exposable buffer, for example) still knows its length
+        long? length = source.CanSeek ? Math.Max(0, source.Length - source.Position) : null;
+
         var pipeReader = PipeReader.Create(source, LeaveOpenPipeReaderOptions);
         try
         {
-            await CompressCoreAsync(pipeReader, null, destination, options ?? LZ4CompressionOptions.Default, cancellationToken);
+            await CompressCoreAsync(pipeReader, length, destination, options, cancellationToken);
         }
         finally
         {
@@ -120,7 +124,7 @@ public static partial class LZ4
 
     public static ValueTask CompressAsync(PipeReader source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        return CompressCoreAsync(source, null, destination, options ?? LZ4CompressionOptions.Default, cancellationToken);
+        return CompressCoreAsync(source, null, destination, options, cancellationToken);
     }
 
     public static async ValueTask CompressAsync(string sourceFilePath, string destinationFilePath, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
@@ -146,15 +150,17 @@ public static partial class LZ4
 
     // ---- core
 
-    // Compresses the whole input as one frame. knownLength is recorded in the frame header, and the frame fails
-    // to close when the input turns out to be a different length.
-    static async ValueTask CompressCoreAsync(PipeReader source, long? knownLength, PipeWriter destination, LZ4CompressionOptions options, CancellationToken cancellationToken)
+    // Compresses the whole input as one frame. A recorded length is verified when the frame closes,
+    // the frame fails to close when the input turns out to be a different length.
+    static async ValueTask CompressCoreAsync(PipeReader source, long? knownLength, PipeWriter destination, LZ4CompressionOptions? givenOptions, CancellationToken cancellationToken)
     {
+        var options = givenOptions ?? LZ4CompressionOptions.Default;
         if (knownLength != null)
         {
+            options.ThrowIfContentSizeDiffers(knownLength.Value);
             options = options with
             {
-                ContentSize = (ulong)knownLength.Value,
+                ContentSize = givenOptions == null ? (ulong)knownLength.Value : options.ContentSize,
                 BlockSizeID = options.BlockSizeID == BlockSizeId.Default ? DetermineBlockSize(knownLength.Value) : options.BlockSizeID,
             };
         }

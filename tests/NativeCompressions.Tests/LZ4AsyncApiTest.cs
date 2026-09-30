@@ -173,6 +173,57 @@ public class LZ4AsyncApiTest : IDisposable
         Assert.Equal(data, LZ4.Decompress(compressed));
     }
 
+    [Fact]
+    public async Task CompressAsync_ContentSize_RecordedWithoutOptions_AsAskedWithOptions()
+    {
+        var data = GetInput("compressible5m");
+        var path = TempFile("contentsize.bin");
+        await File.WriteAllBytesAsync(path, data);
+        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
+
+        // every source with a known length records it when no options are given
+        var sources = new (string Name, byte[] Compressed)[]
+        {
+            ("memory", await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w))),
+            ("sequence", await Collect(w => LZ4.CompressAsync(ToSequence(data, 5000), w))),
+            ("handle", await Collect(w => LZ4.CompressAsync(handle, w))),
+            ("memorystream", await Collect(w => LZ4.CompressAsync(new MemoryStream(data), w))),
+        };
+        foreach (var (name, compressed) in sources)
+        {
+            Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
+#if TEST_CORE_TFM_OVERRIDE
+            if (name == "handle") continue; // the netstandard builds read a handle as a stream of unknown length
+#endif
+            Assert.True((ulong)data.Length == info.ContentSize, $"{name}: content size {info.ContentSize}");
+        }
+
+        // the default options declare nothing
+        Assert.True(LZ4.TryGetFrameInfo(await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, LZ4CompressionOptions.Default)), out var none));
+        Assert.Equal(0ul, none.ContentSize);
+
+        // a declared length is recorded and has to be the real one
+        var declared = LZ4CompressionOptions.Default with { ContentSize = (ulong)data.Length };
+        Assert.True(LZ4.TryGetFrameInfo(await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, declared)), out var some));
+        Assert.Equal((ulong)data.Length, some.ContentSize);
+
+        var wrong = LZ4CompressionOptions.Default with { ContentSize = 1 };
+        await Assert.ThrowsAsync<ArgumentException>(async () => await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, wrong)));
+        await Assert.ThrowsAsync<ArgumentException>(async () => await Collect(w => LZ4.CompressAsync(ToSequence(data, 5000), w, wrong)));
+#if TEST_CORE_TFM_OVERRIDE
+        await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.CompressAsync(handle, w, wrong))); // unknown length, checked when the frame closes
+#else
+        await Assert.ThrowsAsync<ArgumentException>(async () => await Collect(w => LZ4.CompressAsync(handle, w, wrong)));
+#endif
+
+        // a source of unknown length cannot be checked up front, the frame fails to close instead
+        await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.CompressAsync(new NonSeekableStream(data, 4096), w, wrong)));
+        Assert.True(LZ4.TryGetFrameInfo(await Collect(w => LZ4.CompressAsync(new NonSeekableStream(data, 4096), w, declared)), out var pledged));
+        Assert.Equal((ulong)data.Length, pledged.ContentSize);
+        Assert.True(LZ4.TryGetFrameInfo(await Collect(w => LZ4.CompressAsync(new NonSeekableStream(data, 4096), w)), out var unknown));
+        Assert.Equal(0ul, unknown.ContentSize);
+    }
+
     [Theory]
     [MemberData(nameof(Inputs))]
     public async Task CompressAsync_ReadOnlyMemory(string name)
@@ -312,7 +363,7 @@ public class LZ4AsyncApiTest : IDisposable
         expected = a.Concat(b).Concat(c).ToArray();
         return LZ4.Compress(a, IndependentBlocksWithChecksums)
             .Concat(skippable)
-            .Concat(LZ4.Compress(b, LZ4CompressionOptions.Default with { ContentSize = 1 }))
+            .Concat(LZ4.Compress(b, LZ4CompressionOptions.Default with { ContentSize = (ulong)b.Length }))
             .Concat(LZ4.Compress(ReadOnlySpan<byte>.Empty))
             .Concat(LZ4.Compress(c, IndependentBlocksWithChecksums with { BlockSizeID = BlockSizeId.Max256KB }))
             .ToArray();

@@ -54,7 +54,7 @@ LZ4 has both block format and frame format. We adopt frame format for all APIs f
 
 ### Simple Compression
 
-Simple API to convert from `ReadOnlySpan<T>` to `byte[]`, or write/read to/from `Span<T>`. These encode/decode in frame format, not block format. Also automatically sets ContentSize in the frame header.
+Simple API to convert from `ReadOnlySpan<T>` to `byte[]`, or write/read to/from `Span<T>`. These encode/decode in frame format, not block format. The overloads without options record the content size in the frame header. When `LZ4CompressionOptions` is passed, `ContentSize` decides: 0 records nothing, and a value has to be the exact length of the source.
 
 ```csharp
 using NativeCompressions;

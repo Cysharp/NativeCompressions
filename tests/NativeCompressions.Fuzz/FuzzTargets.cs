@@ -216,7 +216,7 @@ public static class FuzzTargets
             BlockMode = independent ? BlockMode.BlockIndependent : BlockMode.BlockLinked,
             ContentChecksumFlag = contentChecksum ? ContentChecksum.ContentChecksumEnabled : ContentChecksum.NoContentChecksum,
             BlockChecksumFlag = blockChecksum ? BlockChecksum.BlockChecksumEnabled : BlockChecksum.NoBlockChecksum,
-            ContentSize = contentSize ? 1ul : 0ul,
+            ContentSize = contentSize ? (ulong)payload.Length : 0ul,
         };
 
         // one-shot
