@@ -8,6 +8,11 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!-- Reuse generated graph IDs; runtime calls still use this project's own P/Invoke. -->
+  <ItemGroup>
+    <Compile Include="../../src/NativeCompressions.OpenZL.Core/Interop/OpenZLNativeMethods.cs" Link="OpenZLNativeMethods.cs" />
+  </ItemGroup>
+
   <!--
     Intentionally no reference to NativeCompressions (Core / Runtime).
     The native libraries are called through this project's own P/Invoke declarations (NativeMethods.cs),

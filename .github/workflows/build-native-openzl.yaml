@@ -856,13 +856,22 @@ jobs:
 
           echo "::endgroup::"
 
+      - name: Install binding generator prerequisites
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+          rustup toolchain install stable --profile minimal
+      - name: Regenerate native bindings
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: cargo build --locked --manifest-path bindgen/Cargo.toml -p libopenzl
       - name: Check generated changes
         id: changes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          git add openzl src/NativeCompressions.OpenZL.Runtime/runtimes
+          git add openzl src/NativeCompressions.OpenZL.Runtime/runtimes bindgen/libopenzl/src/openzl.rs src/NativeCompressions.OpenZL.Core/Interop/OpenZLNativeMethods.cs sandbox/SmokeNative/NativeMethods.cs
           if git diff --cached --quiet; then
             echo "No OpenZL submodule or binary changes." >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -879,7 +888,7 @@ jobs:
           if [ -n "$PR_URL" ]; then
             git fetch origin "$REMOTE_SHA"
             BASE_REF="$REMOTE_SHA"
-            if git diff --cached --quiet "$BASE_REF" -- openzl src/NativeCompressions.OpenZL.Runtime/runtimes; then
+            if git diff --cached --quiet "$BASE_REF" -- openzl src/NativeCompressions.OpenZL.Runtime/runtimes bindgen/libopenzl/src/openzl.rs src/NativeCompressions.OpenZL.Core/Interop/OpenZLNativeMethods.cs sandbox/SmokeNative/NativeMethods.cs; then
               echo "Existing PR already contains these OpenZL binaries: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
@@ -923,7 +932,7 @@ jobs:
           git push --force-with-lease="refs/heads/$NEW_BRANCH_NAME:$REMOTE_SHA" origin "HEAD:refs/heads/$NEW_BRANCH_NAME"
 
           cat <<'EOF' > artifacts/pr_body.txt
-          This PR updates the OpenZL submodule and/or generated native libraries.
+          This PR updates the OpenZL submodule and/or generated native libraries. New releases also regenerate the bindings from the updated headers.
           Binary-only changes can occur without a new upstream release.
 
           ## Changed files
