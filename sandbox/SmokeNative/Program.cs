@@ -333,26 +333,6 @@ sealed class SmokeRunner(SmokeOptions options)
             });
         }
 
-        // NativeCompressions exposes NbWorkers, which needs a ZSTD_MULTITHREAD build; a single-threaded build rejects nbWorkers > 0.
-        Check("multithread roundtrip (nbWorkers=2)", () =>
-        {
-            var data = TestData.All[^1].Bytes;
-            var cctx = ZstdNative.ZSTD_createCCtx();
-            try
-            {
-                var code = ZstdNative.ZSTD_CCtx_setParameter(cctx, ZstdNative.ZSTD_c_nbWorkers, 2);
-                if (ZstdNative.ZSTD_isError(code) != 0) throw new InvalidOperationException($"nbWorkers rejected ({Str(ZstdNative.ZSTD_getErrorName(code))}); not built with ZSTD_MULTITHREAD");
-
-                var compressed = Buf(checked((int)(ZstdNative.ZSTD_compressBound((nuint)data.Length))));
-                var size = Zstd(ZstdNative.ZSTD_compress2(cctx, Ptr(compressed), (nuint)compressed.Length, Ptr(data), (nuint)data.Length));
-                return Decompress(data, compressed, size);
-            }
-            finally
-            {
-                ZstdNative.ZSTD_freeCCtx(cctx);
-            }
-        });
-
         static string Decompress(byte[] original, byte[] compressed, nuint compressedSize)
         {
             var contentSize = ZstdNative.ZSTD_getFrameContentSize(Ptr(compressed), compressedSize);

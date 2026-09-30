@@ -136,13 +136,6 @@ public class AllCompressDecompress
 
     [Benchmark]
     [BenchmarkCategory("Compress")]
-    public int NativeCompressions_Zstandard_Compress_Multithread()
-    {
-        return NativeCompressions.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default with { NbWorkers = Environment.ProcessorCount });
-    }
-
-    [Benchmark]
-    [BenchmarkCategory("Compress")]
     public int BrotliEncoder_TryCompress()
     {
         BrotliEncoder.TryCompress(src, dest, out var bytesWritten);
