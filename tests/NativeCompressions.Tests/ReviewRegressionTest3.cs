@@ -73,70 +73,6 @@ public class ReviewRegressionTest3
         Assert.Equal(default, holder.Info);
     }
 
-    // ---- 2. a failed parallel compression must not complete while a worker still reads the source
-
-    sealed class GatedMemoryManager(byte[] data) : MemoryManager<byte>
-    {
-        readonly ManualResetEventSlim gate = new(false);
-        int calls;
-        int active;
-
-        public bool FirstCallEntered => Volatile.Read(ref calls) > 0;
-        public int Active => Volatile.Read(ref active);
-
-        public void Release() => gate.Set();
-
-        // the Memory property asks GetSpan for the length, which would count as the first call
-        public Memory<byte> CreateMemory() => CreateMemory(data.Length);
-
-        public override Span<byte> GetSpan()
-        {
-            var call = Interlocked.Increment(ref calls);
-            if (call == 1)
-            {
-                // the first worker stays inside the source until the test lets it go
-                Interlocked.Increment(ref active);
-                try
-                {
-                    gate.Wait(TimeSpan.FromSeconds(30));
-                }
-                finally
-                {
-                    Interlocked.Decrement(ref active);
-                }
-                return data;
-            }
-
-            throw new IOException("source is broken");
-        }
-
-        public override MemoryHandle Pin(int elementIndex = 0) => throw new NotSupportedException();
-        public override void Unpin() { }
-        protected override void Dispose(bool disposing) { }
-    }
-
-    [Fact]
-    public async Task LZ4_ParallelCompress_Failure_WaitsForEveryWorker()
-    {
-        var manager = new GatedMemoryManager(Random(2 * 1024 * 1024, 33));
-        var options = LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB };
-
-        var output = new Pipe();
-        _ = ReadAllAsync(output.Reader);
-        var compressing = LZ4.CompressAsync((ReadOnlyMemory<byte>)manager.CreateMemory(), output.Writer, options, maxDegreeOfParallelism: 2).AsTask();
-
-        // the second worker has failed by now, the first one is still inside the source
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
-        Assert.True(manager.FirstCallEntered);
-        Assert.Equal(1, manager.Active);
-        Assert.False(compressing.IsCompleted);
-
-        manager.Release();
-        await Assert.ThrowsAsync<IOException>(() => compressing.WaitAsync(TimeSpan.FromSeconds(20)));
-        Assert.Equal(0, manager.Active);
-        await output.Writer.CompleteAsync();
-    }
-
     // ---- 3. a prefix of an abandoned multithreaded frame stays valid until its workers are gone
 
     [Fact]
@@ -339,9 +275,7 @@ public class ReviewRegressionTest3
         foreach (var size in new[] { 0, 1000, 2 * 1024 * 1024 })
         {
             yield return new object[] { "lz4-compress", size };
-            yield return new object[] { "lz4-compress-parallel", size };
             yield return new object[] { "lz4-decompress", size };
-            yield return new object[] { "lz4-decompress-parallel", size };
             yield return new object[] { "zstd-compress", size };
             yield return new object[] { "zstd-decompress", size };
         }
@@ -350,13 +284,10 @@ public class ReviewRegressionTest3
     static ValueTask Run(string operation, int size, PipeWriter writer)
     {
         var data = Random(size, 38);
-        var parallelFrame = LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockIndependent, BlockSizeID = BlockSizeId.Max64KB };
         return operation switch
         {
             "lz4-compress" => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, writer),
-            "lz4-compress-parallel" => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, writer, maxDegreeOfParallelism: 2),
             "lz4-decompress" => LZ4.DecompressAsync((ReadOnlyMemory<byte>)LZ4.Compress(data), writer),
-            "lz4-decompress-parallel" => LZ4.DecompressAsync((ReadOnlyMemory<byte>)LZ4.Compress(data, parallelFrame), writer, maxDegreeOfParallelism: 2),
             "zstd-compress" => Zstandard.CompressAsync((ReadOnlyMemory<byte>)data, writer),
             "zstd-decompress" => Zstandard.DecompressAsync((ReadOnlyMemory<byte>)Zstandard.Compress(data), writer),
             _ => throw new ArgumentException(operation),

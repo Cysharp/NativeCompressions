@@ -132,54 +132,7 @@ public class ReviewRegressionTest5 : IDisposable
         }
     }
 
-    // ---- 2. blocks that wait for an earlier block must not pile up without limit
-
-    sealed class GatedMemoryManager(byte[] data) : MemoryManager<byte>
-    {
-        readonly ManualResetEventSlim gate = new(false);
-        int calls;
-
-        public int Calls => Volatile.Read(ref calls);
-
-        public void Release() => gate.Set();
-
-        public Memory<byte> CreateMemory() => CreateMemory(data.Length);
-
-        public override Span<byte> GetSpan()
-        {
-            if (Interlocked.Increment(ref calls) == 1)
-            {
-                gate.Wait(TimeSpan.FromSeconds(30)); // the first block is slow
-            }
-            return data;
-        }
-
-        public override MemoryHandle Pin(int elementIndex = 0) => throw new NotSupportedException();
-        public override void Unpin() { }
-        protected override void Dispose(bool disposing) { }
-    }
-
-    [Fact]
-    public async Task LZ4_ParallelCompress_SlowFirstBlock_LimitsBlocksInFlight()
-    {
-        var data = Compressible(32 * 1024 * 1024, 75);
-        var manager = new GatedMemoryManager(data);
-        var options = LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB };
-
-        var compressing = Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)manager.CreateMemory(), w, options, maxDegreeOfParallelism: 2));
-
-        await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
-
-        // 512 blocks in total. Without a limit the second worker goes through all of them meanwhile.
-        Assert.InRange(manager.Calls, 1, 16);
-        Assert.False(compressing.IsCompleted);
-
-        manager.Release();
-        var compressed = await compressing.WaitAsync(TimeSpan.FromSeconds(60));
-        Assert.Equal(data, LZ4.Decompress(compressed));
-    }
-
-    // ---- 2, follow-up. a producer that fails must end the operation, the limit must not make the others wait forever
+    // ---- a source or destination that fails must end the operation with that failure
 
     sealed class FailureCounter(int failAtCall)
     {
@@ -235,14 +188,14 @@ public class ReviewRegressionTest5 : IDisposable
     [InlineData(64 * 1024, 7)]
     [InlineData(16 * 1024, 5)] // blocks span segments
     [InlineData(4 * 1024 * 1024, 1)] // one segment
-    public async Task LZ4_ParallelCompress_Sequence_ProducerFailure_Ends(int segmentSize, int failAtCall)
+    public async Task LZ4_CompressAsync_Sequence_SourceFailure_Ends(int segmentSize, int failAtCall)
     {
         var data = Compressible(4 * 1024 * 1024, 78);
         var source = FailingSequence(data, segmentSize, failAtCall);
         var options = LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB };
 
         var output = new Pipe(new PipeOptions(pauseWriterThreshold: 0));
-        var compressing = LZ4.CompressAsync(source, output.Writer, options, maxDegreeOfParallelism: 2).AsTask();
+        var compressing = LZ4.CompressAsync(source, output.Writer, options).AsTask();
 
         await Assert.ThrowsAsync<IOException>(() => compressing.WaitAsync(TimeSpan.FromSeconds(20)));
     }
@@ -251,14 +204,14 @@ public class ReviewRegressionTest5 : IDisposable
     [InlineData(1)]
     [InlineData(2)]
     [InlineData(7)]
-    public async Task LZ4_ParallelCompress_Memory_ProducerFailure_Ends(int failAtCall)
+    public async Task LZ4_CompressAsync_Memory_SourceFailure_Ends(int failAtCall)
     {
         var data = Compressible(4 * 1024 * 1024, 79);
         var source = new FailingMemoryManager(data, 0, data.Length, new FailureCounter(failAtCall)).CreateMemory();
         var options = LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB };
 
         var output = new Pipe(new PipeOptions(pauseWriterThreshold: 0));
-        var compressing = LZ4.CompressAsync((ReadOnlyMemory<byte>)source, output.Writer, options, maxDegreeOfParallelism: 2).AsTask();
+        var compressing = LZ4.CompressAsync((ReadOnlyMemory<byte>)source, output.Writer, options).AsTask();
 
         await Assert.ThrowsAsync<IOException>(() => compressing.WaitAsync(TimeSpan.FromSeconds(20)));
     }
@@ -267,7 +220,7 @@ public class ReviewRegressionTest5 : IDisposable
     [InlineData(1)]
     [InlineData(2)]
     [InlineData(4)]
-    public async Task LZ4_ParallelCompress_File_DestinationFailure_Ends(int failAtWrite)
+    public async Task LZ4_CompressAsync_File_DestinationFailure_Ends(int failAtWrite)
     {
         var path = Path.Combine(tempDir, $"source-{failAtWrite}.bin");
         File.WriteAllBytes(path, Compressible(4 * 1024 * 1024, 80));
@@ -275,14 +228,12 @@ public class ReviewRegressionTest5 : IDisposable
 
         using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1, FileOptions.Asynchronous);
         var writer = new FailingWritePipeWriter(failAtWrite);
-        var compressing = LZ4.CompressAsync(file.SafeFileHandle, writer, options, maxDegreeOfParallelism: 2).AsTask();
+        var compressing = LZ4.CompressAsync(file.SafeFileHandle, writer, options).AsTask();
 
         await Assert.ThrowsAsync<IOException>(() => compressing.WaitAsync(TimeSpan.FromSeconds(20)));
     }
 
     // Holds the first body write until the operation is cancelled, and makes the cancellation itself slow.
-    // The producers that wait are cancelled and end while the producer that failed is still inside Cancel,
-    // so their cancellations are observed before its exception.
     sealed class StallingPipeWriter : PipeWriter
     {
         byte[] current = [];
@@ -308,17 +259,15 @@ public class ReviewRegressionTest5 : IDisposable
     [InlineData("sequence", 6)]
     [InlineData("sequence", 8)]
     [InlineData("memory", 4)]
-    public async Task LZ4_ParallelCompress_ProducerFailure_ReportsItsExceptionNotTheCancellation(string source, int failAtCall)
+    public async Task LZ4_CompressAsync_SourceFailure_ReportsItsException(string source, int failAtCall)
     {
         var data = Compressible(4 * 1024 * 1024, 81);
         var options = LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB };
         var writer = new StallingPipeWriter();
 
-        // The writer never finishes the first block, so the producers fill the blocks in flight.
-        // One of them fails while the other one waits or is about to.
         var compressing = source == "sequence"
-            ? LZ4.CompressAsync(FailingSequence(data, 64 * 1024, failAtCall), writer, options, maxDegreeOfParallelism: 2).AsTask()
-            : LZ4.CompressAsync((ReadOnlyMemory<byte>)new FailingMemoryManager(data, 0, data.Length, new FailureCounter(failAtCall)).CreateMemory(), writer, options, maxDegreeOfParallelism: 2).AsTask();
+            ? LZ4.CompressAsync(FailingSequence(data, 64 * 1024, failAtCall), writer, options).AsTask()
+            : LZ4.CompressAsync((ReadOnlyMemory<byte>)new FailingMemoryManager(data, 0, data.Length, new FailureCounter(failAtCall)).CreateMemory(), writer, options).AsTask();
 
         await Assert.ThrowsAsync<IOException>(() => compressing.WaitAsync(TimeSpan.FromSeconds(20)));
     }
@@ -348,7 +297,7 @@ public class ReviewRegressionTest5 : IDisposable
         }
     }
 
-    // ---- 3. parallel compression of a file that shrinks must fail
+    // ---- 3. compression of a file that shrinks must fail
 
     sealed class TruncatingPipeWriter(FileStream file, long length) : PipeWriter
     {
@@ -383,13 +332,11 @@ public class ReviewRegressionTest5 : IDisposable
         }
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    public async Task LZ4_CompressFile_FileShrinks_NeverSucceedsWithBrokenFrame(int dop)
+    [Fact]
+    public async Task LZ4_CompressFile_FileShrinks_NeverSucceedsWithBrokenFrame()
     {
         var content = Random(2 * 1024 * 1024, 76);
-        var path = Path.Combine(tempDir, $"shrinking-{dop}.bin");
+        var path = Path.Combine(tempDir, "shrinking.bin");
         File.WriteAllBytes(path, content);
 
         using var file = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite, 1, FileOptions.Asynchronous);
@@ -397,7 +344,7 @@ public class ReviewRegressionTest5 : IDisposable
 
         try
         {
-            await LZ4.CompressAsync(file.SafeFileHandle, writer, maxDegreeOfParallelism: dop).AsTask().WaitAsync(TimeSpan.FromSeconds(20));
+            await LZ4.CompressAsync(file.SafeFileHandle, writer).AsTask().WaitAsync(TimeSpan.FromSeconds(20));
         }
         catch (LZ4Exception)
         {
@@ -414,10 +361,8 @@ public class ReviewRegressionTest5 : IDisposable
 
     // ---- 4. decoded data goes out before the decoder waits for more input
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    public async Task LZ4_DecompressAsync_DeliversFlushedBlockOfOpenFrame(int dop)
+    [Fact]
+    public async Task LZ4_DecompressAsync_DeliversFlushedBlockOfOpenFrame()
     {
         var text = Utf8("hello");
         using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { AutoFlush = true, BlockMode = BlockMode.BlockIndependent });
@@ -428,7 +373,7 @@ public class ReviewRegressionTest5 : IDisposable
         var written = encoder.Compress(text, buffer); // header and one block, the frame stays open
         await input.Writer.WriteAsync(buffer.AsMemory(0, written));
 
-        var decompressing = LZ4.DecompressAsync(input.Reader, output.Writer, maxDegreeOfParallelism: dop).AsTask();
+        var decompressing = LZ4.DecompressAsync(input.Reader, output.Writer).AsTask();
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var received = new MemoryStream();
@@ -470,10 +415,8 @@ public class ReviewRegressionTest5 : IDisposable
         public override void Complete(Exception? exception = null) => inner.Complete(exception);
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    public async Task LZ4_DecompressAsync_CancelPendingRead_Throws(int dop)
+    [Fact]
+    public async Task LZ4_DecompressAsync_CancelPendingRead_Throws()
     {
         var data = Compressible(300_000, 77);
         var compressed = LZ4.Compress(data, LZ4CompressionOptions.Default with
@@ -493,7 +436,7 @@ public class ReviewRegressionTest5 : IDisposable
             var reader = new CancellingPipeReader(input.Reader, cancelAt);
             try
             {
-                var result = await Collect(w => LZ4.DecompressAsync(reader, w, maxDegreeOfParallelism: dop)).WaitAsync(TimeSpan.FromSeconds(5));
+                var result = await Collect(w => LZ4.DecompressAsync(reader, w)).WaitAsync(TimeSpan.FromSeconds(5));
                 Assert.Equal(data, result); // the frame needed fewer reads than that
             }
             catch (OperationCanceledException)
@@ -506,8 +449,8 @@ public class ReviewRegressionTest5 : IDisposable
             }
         }
 
-        // the header, the blocks and the footer are read in at least three reads
-        Assert.True(cancelled >= 3, $"only {cancelled} of the cancelled reads were reported");
+        // the whole frame is available, so it may arrive in a single read
+        Assert.True(cancelled >= 1, $"only {cancelled} of the cancelled reads were reported");
     }
 
     // ---- 6. a FileStream positioned past its end is an empty source

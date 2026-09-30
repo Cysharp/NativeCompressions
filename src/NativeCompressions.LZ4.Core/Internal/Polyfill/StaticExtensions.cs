@@ -35,14 +35,6 @@ namespace NativeCompressions.Internal
             }
         }
 
-        extension(ThreadPool)
-        {
-            public static void UnsafeQueueUserWorkItem(IThreadPoolWorkItem workItem, bool preferLocal)
-            {
-                ThreadPool.QueueUserWorkItem(_ => workItem.Execute());
-            }
-        }
-
 #if NETSTANDARD2_0
         extension(RuntimeHelpers)
         {
@@ -55,14 +47,6 @@ namespace NativeCompressions.Internal
             public ReadOnlySpan<T> FirstSpan => sequence.First.Span;
         }
 #endif
-    }
-}
-
-namespace System.Threading
-{
-    internal interface IThreadPoolWorkItem
-    {
-        void Execute();
     }
 }
 

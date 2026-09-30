@@ -120,26 +120,10 @@ public class Lz4SimpleDecode
     }
 
     [Benchmark]
-    public async Task<int> NativeCompressions_LZ4_DecompressSingleThread()
+    public async Task<int> NativeCompressions_LZ4_DecompressAsync()
     {
         writer.ResetWrittenCount();
-        await NativeCompressions.LZ4.DecompressAsync(srcNativeCompressionsMultithread, writer, maxDegreeOfParallelism: 1);
-        return (int)writer.WrittenCount;
-    }
-
-    [Benchmark]
-    public async Task<int> NativeCompressions_LZ4_DecompressMultiThread_Four()
-    {
-        writer.ResetWrittenCount();
-        await NativeCompressions.LZ4.DecompressAsync(srcNativeCompressionsMultithread, writer, maxDegreeOfParallelism: 4);
-        return (int)writer.WrittenCount;
-    }
-
-    [Benchmark]
-    public async Task<int> NativeCompressions_LZ4_DecompressMultiThread_ProcessorCount()
-    {
-        writer.ResetWrittenCount();
-        await NativeCompressions.LZ4.DecompressAsync(srcNativeCompressionsMultithread, writer, maxDegreeOfParallelism: Environment.ProcessorCount);
+        await NativeCompressions.LZ4.DecompressAsync(srcNativeCompressionsMultithread, writer);
         return (int)writer.WrittenCount;
     }
 }

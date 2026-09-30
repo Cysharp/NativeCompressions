@@ -56,12 +56,7 @@ The solution uses a multi-project structure with clear separation of concerns:
 2. **Streaming API Design**: Three levels of APIs
    - **Simple API**: `byte[]` to `byte[]` conversion (e.g., `LZ4.Compress()`)
    - **Low-level Streaming**: `LZ4Encoder`/`LZ4Decoder` for non-allocating streaming
-   - **High-level Streaming**: `CompressAsync`/`DecompressAsync` with parallel processing support
-
-3. **Parallel Processing**: Automatic parallelization for large data (>1MB)
-   - Uses `Environment.ProcessorCount` by default
-   - Configurable via `maxDegreeOfParallelism` parameter
-   - Only works with `BlockIndependent` mode for decompression
+   - **High-level Streaming**: `CompressAsync`/`DecompressAsync` over `PipeReader`/`PipeWriter`, every source type is turned into a `PipeReader` and runs one shared core
 
 ### Native Library Management
 - Native libraries stored in submodules: `/lz4` and `/zstd`

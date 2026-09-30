@@ -54,7 +54,7 @@ public class SilesiaMultiThread_Lz4 : CompressionBenchmarkBase<int>
     protected override int CompressCore(byte[] source, byte[] destination, int maxDegreeOfParallelism)
     {
         var writer = new ArrayPipeWriter(destination);
-        NativeCompressions.LZ4.CompressAsync(source, writer, maxDegreeOfParallelism: maxDegreeOfParallelism).GetAwaiter().GetResult();
+        NativeCompressions.LZ4.CompressAsync(source, writer).GetAwaiter().GetResult();
         return writer.WrittenCount;
     }
 

@@ -205,88 +205,7 @@ public class ReviewRegressionTest4
         Assert.True(expected.AsSpan().SequenceEqual(CompressAll(encoder, data)));
     }
 
-    // ---- 2. a cancellation callback that throws must not end the operation before its workers
-
-    sealed class GatedMemoryManager(byte[] data, int blockedCall) : MemoryManager<byte>
-    {
-        readonly ManualResetEventSlim gate = new(false);
-        int calls;
-        int active;
-
-        public int Active => Volatile.Read(ref active);
-
-        public void Release() => gate.Set();
-
-        // the Memory property asks GetSpan for the length, which would count as a call
-        public Memory<byte> CreateMemory() => CreateMemory(data.Length);
-
-        public override Span<byte> GetSpan()
-        {
-            if (Interlocked.Increment(ref calls) == blockedCall)
-            {
-                Interlocked.Increment(ref active);
-                try
-                {
-                    gate.Wait(TimeSpan.FromSeconds(30));
-                }
-                finally
-                {
-                    Interlocked.Decrement(ref active);
-                }
-            }
-            return data;
-        }
-
-        public override MemoryHandle Pin(int elementIndex = 0) => throw new NotSupportedException();
-        public override void Unpin() { }
-        protected override void Dispose(bool disposing) { }
-    }
-
-    // Fails the first body write. Before that it registers a callback that throws on the token it was given,
-    // and waits until a worker is inside the source.
-    sealed class FailingPipeWriter(Func<bool> workerIsInsideSource) : PipeWriter
-    {
-        byte[] current = [];
-
-        public override Memory<byte> GetMemory(int sizeHint = 0) => current = new byte[Math.Max(sizeHint, 1)];
-        public override Span<byte> GetSpan(int sizeHint = 0) => GetMemory(sizeHint).Span;
-        public override void Advance(int bytes) { }
-        public override void CancelPendingFlush() { }
-        public override void Complete(Exception? exception = null) { }
-        public override ValueTask<FlushResult> FlushAsync(CancellationToken cancellationToken = default) => new(new FlushResult(false, false));
-
-        public override async ValueTask<FlushResult> WriteAsync(ReadOnlyMemory<byte> source, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.Register(() => throw new InvalidOperationException("callback failed"));
-
-            for (var i = 0; i < 1000 && !workerIsInsideSource(); i++)
-            {
-                await Task.Delay(10);
-            }
-            throw new IOException("destination is broken");
-        }
-    }
-
-    [Fact]
-    public async Task LZ4_ParallelCompress_ThrowingCancellationCallback_WaitsForEveryWorker()
-    {
-        // the first two blocks are produced, a worker is held inside the source on its way to the third
-        var manager = new GatedMemoryManager(Random(2 * 1024 * 1024, 54), blockedCall: 3);
-        var options = LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB };
-        var writer = new FailingPipeWriter(() => manager.Active == 1);
-
-        var compressing = LZ4.CompressAsync((ReadOnlyMemory<byte>)manager.CreateMemory(), writer, options, maxDegreeOfParallelism: 2).AsTask();
-
-        await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
-        Assert.Equal(1, manager.Active);
-        Assert.False(compressing.IsCompleted);
-
-        manager.Release();
-        await Assert.ThrowsAsync<IOException>(() => compressing.WaitAsync(TimeSpan.FromSeconds(20)));
-        Assert.Equal(0, manager.Active);
-    }
-
-    // ---- 3. buffers taken from the queue go back to the pool when the destination fails
+    // ---- 3. buffers rented by the library go back to the pool when the destination fails
 
     sealed class ArrayPoolListener : EventListener
     {
@@ -356,36 +275,6 @@ public class ReviewRegressionTest4
             if (cancel) return new(new FlushResult(isCanceled: true, isCompleted: false));
             throw new IOException("destination is broken");
         }
-    }
-
-    [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task LZ4_Parallel_DestinationFailure_ReturnsRentedBuffers(bool decompress, bool cancel)
-    {
-        var data = Compressible(2 * 1024 * 1024, 55);
-        var options = LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB, BlockMode = BlockMode.BlockIndependent };
-        var compressed = LZ4.Compress(data, options);
-
-        using var listener = new ArrayPoolListener();
-        var writer = new BrokenBodyPipeWriter(cancel);
-        var operation = decompress
-            ? LZ4.DecompressAsync((ReadOnlyMemory<byte>)compressed, writer, maxDegreeOfParallelism: 2).AsTask()
-            : LZ4.CompressAsync((ReadOnlyMemory<byte>)data, writer, options, maxDegreeOfParallelism: 2).AsTask();
-
-        if (cancel)
-        {
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation.WaitAsync(TimeSpan.FromSeconds(20)));
-        }
-        else
-        {
-            await Assert.ThrowsAsync<IOException>(() => operation.WaitAsync(TimeSpan.FromSeconds(20)));
-        }
-
-        Assert.True(listener.Rented > 0);
-        Assert.Empty(listener.OutstandingSizes);
     }
 
     // ---- recheck 2, 1. a failed Reset(options) must leave the parameters it had before

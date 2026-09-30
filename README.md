@@ -3,13 +3,13 @@ NativeCompressions
 <!-- [![CI](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml/badge.svg)](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml)
 [![NuGet](https://img.shields.io/nuget/v/NativeCompressions)](https://www.nuget.org/packages/NativeCompressions) -->
 
-NativeCompressions provides native library bindings, streaming processing, and multi-threading support for [LZ4](https://github.com/lz4/lz4) with its excellent decompression speed, and [Zstandard](https://github.com/facebook/zstd) with its superior balance of compression ratio and performance, and new [OpenZL](https://github.com/facebook/openzl) novel data compression framework.
+NativeCompressions provides native library bindings and streaming processing for [LZ4](https://github.com/lz4/lz4) with its excellent decompression speed, and [Zstandard](https://github.com/facebook/zstd) with its superior balance of compression ratio and performance, and new [OpenZL](https://github.com/facebook/openzl) novel data compression framework.
 
 ![](https://github.com/user-attachments/assets/abd4f2fe-9737-422d-aeb9-d2b222b13b69)
 
 > Encode/Decode [silesia.tar](https://en.wikipedia.org/wiki/Silesia_corpus) corpus(202.13MB)
 
-Compression is crucial for any application, but .NET has had limited options. NativeCompressions builds state-of-the-art algorithms (LZ4, Zstandard) with allocation-free, stream-less streaming APIs. Furthermore, by leveraging modern C# APIs (`Span<T>`, `RandomAccess`, `PipeReader/Writer`) to provide high-level multi-threading APIs, we achieve high-performance compression in any environment.
+Compression is crucial for any application, but .NET has had limited options. NativeCompressions builds state-of-the-art algorithms (LZ4, Zstandard) with allocation-free, stream-less streaming APIs. Furthermore, by leveraging modern C# APIs (`Span<T>`, `RandomAccess`, `PipeReader/Writer`) to provide high-level asynchronous APIs, we achieve high-performance compression in any environment.
 
 We chose native bindings over Pure C# implementation because compression library performance depends not only on algorithms but also on implementation. LZ4 and Zstandard are actively developed with performance improvements in every release. It's impossible to keep synchronizing advanced memory operations and CPU architecture optimizations with .NET ports. To continuously provide the best and latest performance, native bindings are necessary. Note that .NET's standard `System.IO.Compression.BrotliEncoder/Decoder` links [brotli](https://github.com/dotnet/runtime/tree/main/src/native/external/brotli) to [libSystem.IO.Compression.Native](https://github.com/dotnet/runtime/tree/main/src/native/libs/System.IO.Compression.Native), also DeflateStream/GZipStream uses native zlib (from .NET 9, it's [zlib-ng](https://github.com/zlib-ng/zlib-ng)), meaning we follow the same adoption criteria as .NET official.
 
@@ -141,18 +141,16 @@ using var fs = new NetworkStream(socket);
 await LZ4.CompressAsync(source, PipeWriter.Create(fs));
 ```
 
-When source is `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, or `SafeFileHandle`, you can specify `int? maxDegreeOfParallelism`. When it is 2 or greater, parallel processing occurs when the target source is 1MB or larger. null (default) and 1 always result in sequential processing. Parallel compression cannot produce a content checksum, so combining it with `ContentChecksumFlag` throws `NotSupportedException`.
+When source is `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, or `SafeFileHandle`, the length is known up front. It is recorded in the frame header as the content size, and the block size is chosen from it. `Stream` (other than `MemoryStream` and `FileStream`) and `PipeReader` have no known length, so the frame has no content size and the default block size is used.
 
 ```csharp
-// Parallel Compression from File to File
+// Compression from File to File
 using SafeFileHandle sourceHandle = File.OpenHandle("foo.bin");
 using var dest = new FileStream("foo.lz4", FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
-await LZ4.CompressAsync(sourceHandle, PipeWriter.Create(dest), maxDegreeOfParallelism: Environment.ProcessorCount);
+await LZ4.CompressAsync(sourceHandle, PipeWriter.Create(dest));
 ```
 
-When source is a file, passing `SafeFileHandle` enables parallel processing and can expect higher performance than `FileStream`. `Stream` or `PipeReader` doesn't perform parallel processing because the maximum source length is unknown, preventing estimation of appropriate block size for division.
-
-> For ASP.NET servers, we recommend always specifying maxDegreeOfParallelism as 1. Since the server itself processes requests in parallel, increasing CPU load may reduce overall throughput. Parallel processing will be highly effective in client applications or CLI batch processing.
+Compression and decompression run on the calling task, one block at a time. Output that is ready is flushed to the destination before more input is awaited, so the APIs work over a connection where the other side waits for a reply.
 
 Similarly for Decompress, source can be `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, `SafeFileHandle`, `Stream`, `PipeReader`, and destination can be `PipeWriter`.
 
@@ -164,9 +162,7 @@ await LZ4.DecompressAsync(source, PipeWriter.Create(ms));
 var decompressed = ms.ToArray();
 ```
 
-Decompress parallel processing occurs when the LZ4 frame is compressed with `BlockIndependent` and `maxDegreeOfParallelism` is 2 or greater. null (default) and 1 decode sequentially. In NativeCompressions, normal LZ4 compression processes with `BlockLinked`, but only compresses as `BlockIndependent` when parallel processing in `CompressAsync`.
-
-Similar to Compress, explicitly specifying maxDegreeOfParallelism as 1 is recommended for ASP.NET servers.
+Concatenated frames and skippable frames are all decoded, the same as `LZ4.Decompress` and `LZ4Stream`. Invalid data and input that ends inside a frame throw `LZ4Exception`.
 
 ### Stream
 Compatible with System.IO.Stream for easy integration:
@@ -253,7 +249,7 @@ TODO
 
 Zstandard
 ---
-It is generally similar to the LZ4 API. The `Zstandard` class has static methods, and there are `ZstandardEncoder` and `ZstandardDecoder` as Streamless-streaming APIs. `CompressAsync`/`DecompressAsync` with `PipeReader`/`PipeWriter` are provided as well. Unlike LZ4, they are not parallelized.
+It is generally similar to the LZ4 API. The `Zstandard` class has static methods, and there are `ZstandardEncoder` and `ZstandardDecoder` as Streamless-streaming APIs. `CompressAsync`/`DecompressAsync` with `PipeReader`/`PipeWriter` are provided as well.
 
 `ZstandardEncoder` and `ZstandardDecoder` API is completely same as `BrotliEncoder`/`BrotliDecoder` unlike `LZ4Encoder/Decoder`. In other words, Compress returns an `OperationStatus`, which contains `int bytesConsumed`, `int bytesWritten`, and `bool isFinalBlock`.
 
@@ -317,10 +313,6 @@ static void ThrowIfError(ZL_Result_size_t_u result)
     }
 }
 ```
-
-Telemetry
----
-TODO
 
 Unity
 ---

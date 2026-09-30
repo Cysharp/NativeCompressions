@@ -176,23 +176,22 @@ public static class FuzzTargets
         var segmentSize = 1 + (data[0] % 64) * 32;
         var sequence = ToSequence(data.ToArray(), segmentSize);
 
-        foreach (var dop in new[] { 1, 2 })
         {
             byte[]? actual = null;
             try
             {
-                actual = Collect(w => LZ4.DecompressAsync(sequence, w, maxDegreeOfParallelism: dop));
+                actual = Collect(w => LZ4.DecompressAsync(sequence, w));
             }
             catch (LZ4Exception) { }
 
             if (expected != null)
             {
-                Check(actual != null, $"DecompressAsync(dop {dop}) rejected input that Decompress accepted");
-                Check(expected.AsSpan().SequenceEqual(actual), $"DecompressAsync(dop {dop}) differs from one-shot");
+                Check(actual != null, "DecompressAsync rejected input that Decompress accepted");
+                Check(expected.AsSpan().SequenceEqual(actual), "DecompressAsync differs from one-shot");
             }
             else
             {
-                Check(actual == null, $"DecompressAsync(dop {dop}) accepted input that Decompress rejected");
+                Check(actual == null, "DecompressAsync accepted input that Decompress rejected");
             }
         }
     }
@@ -258,11 +257,10 @@ public static class FuzzTargets
             Check(result.ToArray().AsSpan().SequenceEqual(payload), "LZ4Stream round trip differs");
         }
 
-        // async, sequential and parallel
-        foreach (var dop in new[] { 1, 2 })
+        // async
         {
-            var viaAsync = Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 1000), w, maxDegreeOfParallelism: dop));
-            Check(viaAsync.AsSpan().SequenceEqual(payload), $"DecompressAsync(dop {dop}) round trip differs");
+            var viaAsync = Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 1000), w));
+            Check(viaAsync.AsSpan().SequenceEqual(payload), "DecompressAsync round trip differs");
         }
     }
 

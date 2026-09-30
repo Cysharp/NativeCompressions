@@ -1,657 +1,92 @@
-﻿using Microsoft.Win32.SafeHandles;
+using Microsoft.Win32.SafeHandles;
 using NativeCompressions.Internal;
 using System.Buffers;
-using System.Diagnostics;
 using System.IO.Pipelines;
-using System.Runtime.InteropServices;
-using System.Threading.Channels;
 
 namespace NativeCompressions;
 
 public static partial class LZ4
 {
-    const int AllowParallelCompressThreshold = 1024 * 1024; // 1MB
+    // Every CompressAsync overload turns its source into a PipeReader and runs CompressCoreAsync, so they share
+    // one behavior. Sources with a known length (memory, sequence, file) record it in the frame header and
+    // get a block size chosen for that length.
 
     static readonly StreamPipeReaderOptions LeaveOpenPipeReaderOptions = new StreamPipeReaderOptions(leaveOpen: true);
 
-    // allow multithread(known size, random-access): ReadOnlyMemory, ReadOnlySequence, SafeFileHandle
-    // single thread only(unknown size can't determine block-size): Stream, PipeReader
-
-    public static async ValueTask CompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static async ValueTask CompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var newOptions = options ?? LZ4CompressionOptions.Default;
-        ThrowIfParallelWithContentChecksum(newOptions, maxDegreeOfParallelism);
-
-        newOptions = newOptions with
+        var reader = PipeReader.Create(new ReadOnlySequence<byte>(source));
+        try
         {
-            AutoFlush = true, // set auto-flush
-            ContentSize = (ulong)source.Length,
-        };
-
-        if (maxDegreeOfParallelism == null || maxDegreeOfParallelism == 1 || source.Length < AllowParallelCompressThreshold)
-        {
-            // multi-block, single-thread
-
-            // if default block size, determine block size from source length.
-            if (newOptions.BlockSizeID == BlockSizeId.Default)
-            {
-                newOptions = newOptions with
-                {
-                    BlockSizeID = DetermineBlockSize(source.Length, isMultiThread: false)
-                };
-            }
-
-            var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
-            using var encoder = new LZ4Encoder(newOptions);
-
-            while (!source.IsEmpty)
-            {
-                var count = Math.Min(source.Length, actualChunkSize); // compress per chunk-size
-                var buffer = destination.GetSpan(encoder.GetMaxCompressedLength(count, includingHeader: true, includingFooter: false));
-
-                var written = encoder.Compress(source.Span.Slice(0, count), buffer);
-                destination.Advance(written);
-
-                await destination.FlushAndCheckAsync(cancellationToken);
-                source = source.Slice(count);
-            }
-
-            // `AutoFlush = true` so no need to care about encoder's internal buffer, but an empty source writes the header here
-            var lastBuffer = destination.GetSpan(encoder.GetMaxCompressedLength(0));
-            var lastWritten = encoder.Close(lastBuffer);
-            destination.Advance(lastWritten);
-            await destination.FlushAndCheckAsync(cancellationToken);
+            await CompressCoreAsync(reader, source.Length, destination, options ?? LZ4CompressionOptions.Default, cancellationToken);
         }
-        else
+        finally
         {
-            // multi-block, multi-thread
-
-            newOptions = newOptions with
-            {
-                BlockSizeID = (newOptions.BlockSizeID == BlockSizeId.Default)
-                    ? DetermineBlockSize(source.Length, isMultiThread: true)
-                    : newOptions.BlockSizeID,
-                BlockMode = BlockMode.BlockIndependent // for parallel
-            };
-
-            var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
-
-            var threadCount = maxDegreeOfParallelism.Value;
-            // modify thread count for avoid too many buffer.
-            var totalBlocks = (int)(((long)source.Length + actualChunkSize - 1) / actualChunkSize); // ceiling, long to avoid int overflow
-            threadCount = Math.Min(threadCount, totalBlocks);
-
-            var capacity = threadCount * 2;
-
-            var outputChannel = Channel.CreateBounded<CompressionBuffer>(new BoundedChannelOptions(capacity)
-            {
-                SingleWriter = false,
-                SingleReader = true,
-                FullMode = BoundedChannelFullMode.Wait
-            });
-
-            using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            using var inFlight = new SemaphoreSlim(capacity, capacity);
-
-            // write header at first. NOTE: can't reuse Encoder because not called LZ4F_compressEnd(Close).
-            using (var headerEncoder = new LZ4Encoder(newOptions) { IsWriteHeader = true })
-            {
-                var dest = destination.GetSpan(MaxFrameHeaderLength); // LZ4F_compressBegin requires room for the largest header
-                var written = headerEncoder.Compress([], dest);
-                destination.Advance(written);
-                await destination.FlushAndCheckAsync(cancellationToken);
-            }
-
-            // producer: slice buffer and compress, send compressed buffer.
-            var bufferId = -1;
-
-            var outputProducers = ParallelInvoker.InvokeAsync(threadCount, channelToken.Token, async (producerId, token) =>
-            {
-                using (LZ4ActivitySource.Start("InputCompressLoop", tagKey: "LoopId", tagValue: producerId))
-                {
-                    ActivityContext? linkContext = null;
-                    using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
-                    while (true)
-                    {
-                        await inFlight.WaitAsync(token);
-                        var handedOver = false;
-                        try
-                        {
-                            var id = Interlocked.Increment(ref bufferId);
-                            var offset = unchecked(id * actualChunkSize);
-                            if (offset < 0) break; // overflow
-
-                            var remaining = source.Length - offset;
-                            if (remaining <= 0) break;
-
-                            var src = source.Span.Slice(offset, Math.Min(remaining, actualChunkSize));
-                            var bufferLength = encoder.GetMaxCompressedLength(src.Length, includingHeader: false, includingFooter: false);
-                            var dest = ArrayPool<byte>.Shared.Rent(bufferLength);
-
-                            try
-                            {
-                                int written;
-                                using (LZ4ActivitySource.Start("Compress", ref linkContext))
-                                {
-                                    written = encoder.Compress(src, dest);
-                                }
-
-                                await outputChannel.Writer.WriteAsync(new CompressionBuffer
-                                {
-                                    CompressedBuffer = dest,
-                                    Count = written,
-                                    Id = id
-                                }, token);
-                                handedOver = true;
-                            }
-                            catch
-                            {
-                                ArrayPool<byte>.Shared.Return(dest, clearArray: false); // not handed to the channel
-                                throw;
-                            }
-                        }
-                        finally
-                        {
-                            if (!handedOver) inFlight.Release(); // the writer releases the blocks it was given
-                        }
-                    }
-                }
-            });
-
-            var outputConsumer = StartWriteCompressedBuffer(destination, newOptions, outputChannel, inFlight, channelToken);
-
-            // producers complete the output channel when done, or fail it so the writer stops;
-            // the first failure cancels everything else so nobody blocks on a full channel.
-            var producersThenComplete = Task.Run(async () =>
-            {
-                try
-                {
-                    await outputProducers;
-                    outputChannel.Writer.Complete(); // all producers done, input is finished.
-                }
-                catch (Exception ex)
-                {
-                    outputChannel.Writer.TryComplete(ex);
-                    throw;
-                }
-            });
-            try
-            {
-                await WhenAllCancelOnFailureAsync(channelToken, producersThenComplete, outputConsumer);
-            }
-            finally
-            {
-                ReturnQueuedBuffers(outputChannel);
-            }
+            await reader.CompleteAsync();
         }
     }
 
-    public static async ValueTask CompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static async ValueTask CompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var newOptions = options ?? LZ4CompressionOptions.Default;
-        ThrowIfParallelWithContentChecksum(newOptions, maxDegreeOfParallelism);
-
-        // not auto-flush
-        newOptions = newOptions with
+        var reader = PipeReader.Create(source);
+        try
         {
-            ContentSize = (ulong)source.Length,
-        };
-
-        if (maxDegreeOfParallelism == null || maxDegreeOfParallelism == 1 || source.Length < AllowParallelCompressThreshold)
-        {
-            // multi-block, single-thread
-
-            // if default block size, determine block size from source length.
-            if (newOptions.BlockSizeID == BlockSizeId.Default)
-            {
-                newOptions = newOptions with
-                {
-                    BlockSizeID = DetermineBlockSize(source.Length, isMultiThread: false)
-                };
-            }
-
-            var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
-            using var encoder = new LZ4Encoder(newOptions);
-
-            foreach (var sequenceBuffer in source)
-            {
-                var src = sequenceBuffer;
-                while (!src.IsEmpty)
-                {
-                    var count = Math.Min(src.Length, actualChunkSize); // compress per chunk-size
-                    var buffer = destination.GetSpan(encoder.GetMaxCompressedLength(count, includingHeader: true, includingFooter: false));
-
-                    var written = encoder.Compress(src.Span.Slice(0, count), buffer);
-                    if (written > 0) // flush PipeWriter when LZ4 buffer flushed
-                    {
-                        destination.Advance(written);
-                        await destination.FlushAndCheckAsync(cancellationToken);
-                    }
-                    src = src.Slice(count);
-                }
-            }
-
-            // for auto-buffer:false, get GetMaxCompressedLength
-            var lastBuffer = destination.GetSpan(encoder.GetMaxCompressedLength(0));
-            var lastWritten = encoder.Close(lastBuffer);
-            destination.Advance(lastWritten);
-            await destination.FlushAndCheckAsync(cancellationToken);
+            await CompressCoreAsync(reader, source.Length, destination, options ?? LZ4CompressionOptions.Default, cancellationToken);
         }
-        else
+        finally
         {
-            // multi-block, multi-thread
-
-            newOptions = newOptions with
-            {
-                BlockSizeID = (newOptions.BlockSizeID == BlockSizeId.Default)
-                        ? DetermineBlockSize(source.Length, isMultiThread: true)
-                        : newOptions.BlockSizeID,
-                BlockMode = BlockMode.BlockIndependent // for parallel
-            };
-
-            var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
-
-            var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
-            // modify thread count for avoid too many buffer.
-            var totalBlocks = (int)((source.Length + actualChunkSize - 1) / actualChunkSize);
-            threadCount = Math.Min(threadCount, totalBlocks);
-
-            var capacity = threadCount * 2;
-
-            var outputChannel = Channel.CreateBounded<CompressionBuffer>(new BoundedChannelOptions(capacity)
-            {
-                SingleWriter = false,
-                SingleReader = true,
-                FullMode = BoundedChannelFullMode.Wait
-            });
-
-            using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            using var inFlight = new SemaphoreSlim(capacity, capacity);
-
-            // write header at first.
-            using (var headerEncoder = new LZ4Encoder(newOptions) { IsWriteHeader = true })
-            {
-                var dest = destination.GetSpan(MaxFrameHeaderLength); // LZ4F_compressBegin requires room for the largest header
-                var written = headerEncoder.Compress([], dest);
-                destination.Advance(written);
-                await destination.FlushAndCheckAsync(cancellationToken);
-            }
-
-            // producer: slice buffer and compress, send compressed buffer.
-            var bufferId = -1;
-            var failure = new FirstFailure();
-            Task outputProducers;
-            async Task CompressBlocksAsync()
-            {
-                using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
-
-                while (true)
-                {
-                    await inFlight.WaitAsync(channelToken.Token);
-                    var id = Interlocked.Increment(ref bufferId);
-                    var offset = id * (long)actualChunkSize; // long for over 2GB sequence
-
-                    var remaining = source.Length - offset;
-                    if (remaining <= 0)
-                    {
-                        inFlight.Release();
-                        break;
-                    }
-
-                    var src = source.Slice(offset, Math.Min(remaining, actualChunkSize));
-                    var bufferLength = encoder.GetMaxCompressedLength((int)src.Length, includingHeader: false, includingFooter: false);
-                    var destBuffer = ArrayPool<byte>.Shared.Rent(bufferLength);
-
-                    try
-                    {
-                        int written;
-                        if (src.IsSingleSegment)
-                        {
-                            written = CompressBlock(encoder, src.First.Span, destBuffer);
-                        }
-                        else
-                        {
-                            // a block that spans segments is gathered first, the destination is sized for one block
-                            var gathered = ArrayPool<byte>.Shared.Rent((int)src.Length);
-                            try
-                            {
-                                src.CopyTo(gathered);
-                                written = CompressBlock(encoder, gathered.AsSpan(0, (int)src.Length), destBuffer);
-                            }
-                            finally
-                            {
-                                ArrayPool<byte>.Shared.Return(gathered, clearArray: false);
-                            }
-                        }
-
-                        await outputChannel.Writer.WriteAsync(new CompressionBuffer
-                        {
-                            CompressedBuffer = destBuffer,
-                            Count = written,
-                            Id = id
-                        }, channelToken.Token);
-                    }
-                    catch
-                    {
-                        ArrayPool<byte>.Shared.Return(destBuffer, clearArray: false); // not handed to the channel
-                        inFlight.Release();
-                        throw;
-                    }
-                }
-            }
-
-            static int CompressBlock(LZ4Encoder encoder, ReadOnlySpan<byte> source, Span<byte> destination)
-            {
-                var written = encoder.Compress(source, destination);
-                written += encoder.Flush(destination.Slice(written)); // without AutoFlush the last block stays buffered
-                return written;
-            }
-
-#if NET8_0_OR_GREATER
-            outputProducers = Parallel.ForAsync(0, threadCount, async (producerId, _) =>
-            {
-                await RunProducerAsync(CompressBlocksAsync, channelToken, failure);
-            });
-#else
-            var producerTasks = new Task[threadCount];
-            for (int i = 0; i < producerTasks.Length; i++)
-            {
-                producerTasks[i] = Task.Run(() => RunProducerAsync(CompressBlocksAsync, channelToken, failure));
-            }
-
-            outputProducers = Task.WhenAll(producerTasks);
-#endif
-
-            var outputConsumer = StartWriteCompressedBuffer(destination, newOptions, outputChannel, inFlight, channelToken);
-
-            // producers complete the output channel when done, or fail it so the writer stops;
-            // the first failure cancels everything else so nobody blocks on a full channel.
-            var producersThenComplete = Task.Run(async () =>
-            {
-                try
-                {
-                    await outputProducers;
-                    outputChannel.Writer.Complete(); // all producers done, input is finished.
-                }
-                catch (Exception ex)
-                {
-                    outputChannel.Writer.TryComplete(ex);
-                    throw;
-                }
-            });
-            try
-            {
-                await WhenAllCancelOnFailureAsync(channelToken, producersThenComplete, outputConsumer);
-            }
-            catch (OperationCanceledException) when (failure.Exception != null)
-            {
-                // a producer failed first and cancelled the rest, report its exception rather than the cancellation
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure.Exception).Throw();
-            }
-            finally
-            {
-                ReturnQueuedBuffers(outputChannel);
-            }
+            await reader.CompleteAsync();
         }
     }
 
-    public static ValueTask CompressAsync(SafeFileHandle source, PipeWriter destination, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static ValueTask CompressAsync(SafeFileHandle source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        return CompressAsync(source, 0, destination, options, maxDegreeOfParallelism, cancellationToken);
+        return CompressAsync(source, 0, destination, options, cancellationToken);
     }
 
-    public static async ValueTask CompressAsync(SafeFileHandle source, long offset, PipeWriter destination, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+    public static async ValueTask CompressAsync(SafeFileHandle source, long offset, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
         if (source == null || source.IsInvalid || source.IsClosed)
         {
             throw new ArgumentException("Invalid file handle", nameof(source));
         }
-
         if (offset < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(offset));
         }
 
-        // same contract on every framework, even where the netstandard2.1 path compresses sequentially
-        var newOptions = options ?? LZ4CompressionOptions.Default;
-        ThrowIfParallelWithContentChecksum(newOptions, maxDegreeOfParallelism);
 #if NETSTANDARD
-        var fs = NonOwningFileStream.Open(source, offset); // not disposed, it does not own the handle
-        await CompressAsync(fs, destination, options, cancellationToken);
-        return;
+        // the handle is read as a stream of unknown length
+        var stream = NonOwningFileStream.Open(source, offset); // not disposed, it does not own the handle
+        long? length = null;
 #else
-        // we can accept `long` length(over 2GB file), don't cast to int. An offset at or past the end is an empty source.
-        long sourceLength = Math.Max(0, RandomAccess.GetLength(source) - offset);
-
-        newOptions = newOptions with
-        {
-            AutoFlush = true,
-            ContentSize = (ulong)sourceLength,
-        };
-
-        if (maxDegreeOfParallelism == null || maxDegreeOfParallelism == 1 || sourceLength < AllowParallelCompressThreshold)
-        {
-            // multi-block, single-thread
-
-            // if default block size, determine block size from source length.
-            if (newOptions.BlockSizeID == BlockSizeId.Default)
-            {
-                newOptions = newOptions with
-                {
-                    BlockSizeID = DetermineBlockSize(sourceLength, isMultiThread: false)
-                };
-            }
-
-            var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
-            using var encoder = new LZ4Encoder(newOptions);
-
-            var srcBuffer = ArrayPool<byte>.Shared.Rent(actualChunkSize);
-            try
-            {
-                var remaining = sourceLength; // sourceLength already excludes the offset
-                while (remaining > 0)
-                {
-                    var count = (int)Math.Min(remaining, actualChunkSize); // compress per chunk-size
-                    var read = await RandomAccess.ReadAsync(source, srcBuffer.AsMemory(0, count), offset + sourceLength - remaining, cancellationToken);
-                    if (read == 0) break; // EOF, the file shrank while reading
-
-                    var buffer = destination.GetSpan(encoder.GetMaxCompressedLength(count, includingHeader: true, includingFooter: false));
-                    var written = encoder.Compress(srcBuffer.AsSpan(0, read), buffer);
-                    destination.Advance(written);
-                    await destination.FlushAndCheckAsync(cancellationToken);
-                    remaining -= read;
-                }
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(srcBuffer, clearArray: false);
-            }
-
-            // `AutoFlush = true` so no need to care about encoder's internal buffer, but an empty source writes the header here
-            var lastBuffer = destination.GetSpan(encoder.GetMaxCompressedLength(0));
-            var lastWritten = encoder.Close(lastBuffer);
-            destination.Advance(lastWritten);
-            await destination.FlushAndCheckAsync(cancellationToken);
-        }
-        else
-        {
-            // multi-block, multi-thread
-
-            newOptions = newOptions with
-            {
-                BlockSizeID = (newOptions.BlockSizeID == BlockSizeId.Default)
-                    ? DetermineBlockSize(sourceLength, isMultiThread: true)
-                    : newOptions.BlockSizeID,
-                BlockMode = BlockMode.BlockIndependent // for parallel
-            };
-
-            var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
-
-            var threadCount = maxDegreeOfParallelism ?? Environment.ProcessorCount;
-            // modify thread count for avoid too many buffer.
-            var totalBlocks = (int)((sourceLength + actualChunkSize - 1) / actualChunkSize);
-            threadCount = Math.Min(threadCount, totalBlocks);
-
-            var capacity = threadCount * 2;
-
-            var outputChannel = Channel.CreateBounded<CompressionBuffer>(new BoundedChannelOptions(capacity)
-            {
-                SingleWriter = false,
-                SingleReader = true,
-                FullMode = BoundedChannelFullMode.Wait
-            });
-
-            using var channelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            using var inFlight = new SemaphoreSlim(capacity, capacity);
-
-            // write header at first.
-            using (var headerEncoder = new LZ4Encoder(newOptions) { IsWriteHeader = true })
-            {
-                var dest = destination.GetSpan(MaxFrameHeaderLength); // LZ4F_compressBegin requires room for the largest header
-                var written = headerEncoder.Compress([], dest);
-                destination.Advance(written);
-                await destination.FlushAndCheckAsync(cancellationToken);
-            }
-
-            // producer: slice buffer and compress, send compressed buffer.
-            var bufferId = -1;
-            var failure = new FirstFailure();
-            Task outputProducers;
-            var initialOffset = offset;
-
-            async Task CompressBlocksAsync()
-            {
-                using var encoder = new LZ4Encoder(newOptions) { IsWriteHeader = false };
-
-                var srcBuffer = ArrayPool<byte>.Shared.Rent(actualChunkSize); // src buffer rent once
-                try
-                {
-                    while (true)
-                    {
-                        await inFlight.WaitAsync(channelToken.Token);
-                        var handedOver = false;
-                        try
-                        {
-                            var id = Interlocked.Increment(ref bufferId);
-                            var blockOffset = initialOffset + id * (long)actualChunkSize; // long for over 2GB file
-
-                            var remaining = sourceLength - id * (long)actualChunkSize; // sourceLength already excludes initialOffset
-                            if (remaining <= 0)
-                            {
-                                break;
-                            }
-
-                            // The block boundaries and the content size in the header were fixed from the length at the start,
-                            // so every block has to be read completely.
-                            var count = (int)Math.Min(remaining, actualChunkSize);
-                            var read = 0;
-                            while (read < count)
-                            {
-                                var n = await RandomAccess.ReadAsync(source, srcBuffer.AsMemory(read, count - read), blockOffset + read, channelToken.Token);
-                                if (n == 0)
-                                {
-                                    throw new LZ4Exception("The source file became shorter while it was compressed.");
-                                }
-                                read += n;
-                            }
-
-                            var bufferLength = encoder.GetMaxCompressedLength(count, includingHeader: false, includingFooter: false);
-                            var dest = ArrayPool<byte>.Shared.Rent(bufferLength);
-
-                            try
-                            {
-                                var written = encoder.Compress(srcBuffer.AsSpan(0, count), dest); // autoFlush
-
-                                await outputChannel.Writer.WriteAsync(new CompressionBuffer
-                                {
-                                    CompressedBuffer = dest,
-                                    Count = written,
-                                    Id = id
-                                }, channelToken.Token);
-                                handedOver = true;
-                            }
-                            catch
-                            {
-                                ArrayPool<byte>.Shared.Return(dest, clearArray: false); // not handed to the channel
-                                throw;
-                            }
-                        }
-                        finally
-                        {
-                            if (!handedOver) inFlight.Release(); // the writer releases the blocks it was given
-                        }
-                    }
-                }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(srcBuffer, clearArray: false);
-                }
-            }
-
-#if NET8_0_OR_GREATER
-            outputProducers = Parallel.ForAsync(0, threadCount, async (i, _) =>
-            {
-                await RunProducerAsync(CompressBlocksAsync, channelToken, failure);
-            });
-#else
-            var producerTasks = new Task[threadCount];
-            for (int i = 0; i < producerTasks.Length; i++)
-            {
-                producerTasks[i] = Task.Run(() => RunProducerAsync(CompressBlocksAsync, channelToken, failure));
-            }
-
-            outputProducers = Task.WhenAll(producerTasks);
+        var stream = new RandomAccessReadStream(source, offset);
+        long? length = Math.Max(0, RandomAccess.GetLength(source) - offset); // an offset at or past the end is an empty source
 #endif
-
-            var outputConsumer = StartWriteCompressedBuffer(destination, newOptions, outputChannel, inFlight, channelToken);
-
-            // producers complete the output channel when done, or fail it so the writer stops;
-            // the first failure cancels everything else so nobody blocks on a full channel.
-            var producersThenComplete = Task.Run(async () =>
-            {
-                try
-                {
-                    await outputProducers;
-                    outputChannel.Writer.Complete(); // all producers done, input is finished.
-                }
-                catch (Exception ex)
-                {
-                    outputChannel.Writer.TryComplete(ex);
-                    throw;
-                }
-            });
-            try
-            {
-                await WhenAllCancelOnFailureAsync(channelToken, producersThenComplete, outputConsumer);
-            }
-            catch (OperationCanceledException) when (failure.Exception != null)
-            {
-                // a producer failed first and cancelled the rest, report its exception rather than the cancellation
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure.Exception).Throw();
-            }
-            finally
-            {
-                ReturnQueuedBuffers(outputChannel);
-            }
+        var reader = PipeReader.Create(stream, LargeBufferLeaveOpenPipeReaderOptions);
+        try
+        {
+            await CompressCoreAsync(reader, length, destination, options ?? LZ4CompressionOptions.Default, cancellationToken);
         }
-#endif
+        finally
+        {
+            await reader.CompleteAsync(); // returns the buffers of the reader, also after a failure
+        }
     }
 
     public static async ValueTask CompressAsync(Stream source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        // change to fast-path but concurrency is always one.
-
         if (source is MemoryStream ms && ms.TryGetBuffer(out var buffer))
         {
             // honor the stream position, and leave the stream at the end like a normal read would.
             // A position at or past the end is a legal EOF and is left where it is.
             if (ms.Position >= ms.Length)
             {
-                await CompressAsync(ReadOnlyMemory<byte>.Empty, destination, options, maxDegreeOfParallelism: 1, cancellationToken);
+                await CompressAsync(ReadOnlyMemory<byte>.Empty, destination, options, cancellationToken);
                 return;
             }
             var position = (int)ms.Position;
-            await CompressAsync(((ReadOnlyMemory<byte>)buffer).Slice(position), destination, options, maxDegreeOfParallelism: 1, cancellationToken);
+            await CompressAsync(((ReadOnlyMemory<byte>)buffer).Slice(position), destination, options, cancellationToken);
             ms.Position = ms.Length;
             return;
         }
@@ -662,11 +97,11 @@ public static partial class LZ4
             // A position at or past the end is a legal EOF and is left where it is, the same as for MemoryStream.
             if (fs.Position >= fs.Length)
             {
-                await CompressAsync(ReadOnlyMemory<byte>.Empty, destination, options, maxDegreeOfParallelism: 1, cancellationToken);
+                await CompressAsync(ReadOnlyMemory<byte>.Empty, destination, options, cancellationToken);
                 return;
             }
 
-            await CompressAsync(fs.SafeFileHandle, fs.Position, destination, options, maxDegreeOfParallelism: 1, cancellationToken);
+            await CompressAsync(fs.SafeFileHandle, fs.Position, destination, options, cancellationToken);
             fs.Position = fs.Length; // the handle was read directly, leave the stream at the end like a normal read would
             return;
         }
@@ -675,7 +110,7 @@ public static partial class LZ4
         var pipeReader = PipeReader.Create(source, LeaveOpenPipeReaderOptions);
         try
         {
-            await CompressAsync(pipeReader, destination, options, cancellationToken);
+            await CompressCoreAsync(pipeReader, null, destination, options ?? LZ4CompressionOptions.Default, cancellationToken);
         }
         finally
         {
@@ -683,13 +118,49 @@ public static partial class LZ4
         }
     }
 
-    public static async ValueTask CompressAsync(PipeReader source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
+    public static ValueTask CompressAsync(PipeReader source, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var newOptions = options ?? LZ4CompressionOptions.Default;
+        return CompressCoreAsync(source, null, destination, options ?? LZ4CompressionOptions.Default, cancellationToken);
+    }
 
-        // multi-block, single-thread
-        var actualChunkSize = GetMaxBlockSize(newOptions.BlockSizeID);
-        using var encoder = new LZ4Encoder(newOptions);
+    public static async ValueTask CompressAsync(string sourceFilePath, string destinationFilePath, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
+        using var destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
+        var destinationWriter = PipeWriter.Create(destinationStream);
+        try
+        {
+            await CompressAsync(sourceHandle, destinationWriter, options, cancellationToken);
+        }
+        finally
+        {
+            await destinationWriter.CompleteAsync(); // returns the buffers of the writer
+        }
+    }
+
+    public static async ValueTask CompressAsync(string sourceFilePath, PipeWriter destination, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
+        await CompressAsync(sourceHandle, destination, options, cancellationToken);
+    }
+
+    // ---- core
+
+    // Compresses the whole input as one frame. knownLength is recorded in the frame header, and the frame fails
+    // to close when the input turns out to be a different length.
+    static async ValueTask CompressCoreAsync(PipeReader source, long? knownLength, PipeWriter destination, LZ4CompressionOptions options, CancellationToken cancellationToken)
+    {
+        if (knownLength != null)
+        {
+            options = options with
+            {
+                ContentSize = (ulong)knownLength.Value,
+                BlockSizeID = options.BlockSizeID == BlockSizeId.Default ? DetermineBlockSize(knownLength.Value) : options.BlockSizeID,
+            };
+        }
+
+        var blockSize = GetMaxBlockSize(options.BlockSizeID);
+        using var encoder = new LZ4Encoder(options);
 
         ReadResult result = default;
         while (!result.IsCompleted)
@@ -697,16 +168,17 @@ public static partial class LZ4
             result = await source.ReadAsync(cancellationToken);
             if (result.IsCanceled) throw new OperationCanceledException();
 
-            foreach (var sequenceBuffer in result.Buffer)
+            foreach (var segment in result.Buffer)
             {
-                var src = sequenceBuffer;
+                var src = segment;
                 while (!src.IsEmpty)
                 {
-                    var count = Math.Min(src.Length, actualChunkSize); // compress per chunk-size
+                    // one block at a time, so the destination never needs more than a block's worth of room
+                    var count = Math.Min(src.Length, blockSize);
                     var buffer = destination.GetSpan(encoder.GetMaxCompressedLength(count, includingHeader: true, includingFooter: false));
 
                     var written = encoder.Compress(src.Span.Slice(0, count), buffer);
-                    if (written > 0) // flush PipeWriter when LZ4 buffer flushed
+                    if (written > 0) // nothing is written while the encoder buffers a block
                     {
                         destination.Advance(written);
                         await destination.FlushAndCheckAsync(cancellationToken);
@@ -717,137 +189,11 @@ public static partial class LZ4
             source.AdvanceTo(result.Buffer.End);
         }
 
-        // for auto-buffer:false, get GetMaxCompressedLength
+        // what the encoder still buffers, the footer, and the header when nothing was written at all
         var lastBuffer = destination.GetSpan(encoder.GetMaxCompressedLength(0));
         var lastWritten = encoder.Close(lastBuffer);
         destination.Advance(lastWritten);
         await destination.FlushAndCheckAsync(cancellationToken);
-    }
-
-    public static async ValueTask CompressAsync(string sourceFilePath, string destinationFilePath, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
-    {
-        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        using var destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
-        var destinationWriter = PipeWriter.Create(destinationStream);
-        try
-        {
-            await CompressAsync(sourceHandle, destinationWriter, options, maxDegreeOfParallelism, cancellationToken);
-        }
-        finally
-        {
-            await destinationWriter.CompleteAsync(); // returns the buffers of the writer
-        }
-    }
-
-    public static async ValueTask CompressAsync(string sourceFilePath, PipeWriter destination, LZ4CompressionOptions? options = null, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
-    {
-        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        await CompressAsync(sourceHandle, destination, options, maxDegreeOfParallelism, cancellationToken);
-    }
-
-    // Blocks are written in order, so the writer holds the ones that arrive early. The channel alone does not limit
-    // how many: when the first block is slow, the writer keeps taking the later ones out of it. inFlight counts a block
-    // from the moment a producer takes its number until it is written, which bounds what is held at any time.
-    static Task StartWriteCompressedBuffer(PipeWriter destination, LZ4CompressionOptions options, Channel<CompressionBuffer> outputChannel, SemaphoreSlim inFlight, CancellationTokenSource channelToken)
-    {
-        // common operation to write compressed buffer to destination
-        return Task.Run(async () =>
-        {
-            using var _ = LZ4ActivitySource.Start("WriteToDestinationLoop");
-
-            var nextId = 0; // id for write
-            var reader = outputChannel.Reader;
-            var buffers = new MiniPriorityQueue<CompressionBuffer>();
-            try
-            {
-                ActivityContext? linkContext = null;
-                while (await reader.WaitToReadAsync(channelToken.Token))
-                {
-                    while (reader.TryRead(out var compressedBuffer))
-                    {
-                        buffers.Enqueue(compressedBuffer);
-
-                        while (buffers.Count > 0 && buffers.Peek().Id == nextId)
-                        {
-                            var source = buffers.Dequeue();
-                            nextId++;
-
-                            using (LZ4ActivitySource.Start("WriteCompressedBuffer", ref linkContext))
-                            {
-                                try
-                                {
-                                    await destination.WriteAndCheckAsync(source.CompressedBuffer.AsMemory(0, source.Count), channelToken.Token); // write directly(don't use GetSpan/Advance API)
-                                }
-                                finally
-                                {
-                                    ArrayPool<byte>.Shared.Return(source.CompressedBuffer, clearArray: false); // also when the destination fails
-                                }
-                            }
-                            inFlight.Release();
-                        }
-                    }
-                }
-            }
-            finally
-            {
-                // if buffer is remained, return to pool.
-                foreach (var item in buffers.Values)
-                {
-                    ArrayPool<byte>.Shared.Return(item.CompressedBuffer, clearArray: false);
-                }
-            }
-
-            // channel complete, flush(ConentSize = 0 to ignore verify size)
-            using var encoder = new LZ4Encoder(options with { ContentSize = 0 }) { IsWriteHeader = false };
-            var lastBuffer = destination.GetSpan(encoder.GetActualFrameFooterLength());
-            var lastWritten = encoder.Close(lastBuffer);
-            destination.Advance(lastWritten);
-
-            await destination.FlushAndCheckAsync(channelToken.Token);
-        });
-    }
-
-    // A producer that fails leaves a block number nobody delivers. The other producers would fill the blocks
-    // in flight and wait, and the writer would wait for the missing block, so the failure has to stop them.
-    // Cancelling makes the other producers end with a cancellation, which may be observed before this exception.
-    // The exception is recorded first, so the caller can report the real cause.
-    static async Task RunProducerAsync(Func<Task> producer, CancellationTokenSource channelToken, FirstFailure failure)
-    {
-        try
-        {
-            await producer();
-        }
-        catch (Exception ex)
-        {
-            if (ex is not OperationCanceledException) failure.Record(ex);
-            try
-            {
-                channelToken.Cancel();
-            }
-            catch
-            {
-                // a callback registered on the token failed, the exception of this producer is the one to report
-            }
-            throw;
-        }
-    }
-
-    // After a failure the channel may still hold buffers nobody will write out.
-    static void ReturnQueuedBuffers(Channel<CompressionBuffer> outputChannel)
-    {
-        while (outputChannel.Reader.TryRead(out var item))
-        {
-            ArrayPool<byte>.Shared.Return(item.CompressedBuffer, clearArray: false);
-        }
-    }
-
-    // The content checksum is xxHash32 over the whole content in order, which block-parallel compression cannot produce.
-    static void ThrowIfParallelWithContentChecksum(in LZ4CompressionOptions options, int? maxDegreeOfParallelism)
-    {
-        if (maxDegreeOfParallelism > 1 && options.ContentChecksumFlag == ContentChecksum.ContentChecksumEnabled)
-        {
-            throw new NotSupportedException("A content checksum cannot be produced by parallel compression. Set maxDegreeOfParallelism to 1 to keep ContentChecksumFlag, or disable ContentChecksumFlag to compress in parallel.");
-        }
     }
 
     static int GetMaxBlockSize(BlockSizeId id)
@@ -868,43 +214,14 @@ public static partial class LZ4
         }
     }
 
-    static BlockSizeId DetermineBlockSize(long sourceLength, bool isMultiThread)
+    static BlockSizeId DetermineBlockSize(long sourceLength)
     {
-        if (isMultiThread)
+        return sourceLength switch
         {
-            return sourceLength switch
-            {
-                < 16 * 1024 * 1024 => BlockSizeId.Max1MB, // < 16MB
-                _ => BlockSizeId.Max4MB
-            };
-        }
-        else
-        {
-            return sourceLength switch
-            {
-                < 1 * 1024 * 1024 => BlockSizeId.Max64KB,     // < 1MB
-                < 10 * 1024 * 1024 => BlockSizeId.Max256KB,   // < 10MB
-                < 100 * 1024 * 1024 => BlockSizeId.Max1MB,    // < 100MB
-                _ => BlockSizeId.Max4MB
-            };
-        }
-    }
-
-    [StructLayout(LayoutKind.Auto)]
-    struct CompressionBuffer : IComparable<CompressionBuffer>
-    {
-        public int Id;
-        public byte[] CompressedBuffer;
-        public int Count;
-
-        public int CompareTo(CompressionBuffer other)
-        {
-            return Id.CompareTo(other.Id);
-        }
-
-        public override string ToString()
-        {
-            return Id.ToString();
-        }
+            < 1 * 1024 * 1024 => BlockSizeId.Max64KB,     // < 1MB
+            < 10 * 1024 * 1024 => BlockSizeId.Max256KB,   // < 10MB
+            < 100 * 1024 * 1024 => BlockSizeId.Max1MB,    // < 100MB
+            _ => BlockSizeId.Max4MB
+        };
     }
 }

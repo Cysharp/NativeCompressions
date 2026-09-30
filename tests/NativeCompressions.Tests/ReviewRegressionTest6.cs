@@ -169,20 +169,19 @@ public class ReviewRegressionTest6 : IDisposable
     // ---- 4. an offset at or past the end of the file is an empty source
 
     [Theory]
-    [InlineData(3, 1)]
-    [InlineData(20, 1)]
-    [InlineData(20, 2)]
-    public async Task FileHandle_OffsetPastEnd_IsEmpty(long offset, int dop)
+    [InlineData(3)]
+    [InlineData(20)]
+    public async Task FileHandle_OffsetPastEnd_IsEmpty(long offset)
     {
-        var path = Path.Combine(tempDir, $"three-{offset}-{dop}.bin");
+        var path = Path.Combine(tempDir, $"three-{offset}.bin");
         File.WriteAllBytes(path, [1, 2, 3]);
 
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1, FileOptions.Asynchronous);
         SafeFileHandle handle = fs.SafeFileHandle;
 
-        Assert.Empty(LZ4.Decompress(await Collect(w => LZ4.CompressAsync(handle, offset, w, maxDegreeOfParallelism: dop))));
+        Assert.Empty(LZ4.Decompress(await Collect(w => LZ4.CompressAsync(handle, offset, w))));
         Assert.Empty(Zstandard.Decompress(await Collect(w => Zstandard.CompressAsync(handle, offset, w))));
-        Assert.Empty(await Collect(w => LZ4.DecompressAsync(handle, offset, w, maxDegreeOfParallelism: dop)));
+        Assert.Empty(await Collect(w => LZ4.DecompressAsync(handle, offset, w)));
         Assert.Empty(await Collect(w => Zstandard.DecompressAsync(handle, offset, w)));
     }
 
