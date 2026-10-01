@@ -158,7 +158,8 @@ public sealed class LZ4Stream : Stream
         }
 
         // An encoder handed in by the caller may hold data this stream never saw, so the buffer is rented here too.
-        buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxFlushBufferLength());
+        // Sized for Close as well, which may follow without any Write.
+        buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxCompressedLength(0));
 
         // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
         var written = encoder!.Flush(buffer);
@@ -180,7 +181,8 @@ public sealed class LZ4Stream : Stream
         cancellationToken.ThrowIfCancellationRequested();
 
         // An encoder handed in by the caller may hold data this stream never saw, so the buffer is rented here too.
-        buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxFlushBufferLength());
+        // Sized for Close as well, which may follow without any Write.
+        buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxCompressedLength(0));
 
         // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
         var written = encoder!.Flush(buffer);
@@ -555,6 +557,19 @@ public sealed class LZ4Stream : Stream
 
     #endregion
 
+    // Close writes the header of an empty frame, buffered data and the footer, so the buffer must have room for all of it.
+    void EnsureCloseBuffer()
+    {
+        var closeLength = encoder!.GetMaxCompressedLength(0);
+        if (buffer != null && buffer.Length >= closeLength) return;
+
+        if (buffer != null)
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+        buffer = ArrayPool<byte>.Shared.Rent(closeLength);
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (isDisposed) return;
@@ -568,8 +583,8 @@ public sealed class LZ4Stream : Stream
             {
                 try
                 {
-                    buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxCompressedLength(0));
-                    var written = encoder!.Close(buffer);
+                    EnsureCloseBuffer();
+                    var written = encoder!.Close(buffer!);
                     stream.Write(buffer, 0, written);
                 }
                 catch (Exception ex)
@@ -622,8 +637,8 @@ public sealed class LZ4Stream : Stream
             {
                 try
                 {
-                    buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxCompressedLength(0));
-                    var written = encoder!.Close(buffer);
+                    EnsureCloseBuffer();
+                    var written = encoder!.Close(buffer!);
                     await stream.WriteAsync(buffer.AsMemory(0, written));
                 }
                 catch (Exception ex)

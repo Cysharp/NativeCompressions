@@ -78,6 +78,8 @@ public static partial class LZ4
 
     public static async ValueTask CompressAsync(string sourceFilePath, string destinationFilePath, LZ4CompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
+        // checked before any file is opened, a cancelled call must not truncate the destination
+        cancellationToken.ThrowIfCancellationRequested();
         using var source = OpenSource(sourceFilePath);
         using var destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
         var destinationWriter = PipeWriter.Create(destinationStream);

@@ -142,6 +142,8 @@ public static partial class Zstandard
 
     public static async ValueTask DecompressAsync(string sourceFilePath, string destinationFilePath, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
+        // checked before any file is opened, a cancelled call must not truncate the destination
+        cancellationToken.ThrowIfCancellationRequested();
         using var source = OpenSource(sourceFilePath);
         using var destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
         var destinationWriter = PipeWriter.Create(destinationStream);
