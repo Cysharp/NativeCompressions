@@ -5,15 +5,15 @@ NativeCompressions
 
 NativeCompressions provides native library bindings and streaming processing for [LZ4](https://github.com/lz4/lz4) with its excellent decompression speed, and [Zstandard](https://github.com/facebook/zstd) with its superior balance of compression ratio and performance, and new [OpenZL](https://github.com/facebook/openzl) novel data compression framework.
 
-![](https://github.com/user-attachments/assets/abd4f2fe-9737-422d-aeb9-d2b222b13b69)
+![](https://github.com/user-attachments/assets/c5bd7e1c-8dca-4345-99f8-ddf59b6aafc9)
 
 > Encode/Decode [silesia.tar](https://en.wikipedia.org/wiki/Silesia_corpus) corpus(202.13MB)
 
-Compression is crucial for any application, but .NET has had limited options. NativeCompressions builds state-of-the-art algorithms (LZ4, Zstandard) with allocation-free, stream-less streaming APIs. Furthermore, by leveraging modern C# APIs (`Span<T>`, `RandomAccess`, `PipeReader/Writer`) to provide high-level asynchronous APIs, we achieve high-performance compression in any environment.
+Compression is crucial for any application, but .NET has had limited options. NativeCompressions builds state-of-the-art algorithms (LZ4, Zstandard) with stream-less streaming APIs. Furthermore, by leveraging modern C# APIs (`Span<T>`, `PipeReader/Writer`) to provide high-level asynchronous APIs, we achieve high-performance compression in any environment.
 
 We chose native bindings over Pure C# implementation because compression library performance depends not only on algorithms but also on implementation. LZ4 and Zstandard are actively developed with performance improvements in every release. It's impossible to keep synchronizing advanced memory operations and CPU architecture optimizations with .NET ports. To continuously provide the best and latest performance, native bindings are necessary. Note that .NET's standard `System.IO.Compression.BrotliEncoder/Decoder` links [brotli](https://github.com/dotnet/runtime/tree/main/src/native/external/brotli) to [libSystem.IO.Compression.Native](https://github.com/dotnet/runtime/tree/main/src/native/libs/System.IO.Compression.Native), also DeflateStream/GZipStream uses native zlib (from .NET 9, it's [zlib-ng](https://github.com/zlib-ng/zlib-ng)), meaning we follow the same adoption criteria as .NET official.
 
-LZ4 and Zstandard are created by the same author [Cyan4973](https://github.com/Cyan4973), showing high performance against competitors in their respective domains (LZ4 vs Snappy / Zstandard vs Brotli), and are widely used as industry standards. Also, a new compression library called OpenZL was released in 2025 from Facebook, where he works. NativeCompressions supports this excellent library as well.
+LZ4 and Zstandard are created by the same author [Cyan4973](https://github.com/Cyan4973), showing high performance against competitors in their respective domains (LZ4 vs Snappy / Zstandard vs Brotli), and are widely used as industry standards. Also, a new compression library called OpenZL was released in 2025 from Meta, where he works. NativeCompressions supports this excellent library as well.
 
 Getting Started
 ---
