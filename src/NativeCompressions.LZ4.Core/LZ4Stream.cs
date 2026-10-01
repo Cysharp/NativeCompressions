@@ -85,8 +85,8 @@ public sealed class LZ4Stream : Stream
         this.mode = CompressionMode.Decompress;
     }
 
-    public override bool CanRead => mode == CompressionMode.Decompress && stream.CanRead;
-    public override bool CanWrite => mode == CompressionMode.Compress && stream.CanWrite;
+    public override bool CanRead => !isDisposed && mode == CompressionMode.Decompress && stream.CanRead;
+    public override bool CanWrite => !isDisposed && mode == CompressionMode.Compress && stream.CanWrite;
     public override bool CanSeek => false;
     public override long Length => throw new NotSupportedException();
     public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
@@ -585,7 +585,7 @@ public sealed class LZ4Stream : Stream
                 {
                     EnsureCloseBuffer();
                     var written = encoder!.Close(buffer!);
-                    stream.Write(buffer, 0, written);
+                    stream.Write(buffer!, 0, written);
                 }
                 catch (Exception ex)
                 {

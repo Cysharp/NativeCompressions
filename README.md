@@ -15,9 +15,6 @@ We chose native bindings over Pure C# implementation because compression library
 
 LZ4 and Zstandard are created by the same author [Cyan4973](https://github.com/Cyan4973), showing high performance against competitors in their respective domains (LZ4 vs Snappy / Zstandard vs Brotli), and are widely used as industry standards. Also, a new compression library called OpenZL was released in 2025 from Facebook, where he works. NativeCompressions supports this excellent library as well.
 
-> [!NOTE]
-> This library is in preview. We do not recommend using it in production environments. The API may change. We are collecting feedback during this preview period.
-
 Getting Started
 ---
 Install the package from [NuGet/NativeCompressions](https://www.nuget.org/packages/NativeCompressions):
@@ -25,6 +22,8 @@ Install the package from [NuGet/NativeCompressions](https://www.nuget.org/packag
 ```bash
 dotnet add package NativeCompressions
 ```
+
+The package includes native libraries for Windows (x64, arm64), Linux (x64, arm64), macOS (x64, arm64), Android (arm, arm64, x64), iOS and Mac Catalyst. The macOS libraries require macOS 15.0 or later.
 
 ```csharp
 // for LZ4
@@ -249,7 +248,7 @@ var decompressed = destination.AsSpan(0, decompressedSize).ToArray();
 ```
 
 ### Raw API
-TODO
+The C API of LZ4 is exposed as it is in `NativeCompressions.Interop.LZ4NativeMethods`, generated from the LZ4 headers. Use it when you need a native function that the APIs above do not cover. The methods take raw pointers and do no validation, so the rules of the C API apply.
 
 Zstandard
 ---
@@ -259,7 +258,7 @@ It is generally similar to the LZ4 API. The `Zstandard` class has static methods
 
 Unlike `BrotliEncoder`/`BrotliDecoder` (which are structs), `ZstandardEncoder` and `ZstandardDecoder` are sealed classes that own a single native context (`ZSTD_CCtx`/`ZSTD_DCtx`). This matches the design of `System.IO.Compression.ZstandardEncoder`/`ZstandardDecoder` in .NET 11, and makes it safe to cache and share a single instance by reference (for example in a serializer) without the copy-then-dispose pitfalls of a struct. The native context is stored as a raw pointer rather than a `SafeHandle`, so creating an encoder costs one managed allocation plus the native context. Always call `Dispose()`; a finalizer releases the native context if you forget, and `Dispose()` is safe to call multiple times. Using an instance after `Dispose()` throws `ObjectDisposedException`. Instances are not thread-safe.
 
-Detailed documentation will also be prepared later.
+Options (`ZstandardCompressionOptions`, `ZstandardDecompressionOptions`), dictionaries (`ZstandardDictionary`) and `ZstandardStream` follow the same shape as their LZ4 counterparts. The C API of Zstandard is exposed as it is in `NativeCompressions.Interop.ZstandardNativeMethods`.
 
 OpenZL
 ---
@@ -348,7 +347,7 @@ License
 ---
 This library is licensed under the MIT License.
 
-This library includes precompiled binaries of LZ4, Zstandard and OpenZL. See LICENSE file for full license texts.
+This library includes precompiled binaries of LZ4, Zstandard and OpenZL. See [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) for their full license texts. The file is also included in every NuGet package.
 
 ### Third-party Notices
 * LZ4 - [Licensed under BSD 2-Clause license](https://github.com/lz4/lz4/blob/dev/LICENSE)
