@@ -58,14 +58,14 @@ var linkedCompressed = File.ReadAllBytes("silesia.tar.lz4");
 var original = LZ4.Decompress(linkedCompressed);
 var blockIndependenCompressed = LZ4.Compress(original);
 
-app.Add("", async ([FromServices] IServiceProvider serviceProvider, [FromServices] ILogger<Program> logger, int? maxDegreeOfParallelism = null) =>
+app.Add("", async ([FromServices] IServiceProvider serviceProvider, [FromServices] ILogger<Program> logger) =>
 {
-    using var _ = rootActivitySource.StartActivity("Multithreading LZ4 Compress");
+    using var _ = rootActivitySource.StartActivity("LZ4 Compress");
 
     var writer = new ArrayBufferPipeWriter();
-    await LZ4.CompressAsync(original, writer, maxDegreeOfParallelism: maxDegreeOfParallelism);
+    await LZ4.CompressAsync(original, writer);
     var count = writer.WrittenCount;
-    logger.LogInformation("Multithreading Compress Count:" + count + "B");
+    logger.LogInformation("Compress Count:" + count + "B");
 });
 
 await app.RunAsync(args);

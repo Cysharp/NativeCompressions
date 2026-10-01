@@ -66,41 +66,48 @@ public static partial class Zstandard
 
             Span<byte> scratch = stackalloc byte[256];
             var arrayProvider = new SegmentedArrayProvider<byte>(scratch);
-            var dest = arrayProvider.GetSpan();
-
-            // Same behavior as ZstandardStream and DecompressAsync: every frame is decoded,
-            // input that ends inside a frame or trailing garbage is an error.
-            while (true)
+            try
             {
-                var status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
+                var dest = arrayProvider.GetSpan();
 
-                source = source.Slice(bytesConsumed);
-                dest = dest.Slice(bytesWritten);
-                arrayProvider.Advance(bytesWritten);
+                // Same behavior as ZstandardStream and DecompressAsync: every frame is decoded,
+                // input that ends inside a frame or trailing garbage is an error.
+                while (true)
+                {
+                    var status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
 
-                if (status == OperationStatus.Done)
-                {
-                    if (source.IsEmpty) break;
-                    decoder.Reset(); // another frame follows
-                }
-                else if (status == OperationStatus.NeedMoreData && source.IsEmpty)
-                {
-                    throw new ZstandardException("Decompression failed: input ends inside a frame.");
-                }
-                else if (status == OperationStatus.InvalidData)
-                {
-                    throw new ZstandardException("Decompression failed: invalid data.");
+                    source = source.Slice(bytesConsumed);
+                    dest = dest.Slice(bytesWritten);
+                    arrayProvider.Advance(bytesWritten);
+
+                    if (status == OperationStatus.Done)
+                    {
+                        if (source.IsEmpty) break;
+                        decoder.Reset(); // another frame follows
+                    }
+                    else if (status == OperationStatus.NeedMoreData && source.IsEmpty)
+                    {
+                        throw new ZstandardException("Decompression failed: input ends inside a frame.");
+                    }
+                    else if (status == OperationStatus.InvalidData)
+                    {
+                        throw new ZstandardException("Decompression failed: invalid data.");
+                    }
+
+                    if (dest.Length == 0)
+                    {
+                        dest = arrayProvider.GetSpan();
+                    }
                 }
 
-                if (dest.Length == 0)
-                {
-                    dest = arrayProvider.GetSpan();
-                }
+                var result = GC.AllocateUninitializedArray<byte>(arrayProvider.Count);
+                arrayProvider.CopyToAndClear(result);
+                return result;
             }
-
-            var result = GC.AllocateUninitializedArray<byte>(arrayProvider.Count);
-            arrayProvider.CopyToAndClear(result);
-            return result;
+            finally
+            {
+                arrayProvider.Clear(); // invalid data throws in the middle, the rented segments go back either way
+            }
         }
     }
 
@@ -124,12 +131,13 @@ public static partial class Zstandard
             }
             else
             {
+                using var lease = decompressionOptions.Dictionary.Acquire();
                 var context = ZSTD_createDCtx();
                 if (context == null) throw new ZstandardException("Failed to create decompression context");
 
                 try
                 {
-                    bytesWritten = ZSTD_decompress_usingDDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, decompressionOptions.Dictionary.DecompressionHandle);
+                    bytesWritten = ZSTD_decompress_usingDDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, lease.Decompression);
                 }
                 finally
                 {

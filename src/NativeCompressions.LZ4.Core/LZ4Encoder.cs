@@ -29,7 +29,9 @@ public sealed unsafe class LZ4Encoder : IDisposable
     LZ4F_cctx_s* cctx;
 
     LZ4F_preferences_t preferences;
-    LZ4Dictionary? dictionary; // keeps the dictionary reachable while the native context references it
+    // The native context reads the dictionary whenever a frame begins. The encoder holds a lease on it
+    // from the moment it is chosen until the context is freed.
+    LZ4Dictionary.Lease dictionary;
     bool isWrittenHeader;
 
     // Whether the frame header is written on the first Compress call. Parallel compression turns this off
@@ -57,17 +59,15 @@ public sealed unsafe class LZ4Encoder : IDisposable
 
         this.cctx = context;
         this.preferences = options.ToPreferences();
-        this.dictionary = options.Dictionary;
-    }
 
-    ~LZ4Encoder()
-    {
-        // Finalizer runs only when the object is unreachable, so no race with Dispose.
-        var context = cctx;
-        if (context != null)
+        try
         {
-            cctx = null;
-            LZ4F_freeCompressionContext(context);
+            this.dictionary = options.AcquireDictionary();
+        }
+        catch
+        {
+            Dispose();
+            throw;
         }
     }
 
@@ -92,23 +92,34 @@ public sealed unsafe class LZ4Encoder : IDisposable
     /// - Compressed data with block headers
     /// - Frame footer (4-8 bytes: end mark and optional content checksum)
     /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">inputSize is negative.</exception>
+    /// <exception cref="OverflowException">The size does not fit in an int.</exception>
     public int GetMaxCompressedLength(int inputSize, bool includingHeader = true, bool includingFooter = true)
     {
+        if (inputSize < 0) throw new ArgumentOutOfRangeException(nameof(inputSize));
         ThrowIfDisposed();
 
-        int bound;
+        nuint bound;
         fixed (LZ4F_preferences_t* prefs = &preferences)
         {
-            bound = (int)LZ4F_compressBound((nuint)inputSize, prefs);
+            bound = LZ4F_compressBound((nuint)inputSize, prefs);
         }
 
         // LZ4F_compressBegin requires room for the largest header, whatever size the header actually takes
-        if (includingHeader) bound += LZ4.MaxFrameHeaderLength;
-        if (includingFooter) bound += GetActualFrameFooterLength();
-        return bound;
+        if (includingHeader) bound += (nuint)LZ4.MaxFrameHeaderLength;
+        if (includingFooter) bound += (nuint)GetActualFrameFooterLength();
+        return checked((int)bound);
     }
 
-    public int GetMaxFlushBufferLength(bool includingFooter = false) => GetMaxCompressedLength(0, includingHeader: false, includingFooter: includingFooter);
+    /// <summary>
+    /// Calculates the buffer size that is enough for <see cref="Flush"/>, or for <see cref="Close"/> when includingFooter is true.
+    /// </summary>
+    /// <param name="includingFooter">true to size the buffer for <see cref="Close"/>, false for <see cref="Flush"/>.</param>
+    /// <remarks>
+    /// The size for Close also has room for the frame header, because closing an encoder that has not
+    /// compressed anything writes the header of an empty frame. So the value is enough for Close in any state.
+    /// </remarks>
+    public int GetMaxFlushBufferLength(bool includingFooter = false) => GetMaxCompressedLength(0, includingHeader: includingFooter, includingFooter: includingFooter);
 
     /// <summary>
     /// Gets the actual frame header size based on current options.
@@ -179,9 +190,9 @@ public sealed unsafe class LZ4Encoder : IDisposable
             fixed (LZ4F_preferences_t* preference = &preferences)
             fixed (byte* dest = headerDestination)
             {
-                var writtenOrErrorCode = (dictionary == null)
+                var writtenOrErrorCode = dictionary.IsEmpty
                     ? LZ4F_compressBegin(context, dest, (nuint)headerDestination.Length, preference)
-                    : LZ4F_compressBegin_usingCDict(context, dest, (nuint)headerDestination.Length, dictionary.Handle, preference);
+                    : LZ4F_compressBegin_usingCDict(context, dest, (nuint)headerDestination.Length, dictionary.Compression, preference);
                 LZ4.ThrowIfError(writtenOrErrorCode);
                 isWrittenHeader = true;
 
@@ -244,7 +255,7 @@ public sealed unsafe class LZ4Encoder : IDisposable
     /// <summary>
     /// Finalizes the current LZ4 frame by writing the ending marker and optional content checksum.
     /// </summary>
-    /// <param name="destination">The buffer to write the frame ending to. It is guaranteed to be successful when destination.Length &gt;= GetMaxCompressedLength(0).</param>
+    /// <param name="destination">The buffer to write the frame ending to. It is guaranteed to be successful when destination.Length &gt;= GetMaxFlushBufferLength(includingFooter: true), which is the same as GetMaxCompressedLength(0).</param>
     /// <returns>The number of bytes written to the destination buffer (at least 4 bytes for the end marker).</returns>
     /// <exception cref="LZ4Exception">Thrown when finalization fails.</exception>
     /// <remarks>
@@ -288,35 +299,35 @@ public sealed unsafe class LZ4Encoder : IDisposable
         DiscardFrame();
     }
 
-    /// <summary>
-    /// Abandons the current frame, if one is in progress, and applies new options to the frames that follow.
-    /// Data buffered for the abandoned frame is discarded.
-    /// </summary>
-    /// <param name="options">The LZ4 frame options to apply.</param>
-    public void Reset(in LZ4CompressionOptions options)
-    {
-        ThrowIfDisposed();
-        this.preferences = options.ToPreferences();
-        this.dictionary = options.Dictionary;
-        DiscardFrame();
-    }
-
     // LZ4F_compressBegin reinitializes the context, which drops any input still buffered for the frame in progress.
     // The header it writes goes to a scratch buffer; the next Compress begins the frame again and writes the real one.
     void DiscardFrame()
     {
+        // LZ4F compressionContext has no reset context(LZ4F_resetDecompressionContext is for decompressionContext) so we need to call LZ4F_compressBegin() to reset context.
         var context = GetContext();
         Span<byte> scratch = stackalloc byte[LZ4.MaxFrameHeaderLength];
         fixed (LZ4F_preferences_t* preference = &preferences)
         fixed (byte* dest = scratch)
         {
-            var result = (dictionary == null)
+            var result = dictionary.IsEmpty
                 ? LZ4F_compressBegin(context, dest, (nuint)scratch.Length, preference)
-                : LZ4F_compressBegin_usingCDict(context, dest, (nuint)scratch.Length, dictionary.Handle, preference);
+                : LZ4F_compressBegin_usingCDict(context, dest, (nuint)scratch.Length, dictionary.Compression, preference);
             GC.KeepAlive(this);
             LZ4.ThrowIfError(result);
         }
         isWrittenHeader = false;
+    }
+
+    ~LZ4Encoder()
+    {
+        // Finalizer runs only when the object is unreachable, so no race with Dispose.
+        var context = cctx;
+        if (context != null)
+        {
+            cctx = null;
+            LZ4F_freeCompressionContext(context);
+        }
+        dictionary.Dispose();
     }
 
     /// <summary>
@@ -335,6 +346,10 @@ public sealed unsafe class LZ4Encoder : IDisposable
         {
             LZ4F_freeCompressionContext(context);
         }
+
+        // freeing the context ends everything that reads the dictionary
+        dictionary.Dispose();
+        dictionary = default;
         GC.SuppressFinalize(this);
     }
 

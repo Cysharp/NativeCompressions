@@ -1,5 +1,28 @@
 use std::error::Error;
 
+// Declared by the sources but not exported by the shared library (static linking only or internal),
+// calling them fails with EntryPointNotFoundException.
+const NOT_EXPORTED: &[&str] = &[
+    "LZ4_compress_fast_extState_fastReset",
+    "LZ4_compress_destSize_extState",
+    "LZ4_compress_forceExtDict",
+    "LZ4_decompress_safe_forceExtDict",
+    "LZ4_decompress_safe_partial_forceExtDict",
+    "LZ4_loadDict_internal",
+    "LZ4_setCompressionLevel",
+    "LZ4_favorDecompressionSpeed",
+    "LZ4_compress_HC_extStateHC_fastReset",
+    "LZ4HC_searchExtDict",
+    "LZ4F_getErrorCode",
+    "LZ4F_getBlockSize",
+    "LZ4F_uncompressedUpdate",
+    "LZ4F_createCompressionContext_advanced",
+    "LZ4F_createDecompressionContext_advanced",
+    "LZ4F_createCDict_advanced",
+    "LZ4F_compressBegin_internal",
+    "LZ4F_compressBegin_usingDictOnce",
+];
+
 fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=../../lz4/lib");
     bindgen::Builder::default()
@@ -15,7 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     csbindgen::Builder::default()
         .input_bindgen_file("src/lz4.rs")
-        .method_filter(|x| x.starts_with("LZ4"))
+        .method_filter(|x| x.starts_with("LZ4") && !NOT_EXPORTED.contains(&x.as_str()))
         .csharp_class_name("LZ4NativeMethods")
         .csharp_namespace("NativeCompressions.Interop")
         .csharp_dll_name("lz4")

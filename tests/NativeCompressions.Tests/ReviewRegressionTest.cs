@@ -167,10 +167,8 @@ public class ReviewRegressionTest
 
     // ---- 3. a complete frame on a pipe that stays open must be delivered without waiting for more input
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    public async Task LZ4_PipeReader_DeliversFrameWhileInputStaysOpen(int dop)
+    [Fact]
+    public async Task LZ4_PipeReader_DeliversFrameWhileInputStaysOpen()
     {
         var data = Compressible(200_000, 6);
         var compressed = LZ4.Compress(data, LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockIndependent, BlockSizeID = BlockSizeId.Max64KB });
@@ -180,7 +178,7 @@ public class ReviewRegressionTest
         await input.Writer.WriteAsync(compressed);
         await input.Writer.FlushAsync(); // frame is complete, but the writer is not completed
 
-        var decompressing = LZ4.DecompressAsync(input.Reader, output.Writer, maxDegreeOfParallelism: dop).AsTask();
+        var decompressing = LZ4.DecompressAsync(input.Reader, output.Writer).AsTask();
 
         // the whole frame must arrive while the input is still open
         var received = new MemoryStream();
@@ -229,7 +227,7 @@ public class ReviewRegressionTest
         await output.Writer.CompleteAsync();
     }
 
-    // ---- 4. a failing destination must end parallel compression with that failure
+    // ---- 4. a failing destination must end compression with that failure
 
     sealed class FailingPipeWriter : PipeWriter
     {
@@ -268,13 +266,13 @@ public class ReviewRegressionTest
     }
 
     [Fact]
-    public async Task LZ4_ParallelCompress_EndsWhenDestinationFails()
+    public async Task LZ4_CompressAsync_EndsWhenDestinationFails()
     {
         var data = Compressible(8 * 1024 * 1024, 8);
         var options = LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB };
         var writer = new FailingPipeWriter();
 
-        var compressing = LZ4.CompressAsync((ReadOnlyMemory<byte>)data, writer, options, maxDegreeOfParallelism: 4).AsTask();
+        var compressing = LZ4.CompressAsync((ReadOnlyMemory<byte>)data, writer, options).AsTask();
         await Assert.ThrowsAsync<IOException>(() => compressing.WaitAsync(TimeSpan.FromSeconds(20)));
     }
 
@@ -300,7 +298,7 @@ public class ReviewRegressionTest
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await zs.DisposeAsync());
     }
 
-    // ---- 7. LZ4 parallel decode must reject a content size that does not match
+    // ---- 7. every LZ4 decode path must reject a content size that does not match
 
     static byte[] LZ4FrameWithWrongContentSize(byte[] body, ulong claimed)
     {
@@ -318,23 +316,19 @@ public class ReviewRegressionTest
         return ms.ToArray();
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(4)]
-    public async Task LZ4_ContentSizeMismatch_RejectedInEveryPath(int dop)
+    [Fact]
+    public async Task LZ4_ContentSizeMismatch_RejectedInEveryPath()
     {
         var frame = LZ4FrameWithWrongContentSize(Compressible(100_000, 9), claimed: 200_000);
 
         Assert.Throws<LZ4Exception>(() => LZ4.Decompress(frame));
-        await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)frame, w, maxDegreeOfParallelism: dop)));
+        await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)frame, w)));
     }
 
-    // ---- 8. LZ4 parallel decode must reject a block larger than the frame's block size
+    // ---- 8. every LZ4 decode path must reject a block larger than the frame's block size
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(4)]
-    public async Task LZ4_OversizeBlock_RejectedInEveryPath(int dop)
+    [Fact]
+    public async Task LZ4_OversizeBlock_RejectedInEveryPath()
     {
         var options = LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockIndependent, BlockSizeID = BlockSizeId.Max64KB };
         var headerOnly = LZ4.Compress(ReadOnlySpan<byte>.Empty, options);
@@ -351,7 +345,7 @@ public class ReviewRegressionTest
         var bytes = frame.ToArray();
 
         Assert.Throws<LZ4Exception>(() => LZ4.Decompress(bytes));
-        await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)bytes, w, maxDegreeOfParallelism: dop)));
+        await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)bytes, w)));
     }
 
     // ---- 9. LZ4Encoder.Reset must discard buffered input
@@ -366,20 +360,16 @@ public class ReviewRegressionTest
         encoder.Reset();
         Assert.Equal(0, encoder.Flush(buffer));
 
-        encoder.Compress(Utf8("abandoned-data"), buffer);
-        encoder.Reset(LZ4CompressionOptions.Default with { CompressionLevel = 3 });
-        Assert.Equal(0, encoder.Flush(buffer));
-
         var ms = new MemoryStream();
         ms.Write(buffer, 0, encoder.Compress(Utf8("kept"), buffer));
         ms.Write(buffer, 0, encoder.Close(buffer));
         Assert.Equal(Utf8("kept"), LZ4.Decompress(ms.ToArray()));
     }
 
-    // ---- re-review: a failing worker must end parallel decompression even when the input stays open
+    // ---- re-review: a corrupt block must end decompression even when the input stays open
 
     [Fact]
-    public async Task LZ4_ParallelDecompress_WorkerFailure_EndsWithOpenInput()
+    public async Task LZ4_DecompressAsync_CorruptBlock_EndsWithOpenInput()
     {
         var data = Compressible(300_000, 12);
         var compressed = LZ4.Compress(data, LZ4CompressionOptions.Default with
@@ -403,7 +393,7 @@ public class ReviewRegressionTest
 
         var output = new Pipe();
         _ = ReadAllAsync(output.Reader);
-        var decompressing = LZ4.DecompressAsync(input.Reader, output.Writer, maxDegreeOfParallelism: 4).AsTask();
+        var decompressing = LZ4.DecompressAsync(input.Reader, output.Writer).AsTask();
         await Assert.ThrowsAsync<LZ4Exception>(() => decompressing.WaitAsync(TimeSpan.FromSeconds(10)));
         await output.Writer.CompleteAsync();
     }

@@ -135,14 +135,16 @@ public static partial class LZ4
         {
             fixed (byte* src = source)
             {
-                ref var native = ref Unsafe.As<LZ4FrameInfo, LZ4F_frameInfo_t>(ref frameInfo);
+                // frameInfo may live on the heap (a field or an array element), so the native call writes to a local
+                LZ4F_frameInfo_t native = default;
                 var consumed = (nuint)source.Length;
-                var result = LZ4F_getFrameInfo(context, (LZ4F_frameInfo_t*)Unsafe.AsPointer(ref native), src, &consumed);
+                var result = LZ4F_getFrameInfo(context, &native, src, &consumed);
                 if (IsError(result))
                 {
-                    frameInfo = default;
                     return false;
                 }
+
+                frameInfo = Unsafe.As<LZ4F_frameInfo_t, LZ4FrameInfo>(ref native);
                 return true;
             }
         }

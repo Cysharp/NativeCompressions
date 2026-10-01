@@ -4,6 +4,8 @@ using System.Runtime.InteropServices;
 namespace NativeCompressions;
 
 // LZ4F_preferences_t(LZ4F_frameInfo_t) + dictionary ref
+// frameType of LZ4F_frameInfo_t is left out. lz4frame reports it for a frame it reads but always writes
+// a regular frame, so an option for it could only be ignored.
 
 [StructLayout(LayoutKind.Auto)]
 public readonly record struct LZ4CompressionOptions
@@ -19,7 +21,6 @@ public readonly record struct LZ4CompressionOptions
     readonly BlockSizeId blockSizeID;
     readonly BlockMode blockMode;
     readonly ContentChecksum contentChecksumFlag;
-    readonly FrameType frameType;
     readonly ulong contentSize;
     readonly uint dictionaryID;
     readonly BlockChecksum blockChecksumFlag;
@@ -53,13 +54,12 @@ public readonly record struct LZ4CompressionOptions
     /// <summary>1: add a 32-bit checksum of frame's decompressed data; 0 == default (disabled)</summary>
     public ContentChecksum ContentChecksumFlag { get => contentChecksumFlag; init => contentChecksumFlag = value; }
 
-    /// <summary>LZ4F_frame or LZ4F_skippableFrame</summary>
-    public FrameType FrameType { get => frameType; init => frameType = value; }
-
     /// <summary>
-    /// Size of the uncompressed content recorded in the frame header; 0 == unknown, nothing is recorded.
-    /// For streaming with LZ4Encoder this must be the exact size that will be written.
-    /// For the one-shot Compress methods any non-zero value means "record the size", the real size is written.
+    /// The length of the content, recorded in the frame header; 0 == not declared, nothing is recorded.
+    /// A declared length has to be the exact length of the content: where the length of the source is known
+    /// (the one-shot Compress methods, memory, sequence and file sources of CompressAsync) a different value
+    /// throws ArgumentException up front, otherwise the frame fails to close when the lengths differ.
+    /// The overloads without options record the length whenever the source makes it known.
     /// </summary>
     public ulong ContentSize { get => contentSize; init => contentSize = value; }
 
@@ -84,9 +84,18 @@ public readonly record struct LZ4CompressionOptions
         }
     }
 
-    internal unsafe LZ4F_preferences_t ToPreferences() => ToPreferencesWithContentSize(contentSize);
+    internal LZ4Dictionary.Lease AcquireDictionary() => compressionDictionary == null ? default : compressionDictionary.Acquire();
 
-    internal unsafe LZ4F_preferences_t ToPreferencesWithContentSize(ulong contentSize)
+    // The declared length must match the length of the source, when that is known.
+    internal void ThrowIfContentSizeDiffers(long sourceLength)
+    {
+        if (contentSize != 0 && contentSize != (ulong)sourceLength)
+        {
+            throw new ArgumentException($"ContentSize {contentSize} differs from the length of the source, {sourceLength}. Declare the exact length or leave it 0.", "options");
+        }
+    }
+
+    internal unsafe LZ4F_preferences_t ToPreferences()
     {
         var prefs = new LZ4F_preferences_t
         {
@@ -98,8 +107,8 @@ public readonly record struct LZ4CompressionOptions
                 blockSizeID = (LZ4F_blockSizeID_t)blockSizeID,
                 blockMode = (LZ4F_blockMode_t)blockMode,
                 contentChecksumFlag = (LZ4F_contentChecksum_t)contentChecksumFlag,
-                frameType = (LZ4F_frameType_t)frameType,
-                contentSize = contentSize, // override content size
+                frameType = LZ4F_frameType_t.LZ4F_frame,
+                contentSize = contentSize,
                 dictID = dictionaryID,
                 blockChecksumFlag = (LZ4F_blockChecksum_t)blockChecksumFlag,
             }

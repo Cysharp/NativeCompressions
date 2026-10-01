@@ -122,6 +122,10 @@ public sealed class ZstandardStream : Stream
         encoder!.SetSourceLength(length);
     }
 
+    /// <summary>
+    /// Initializes a stream that compresses with an encoder owned by the caller. The stream does not dispose the encoder.
+    /// </summary>
+    /// <remarks>When a write fails, reset the encoder with <see cref="ZstandardEncoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public ZstandardStream(Stream stream, ZstandardEncoder encoder, bool leaveOpen = false)
     {
         this.stream = stream;
@@ -131,6 +135,10 @@ public sealed class ZstandardStream : Stream
         this.mode = CompressionMode.Compress;
     }
 
+    /// <summary>
+    /// Initializes a stream that decompresses with a decoder owned by the caller. The stream does not dispose the decoder.
+    /// </summary>
+    /// <remarks>When a read fails, reset the decoder with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public ZstandardStream(Stream stream, ZstandardDecoder decoder, bool leaveOpen = false)
     {
         this.stream = stream;
@@ -140,8 +148,8 @@ public sealed class ZstandardStream : Stream
         this.mode = CompressionMode.Decompress;
     }
 
-    public override bool CanRead => mode == CompressionMode.Decompress && stream.CanRead;
-    public override bool CanWrite => mode == CompressionMode.Compress && stream.CanWrite;
+    public override bool CanRead => !isDisposed && mode == CompressionMode.Decompress && stream.CanRead;
+    public override bool CanWrite => !isDisposed && mode == CompressionMode.Compress && stream.CanWrite;
     public override bool CanSeek => false;
     public override long Length => throw new NotSupportedException();
     public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
@@ -212,7 +220,8 @@ public sealed class ZstandardStream : Stream
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
 
-        if (buffer == null) return;
+        // An encoder handed in by the caller may hold data this stream never saw, so the buffer is rented here too.
+        buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
 
         var status = OperationStatus.DestinationTooSmall;
         while (status == OperationStatus.DestinationTooSmall)
@@ -235,7 +244,13 @@ public sealed class ZstandardStream : Stream
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
-        if (buffer == null) return;
+
+        // Checked before the encoder is touched. Output taken from the encoder cannot be put back,
+        // so a cancelled write after that would lose it.
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // An encoder handed in by the caller may hold data this stream never saw, so the buffer is rented here too.
+        buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
 
         var status = OperationStatus.DestinationTooSmall;
         while (status == OperationStatus.DestinationTooSmall)
@@ -491,6 +506,9 @@ public sealed class ZstandardStream : Stream
             throw new InvalidOperationException("Read operation must be Decompress mode.");
         }
 
+        // checked before the decoder is touched, a cancelled read must not consume input
+        cancellationToken.ThrowIfCancellationRequested();
+
         buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
         var totalRead = 0;
 
@@ -617,10 +635,12 @@ public sealed class ZstandardStream : Stream
         Exception? closeFailure = null;
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            // also without any Write, so an empty source still produces a valid frame
+            if (mode == CompressionMode.Compress)
             {
                 try
                 {
+                    buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
                     var status = OperationStatus.DestinationTooSmall;
                     while (status == OperationStatus.DestinationTooSmall)
                     {
@@ -678,10 +698,12 @@ public sealed class ZstandardStream : Stream
         Exception? closeFailure = null;
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            // also without any Write, so an empty source still produces a valid frame
+            if (mode == CompressionMode.Compress)
             {
                 try
                 {
+                    buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
                     var status = OperationStatus.DestinationTooSmall;
                     while (status == OperationStatus.DestinationTooSmall)
                     {

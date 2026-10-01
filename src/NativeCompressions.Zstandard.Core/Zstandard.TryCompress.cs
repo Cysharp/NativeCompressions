@@ -28,13 +28,14 @@ public static partial class Zstandard
         fixed (byte* src = source)
         fixed (byte* dest = destination)
         {
+            using var lease = compressionOptions.AcquireDictionary();
             var context = ZSTD_createCCtx();
             if (context == null) throw new ZstandardException("Failed to create compression context");
 
             nuint result;
             try
             {
-                compressionOptions.SetParameter(context);
+                compressionOptions.SetParameter(context, lease);
                 result = ZSTD_compress2(context, dest, (nuint)destination.Length, src, (nuint)source.Length);
             }
             finally
@@ -43,7 +44,6 @@ public static partial class Zstandard
             }
 
             var ok = TryGetResult(result, out bytesWritten);
-            GC.KeepAlive(compressionOptions.Dictionary);
             return ok;
         }
     }
@@ -76,13 +76,14 @@ public static partial class Zstandard
         fixed (byte* src = source)
         fixed (byte* dest = destination)
         {
+            using var lease = decompressionOptions.Dictionary.Acquire();
             var context = ZSTD_createDCtx();
             if (context == null) throw new ZstandardException("Failed to create decompression context");
 
             nuint result;
             try
             {
-                result = ZSTD_decompress_usingDDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, decompressionOptions.Dictionary.DecompressionHandle);
+                result = ZSTD_decompress_usingDDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, lease.Decompression);
             }
             finally
             {
@@ -90,7 +91,6 @@ public static partial class Zstandard
             }
 
             var ok = TryGetResult(result, out bytesWritten);
-            GC.KeepAlive(decompressionOptions.Dictionary);
             return ok;
         }
     }

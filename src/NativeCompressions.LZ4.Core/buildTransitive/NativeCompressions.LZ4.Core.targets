@@ -1,0 +1,10 @@
+<Project>
+  <!-- The assembly that calls the statically linked library through __Internal exists for .NET 10 and later.
+       An older iOS or Mac Catalyst app would get the generic assembly instead, which fails to find the
+       native library at run time. Fail the build here so the problem shows up early. -->
+  <Target Name="CheckNativeCompressionsLz4AppleTargetFramework" BeforeTargets="PrepareForBuild"
+          Condition="'$(TargetFramework)' != '' and '$(IsCrossTargetingBuild)' != 'true' and ('$(TargetPlatformIdentifier)' == 'ios' or '$(TargetPlatformIdentifier)' == 'maccatalyst')">
+    <Error Condition="$([MSBuild]::VersionLessThan('$(TargetFrameworkVersion)', '10.0'))"
+           Text="NativeCompressions.LZ4.Core requires .NET 10 or later on iOS and Mac Catalyst. $(TargetFramework) would use the generic assembly, which cannot call the statically linked native library." />
+  </Target>
+</Project>

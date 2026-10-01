@@ -1,5 +1,8 @@
-using NativeCompressions.Internal;
+﻿using NativeCompressions.Internal;
+using NativeCompressions.Interop;
+using static NativeCompressions.Interop.LZ4NativeMethods;
 using System.Buffers;
+using System.IO.Compression;
 
 namespace NativeCompressions;
 
@@ -33,7 +36,7 @@ public static partial class LZ4
             return [];
         }
 
-        using var decoder = new LZ4Decoder(options);
+        using var decoder = new LZ4Decoder(options.WithoutStableDst());
 
         if (trustedData && TryGetFrameInfo(source, out var frameInfo) && frameInfo.FrameType == FrameType.Frame && frameInfo.ContentSize != 0)
         {
@@ -84,38 +87,45 @@ public static partial class LZ4
     {
         Span<byte> scratch = stackalloc byte[256];
         var arrayProvider = new SegmentedArrayProvider<byte>(scratch);
-        var dest = arrayProvider.GetSpan();
-
-        while (true)
+        try
         {
-            var status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
-            source = source.Slice(bytesConsumed);
-            dest = dest.Slice(bytesWritten);
-            arrayProvider.Advance(bytesWritten);
+            var dest = arrayProvider.GetSpan();
 
-            if (status == OperationStatus.Done)
+            while (true)
             {
-                if (source.IsEmpty) break;
-                decoder.Reset(); // another frame follows
-            }
-            else if (status == OperationStatus.NeedMoreData && source.IsEmpty)
-            {
-                throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
-            }
-            else if (status == OperationStatus.InvalidData)
-            {
-                throw new LZ4Exception("Invalid LZ4 frame.");
+                var status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
+                source = source.Slice(bytesConsumed);
+                dest = dest.Slice(bytesWritten);
+                arrayProvider.Advance(bytesWritten);
+
+                if (status == OperationStatus.Done)
+                {
+                    if (source.IsEmpty) break;
+                    decoder.Reset(); // another frame follows
+                }
+                else if (status == OperationStatus.NeedMoreData && source.IsEmpty)
+                {
+                    throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
+                }
+                else if (status == OperationStatus.InvalidData)
+                {
+                    throw new LZ4Exception("Invalid LZ4 frame.");
+                }
+
+                if (dest.Length == 0)
+                {
+                    dest = arrayProvider.GetSpan();
+                }
             }
 
-            if (dest.Length == 0)
-            {
-                dest = arrayProvider.GetSpan();
-            }
+            var result = GC.AllocateUninitializedArray<byte>(arrayProvider.Count);
+            arrayProvider.CopyToAndClear(result);
+            return result;
         }
-
-        var result = GC.AllocateUninitializedArray<byte>(arrayProvider.Count);
-        arrayProvider.CopyToAndClear(result);
-        return result;
+        finally
+        {
+            arrayProvider.Clear(); // invalid data throws in the middle, the rented segments go back either way
+        }
     }
 
     /// <summary>
@@ -127,42 +137,61 @@ public static partial class LZ4
     /// Decompresses one or more concatenated frames into the destination buffer and returns the number of bytes written.
     /// </summary>
     /// <exception cref="LZ4Exception">Thrown when the data is invalid, ends inside a frame, or does not fit in the destination.</exception>
-    public static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, in LZ4DecompressionOptions options)
+    public static unsafe int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, in LZ4DecompressionOptions options)
     {
         if (source.IsEmpty)
         {
             return 0;
         }
 
-        using var decoder = new LZ4Decoder(options);
+        // lz4frame is called directly instead of through LZ4Decoder. All of the input is here, so anything
+        // short of a finished frame is an error, and the call allocates nothing managed.
+        var decompressOptions = options.WithoutStableDst().ToDecompressOptions();
 
-        var totalWritten = 0;
-        while (true)
+        LZ4F_dctx_s* context = null;
+        LZ4Dictionary.Lease dictionary = default;
+        try
         {
-            var status = decoder.Decompress(source, destination, out var bytesConsumed, out var bytesWritten);
-            source = source.Slice(bytesConsumed);
-            destination = destination.Slice(bytesWritten);
-            totalWritten += bytesWritten;
+            ThrowIfError(LZ4F_createDecompressionContext(&context, FrameVersion));
+            dictionary = options.AcquireDictionary();
 
-            if (status == OperationStatus.Done)
+            fixed (byte* src = source)
+            fixed (byte* dest = destination)
             {
-                if (source.IsEmpty) break;
-                decoder.Reset(); // another frame follows
-            }
-            else if (status == OperationStatus.NeedMoreData && source.IsEmpty)
-            {
-                throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
-            }
-            else if (status == OperationStatus.InvalidData)
-            {
-                throw new LZ4Exception("Invalid LZ4 frame.");
-            }
-            else if (status == OperationStatus.DestinationTooSmall && destination.IsEmpty)
-            {
-                throw new LZ4Exception("Destination buffer is too small.");
+                var totalConsumed = 0;
+                var totalWritten = 0;
+                while (true)
+                {
+                    var consumed = (nuint)(source.Length - totalConsumed);
+                    var written = (nuint)(destination.Length - totalWritten);
+
+                    // returns a hint of the next source size, 0 when the frame is complete, or an error code
+                    var hintOrErrorCode = dictionary.IsEmpty
+                        ? LZ4F_decompress(context, dest + totalWritten, &written, src + totalConsumed, &consumed, &decompressOptions)
+                        : LZ4F_decompress_usingDict(context, dest + totalWritten, &written, src + totalConsumed, &consumed, dictionary.Data, (nuint)dictionary.DataLength, &decompressOptions);
+                    ThrowIfError(hintOrErrorCode);
+
+                    totalConsumed += (int)consumed;
+                    totalWritten += (int)written;
+
+                    if (hintOrErrorCode == 0)
+                    {
+                        // The frame is complete. Another one may follow, lz4frame reads it without a reset.
+                        if (totalConsumed == source.Length) return totalWritten;
+                        if (consumed == 0) throw new LZ4Exception("Invalid LZ4 frame: decoder made no progress.");
+                        continue;
+                    }
+
+                    if (totalWritten == destination.Length) throw new LZ4Exception("Destination buffer is too small.");
+                    if (totalConsumed == source.Length) throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
+                    if (consumed == 0 && written == 0) throw new LZ4Exception("Invalid LZ4 frame: decoder made no progress.");
+                }
             }
         }
-
-        return totalWritten;
+        finally
+        {
+            LZ4F_freeDecompressionContext(context); // accepts null
+            dictionary.Dispose();
+        }
     }
 }

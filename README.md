@@ -3,20 +3,17 @@ NativeCompressions
 <!-- [![CI](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml/badge.svg)](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml)
 [![NuGet](https://img.shields.io/nuget/v/NativeCompressions)](https://www.nuget.org/packages/NativeCompressions) -->
 
-NativeCompressions provides native library bindings, streaming processing, and multi-threading support for [LZ4](https://github.com/lz4/lz4) with its excellent decompression speed, and [Zstandard](https://github.com/facebook/zstd) with its superior balance of compression ratio and performance, and new [OpenZL](https://github.com/facebook/openzl) novel data compression framework.
+NativeCompressions provides native library bindings and streaming processing for [LZ4](https://github.com/lz4/lz4) with its excellent decompression speed, and [Zstandard](https://github.com/facebook/zstd) with its superior balance of compression ratio and performance, and new [OpenZL](https://github.com/facebook/openzl) novel data compression framework.
 
-![](https://github.com/user-attachments/assets/abd4f2fe-9737-422d-aeb9-d2b222b13b69)
+![](https://github.com/user-attachments/assets/c5bd7e1c-8dca-4345-99f8-ddf59b6aafc9)
 
 > Encode/Decode [silesia.tar](https://en.wikipedia.org/wiki/Silesia_corpus) corpus(202.13MB)
 
-Compression is crucial for any application, but .NET has had limited options. NativeCompressions builds state-of-the-art algorithms (LZ4, Zstandard) with allocation-free, stream-less streaming APIs. Furthermore, by leveraging modern C# APIs (`Span<T>`, `RandomAccess`, `PipeReader/Writer`) to provide high-level multi-threading APIs, we achieve high-performance compression in any environment.
+Compression is crucial for any application, but .NET has had limited options. NativeCompressions builds state-of-the-art algorithms (LZ4, Zstandard) with stream-less streaming APIs. Furthermore, by leveraging modern C# APIs (`Span<T>`, `PipeReader/Writer`) to provide high-level asynchronous APIs, we achieve high-performance compression in any environment.
 
 We chose native bindings over Pure C# implementation because compression library performance depends not only on algorithms but also on implementation. LZ4 and Zstandard are actively developed with performance improvements in every release. It's impossible to keep synchronizing advanced memory operations and CPU architecture optimizations with .NET ports. To continuously provide the best and latest performance, native bindings are necessary. Note that .NET's standard `System.IO.Compression.BrotliEncoder/Decoder` links [brotli](https://github.com/dotnet/runtime/tree/main/src/native/external/brotli) to [libSystem.IO.Compression.Native](https://github.com/dotnet/runtime/tree/main/src/native/libs/System.IO.Compression.Native), also DeflateStream/GZipStream uses native zlib (from .NET 9, it's [zlib-ng](https://github.com/zlib-ng/zlib-ng)), meaning we follow the same adoption criteria as .NET official.
 
-LZ4 and Zstandard are created by the same author [Cyan4973](https://github.com/Cyan4973), showing high performance against competitors in their respective domains (LZ4 vs Snappy / Zstandard vs Brotli), and are widely used as industry standards. Also, a new compression library called OpenZL was released in 2025 from Facebook, where he works. NativeCompressions supports this excellent library as well.
-
-> [!NOTE]
-> This library is in preview. We do not recommend using it in production environments. The API may change. We are collecting feedback during this preview period.
+LZ4 and Zstandard are created by the same author [Cyan4973](https://github.com/Cyan4973), showing high performance against competitors in their respective domains (LZ4 vs Snappy / Zstandard vs Brotli), and are widely used as industry standards. Also, a new compression library called OpenZL was released in 2025 from Meta, where he works. NativeCompressions supports this excellent library as well.
 
 Getting Started
 ---
@@ -25,6 +22,10 @@ Install the package from [NuGet/NativeCompressions](https://www.nuget.org/packag
 ```bash
 dotnet add package NativeCompressions
 ```
+
+The package includes native libraries for Windows (x64, arm64), Linux (x64, arm64), macOS (x64, arm64), Android (arm, arm64, x64), iOS and Mac Catalyst. The macOS libraries require macOS 15.0 or later.
+
+iOS and Mac Catalyst apps need .NET 10 or later. The native libraries are linked statically on those platforms, and the assemblies that call them that way are built for `net10.0-ios` and `net10.0-maccatalyst` onward. An app that targets .NET 8 or 9 there fails at build time with a message saying so.
 
 ```csharp
 // for LZ4
@@ -54,7 +55,7 @@ LZ4 has both block format and frame format. We adopt frame format for all APIs f
 
 ### Simple Compression
 
-Simple API to convert from `ReadOnlySpan<T>` to `byte[]`, or write/read to/from `Span<T>`. These encode/decode in frame format, not block format. Also automatically sets ContentSize in the frame header.
+Simple API to convert from `ReadOnlySpan<T>` to `byte[]`, or write/read to/from `Span<T>`. These encode/decode in frame format, not block format. The overloads without options record the content size in the frame header. When `LZ4CompressionOptions` is passed, `ContentSize` decides: 0 records nothing, and a value has to be the exact length of the source.
 
 ```csharp
 using NativeCompressions;
@@ -98,9 +99,9 @@ foreach (var chunk in dataChunks) // dataChunks = byte[][]
     bufferWriter.Advance(written);
 }
 
-// Finalize frame(need to get size of footer with buffered-data)
-var fotterWithBufferdDataSize = encoder.GetMaxFlushBufferLength(includingFooter: true);
-var finalBytes = bufferWriter.GetSpan(fotterWithBufferdDataSize);
+// Finalize frame. The size covers buffered data, the footer, and the header of an empty frame when nothing was compressed.
+var footerWithBufferedDataSize = encoder.GetMaxFlushBufferLength(includingFooter: true);
+var finalBytes = bufferWriter.GetSpan(footerWithBufferedDataSize);
 
 // need to call `Close` to write LZ4 frame footer
 var finalWritten = encoder.Close(finalBytes);
@@ -123,7 +124,7 @@ In `Decompress`, both source and destination can receive incomplete data. When `
 
 ### High-level Streaming Compression
 
-Using `CompressAsync` or `DecompressAsync`, you can stream encode/decode from `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, `SafeFileHandle`, `Stream`, `PipeReader` to `PipeWriter`. While internally using `LZ4Encoder/LZ4Decoder`, a single method call optimally handles complex operations.
+Using `CompressAsync` or `DecompressAsync`, you can stream encode/decode from `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, `Stream`, `PipeReader` or a file path to `PipeWriter`. While internally using `LZ4Encoder/LZ4Decoder`, a single method call optimally handles complex operations.
 
 The destination `PipeWriter` can be passed directly or wrapped around a Stream to change where to write.
 
@@ -133,7 +134,7 @@ using var ms = new MemoryStream();
 await LZ4.CompressAsync(source, PipeWriter.Create(ms));
 
 // to File
-using var fs = new FileStream("foo.lz4", FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
+using var fs = new FileStream("foo.lz4", FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
 await LZ4.CompressAsync(source, PipeWriter.Create(fs));
 
 // to Network
@@ -141,32 +142,30 @@ using var fs = new NetworkStream(socket);
 await LZ4.CompressAsync(source, PipeWriter.Create(fs));
 ```
 
-When source is `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, or `SafeFileHandle`, you can specify `int? maxDegreeOfParallelism`. When it is 2 or greater, parallel processing occurs when the target source is 1MB or larger. null (default) and 1 always result in sequential processing. Parallel compression cannot produce a content checksum, so combining it with `ContentChecksumFlag` throws `NotSupportedException`.
+When source is `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, a seekable `Stream` or a file path, the length is known up front. It is recorded in the frame header as the content size, and the block size is chosen from it. A non-seekable `Stream` and `PipeReader` have no known length, so the frame has no content size and the default block size is used.
 
 ```csharp
-// Parallel Compression from File to File
-using SafeFileHandle sourceHandle = File.OpenHandle("foo.bin");
-using var dest = new FileStream("foo.lz4", FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
-await LZ4.CompressAsync(sourceHandle, PipeWriter.Create(dest), maxDegreeOfParallelism: Environment.ProcessorCount);
+// Compression from File to File
+await LZ4.CompressAsync("foo.bin", "foo.lz4");
+
+// or from a FileStream, starting at its current position
+using var source = new FileStream("foo.bin", FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, useAsync: true);
+using var dest = new FileStream("foo.lz4", FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, useAsync: true);
+await LZ4.CompressAsync(source, PipeWriter.Create(dest));
 ```
 
-When source is a file, passing `SafeFileHandle` enables parallel processing and can expect higher performance than `FileStream`. `Stream` or `PipeReader` doesn't perform parallel processing because the maximum source length is unknown, preventing estimation of appropriate block size for division.
+Compression and decompression run on the calling task, one block at a time. Output that is ready is flushed to the destination before more input is awaited, so the APIs work over a connection where the other side waits for a reply.
 
-> For ASP.NET servers, we recommend always specifying maxDegreeOfParallelism as 1. Since the server itself processes requests in parallel, increasing CPU load may reduce overall throughput. Parallel processing will be highly effective in client applications or CLI batch processing.
-
-Similarly for Decompress, source can be `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, `SafeFileHandle`, `Stream`, `PipeReader`, and destination can be `PipeWriter`.
+Similarly for Decompress, source can be `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, `Stream`, `PipeReader` or a file path, and destination can be `PipeWriter`.
 
 ```csharp
 using var ms = new MemoryStream();
-using SafeFileHandle sourceHandle = File.OpenHandle("foo.lz4");
-await LZ4.DecompressAsync(source, PipeWriter.Create(ms));
+await LZ4.DecompressAsync("foo.lz4", PipeWriter.Create(ms));
 
 var decompressed = ms.ToArray();
 ```
 
-Decompress parallel processing occurs when the LZ4 frame is compressed with `BlockIndependent` and `maxDegreeOfParallelism` is 2 or greater. null (default) and 1 decode sequentially. In NativeCompressions, normal LZ4 compression processes with `BlockLinked`, but only compresses as `BlockIndependent` when parallel processing in `CompressAsync`.
-
-Similar to Compress, explicitly specifying maxDegreeOfParallelism as 1 is recommended for ASP.NET servers.
+Concatenated frames and skippable frames are all decoded, the same as `LZ4.Decompress` and `LZ4Stream`. Invalid data and input that ends inside a frame throw `LZ4Exception`.
 
 ### Stream
 Compatible with System.IO.Stream for easy integration:
@@ -185,6 +184,8 @@ using var lz4Stream = new LZ4Stream(input, CompressionMode.Decompress);
 byte[] buffer = new byte[4096];
 int read = await lz4Stream.ReadAsync(buffer);
 ```
+
+Each `Write` and `Read` goes to the native codec once, the same as the streams in `System.IO.Compression`. The native codec keeps its own block buffers, so a small read or write costs one call of about 10 ns and no buffering is done in the stream itself. Code that processes many small pieces at once, a serializer for example, is better served by the `PipeWriter` based `CompressAsync` and `DecompressAsync`.
 
 ### Options
 You can change `with` operator.
@@ -249,17 +250,17 @@ var decompressed = destination.AsSpan(0, decompressedSize).ToArray();
 ```
 
 ### Raw API
-TODO
+The C API of LZ4 is exposed as it is in `NativeCompressions.Interop.LZ4NativeMethods`, generated from the LZ4 headers. Use it when you need a native function that the APIs above do not cover. The methods take raw pointers and do no validation, so the rules of the C API apply.
 
 Zstandard
 ---
-It is generally similar to the LZ4 API. The `Zstandard` class has static methods, and there are `ZstandardEncoder` and `ZstandardDecoder` as Streamless-streaming APIs. `CompressAsync`/`DecompressAsync` with `PipeReader`/`PipeWriter` are provided as well. Unlike LZ4, they are not parallelized.
+It is generally similar to the LZ4 API. The `Zstandard` class has static methods, and there are `ZstandardEncoder` and `ZstandardDecoder` as Streamless-streaming APIs. `CompressAsync`/`DecompressAsync` with `PipeReader`/`PipeWriter` are provided as well.
 
-`ZstandardEncoder` and `ZstandardDecoder` API is completely same as `BrotliEncoder`/`BrotliDecoder` unlike `LZ4Encoder/Decoder`. In other words, Compress returns an `OperationStatus`, which contains `int bytesConsumed`, `int bytesWritten`, and `bool isFinalBlock`.
+`ZstandardEncoder` and `ZstandardDecoder` API is completely same as `BrotliEncoder`/`BrotliDecoder` unlike `LZ4Encoder/Decoder`. In other words, Compress returns an `OperationStatus`, which contains `int bytesConsumed`, `int bytesWritten`, and `bool isFinalBlock`. After `OperationStatus.InvalidData`, call `Reset()` before reusing the encoder or decoder, or dispose it.
 
 Unlike `BrotliEncoder`/`BrotliDecoder` (which are structs), `ZstandardEncoder` and `ZstandardDecoder` are sealed classes that own a single native context (`ZSTD_CCtx`/`ZSTD_DCtx`). This matches the design of `System.IO.Compression.ZstandardEncoder`/`ZstandardDecoder` in .NET 11, and makes it safe to cache and share a single instance by reference (for example in a serializer) without the copy-then-dispose pitfalls of a struct. The native context is stored as a raw pointer rather than a `SafeHandle`, so creating an encoder costs one managed allocation plus the native context. Always call `Dispose()`; a finalizer releases the native context if you forget, and `Dispose()` is safe to call multiple times. Using an instance after `Dispose()` throws `ObjectDisposedException`. Instances are not thread-safe.
 
-Detailed documentation will also be prepared later.
+Options (`ZstandardCompressionOptions`, `ZstandardDecompressionOptions`), dictionaries (`ZstandardDictionary`) and `ZstandardStream` follow the same shape as their LZ4 counterparts. The C API of Zstandard is exposed as it is in `NativeCompressions.Interop.ZstandardNativeMethods`.
 
 OpenZL
 ---
@@ -318,17 +319,21 @@ static void ThrowIfError(ZL_Result_size_t_u result)
 }
 ```
 
-Telemetry
----
-TODO
-
 Unity
 ---
 Install `NativeCompressions` from NuGet using [NuGetForUnity](https://github.com/GlitchEnzo/NuGetForUnity). Open Window from NuGet -> Manage NuGet Packages, Search "NativeCompressions" and Press Install.
 
 The `NativeCompressions` package includes all runtimes. If you want to install only specific runtimes, please install the `Core` package and `Runtime.***` packages separately.
 
-NuGetForUnity basically handles native runtimes correctly, but there are some that are not currently supported. For example, win-arm64, linux-arm64, android-arm, android-x64, and ios-x64 cannot be imported. As a workaround, you can replace `ProjectSettings/Packages/com.github-glitchenzo.nugetforunity/NativeRuntimeSettings.json` with this [NativeRuntimeSettings.json](https://github.com/Cysharp/NativeCompressions/blob/6123b5a/sandbox/UnityApp/ProjectSettings/Packages/com.github-glitchenzo.nugetforunity/NativeRuntimeSettings.json) to enable import support. I have submitted a PR to NuGetForUnity to support this by default, but until that is released, please use the above workaround.
+NuGetForUnity basically handles native runtimes correctly, but there are some that are not currently supported. For example, win-arm64, linux-arm64, android-arm, android-x64, and ios-x64 cannot be imported. NuGetForUnity deletes the native files of a runtime that is missing from its settings when the package is imported, so the settings have to be in place before the install. Do this before you install the packages:
+
+1. Replace `ProjectSettings/Packages/com.github-glitchenzo.nugetforunity/NativeRuntimeSettings.json` with this [NativeRuntimeSettings.json](https://github.com/Cysharp/NativeCompressions/blob/main/sandbox/UnityApp/ProjectSettings/Packages/com.github-glitchenzo.nugetforunity/NativeRuntimeSettings.json). Create the directories when they do not exist yet.
+2. Restart the Unity Editor. NuGetForUnity reads the file once and keeps it in memory, so a replaced file is not picked up by a running Editor.
+3. Install the packages.
+
+If the packages were installed before the settings were in place, the missing runtimes are already deleted and replacing the settings does not bring them back. Replace the file, restart the Editor, then uninstall and install the `NativeCompressions` package (or the affected `Runtime.***` packages) again so the files are imported with the new settings. Afterwards, `Assets/Packages/NativeCompressions.*.Runtime.<rid>.<version>/runtimes/<rid>/native` should exist for every runtime you need.
+
+I have submitted a PR to NuGetForUnity to support this by default, but until that is released, please use the above workaround.
 
 iOS builds need one additional package. iOS links native libraries statically, which requires `DllImport("__Internal")`, but the assemblies that NuGetForUnity installs use regular library names. Install the `NativeCompressions.Unity` editor package from the Package Manager with this git URL:
 
@@ -336,13 +341,15 @@ iOS builds need one additional package. iOS links native libraries statically, w
 https://github.com/Cysharp/NativeCompressions.git?path=src/NativeCompressions.Unity
 ```
 
-During an iOS player build it rewrites the library names to `__Internal` in the build output, before IL2CPP runs. The assemblies in your project are not modified, so the Editor and other platforms are unaffected. This limitation is Unity specific. .NET for iOS and .NET MAUI use the `net10.0-ios` build of the Core assemblies, which already uses `__Internal`.
+During an iOS player build it rewrites the library names to `__Internal` in the build output, before IL2CPP runs. The assemblies in your project are not modified, so the Editor and other platforms are unaffected. This limitation is Unity specific. .NET for iOS and .NET MAUI use the `net10.0-ios` build of the Core assemblies, which already uses `__Internal`. That is why .NET 10 is the minimum on iOS and Mac Catalyst.
+
+The iOS Simulator on Apple Silicon is not supported in Unity. The packages ship an `iossimulator-arm64` library, but the runtime settings above do not register it, so NuGetForUnity does not import it. Unity links every iOS plugin into one build and cannot pick the simulator library over the device library of the same architecture. Use a device build, or the Intel simulator (`ios-x64`) on a Rosetta Editor.
 
 License
 ---
 This library is licensed under the MIT License.
 
-This library includes precompiled binaries of LZ4, Zstandard and OpenZL. See LICENSE file for full license texts.
+This library includes precompiled binaries of LZ4, Zstandard and OpenZL. See [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) for their full license texts. The file is also included in every NuGet package.
 
 ### Third-party Notices
 * LZ4 - [Licensed under BSD 2-Clause license](https://github.com/lz4/lz4/blob/dev/LICENSE)

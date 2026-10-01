@@ -288,7 +288,21 @@ public readonly record struct ZstandardCompressionOptions
         init => dictionary = value;
     }
 
-    internal unsafe void SetParameter(ZSTD_CCtx_s* context)
+    internal ZstandardDictionary.Lease AcquireDictionary() => dictionary == null ? default : dictionary.Acquire();
+
+    // The lease is the one taken on the dictionary of these options.
+    internal unsafe void SetParameter(ZSTD_CCtx_s* context, in ZstandardDictionary.Lease lease)
+    {
+        SetParameters(context);
+
+        if (!lease.IsEmpty)
+        {
+            var result = ZSTD_CCtx_refCDict(context, lease.Compression);
+            Zstandard.ThrowIfError(result);
+        }
+    }
+
+    unsafe void SetParameters(ZSTD_CCtx_s* context)
     {
         if (IsDefault) return;
 
@@ -308,13 +322,6 @@ public readonly record struct ZstandardCompressionOptions
         SetParameterDefaultIsTrue(context, ZSTD_cParameter.ZSTD_c_contentSizeFlag, contentSizeFlag);
         SetParameterDefaultIsFalse(context, ZSTD_cParameter.ZSTD_c_checksumFlag, checksumFlag);
         SetParameterDefaultIsTrue(context, ZSTD_cParameter.ZSTD_c_dictIDFlag, dictIDFlag);
-
-        // and dictionary
-        if (dictionary != null)
-        {
-            var result = ZSTD_CCtx_refCDict(context, dictionary.CompressionHandle);
-            Zstandard.ThrowIfError(result);
-        }
     }
 
     // Set parameter if value is not zero(default).

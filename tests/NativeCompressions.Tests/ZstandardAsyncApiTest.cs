@@ -164,7 +164,7 @@ public class ZstandardAsyncApiTest : IDisposable
         var compressed = await Collect(w => Zstandard.CompressAsync((ReadOnlyMemory<byte>)data, w));
         Assert.Equal(data, BclDecompress(compressed));
 
-        // options, parallelism and a small request buffer
+        // with options
         var options = ZstandardCompressionOptions.Default with { CompressionLevel = 5, ChecksumFlag = true };
         compressed = await Collect(w => Zstandard.CompressAsync((ReadOnlyMemory<byte>)data, w, options));
         Assert.Equal(data, BclDecompress(compressed));
@@ -183,39 +183,6 @@ public class ZstandardAsyncApiTest : IDisposable
         Assert.Equal(data, BclDecompress(compressed));
 
         compressed = await Collect(w => Zstandard.CompressAsync(sequence, w, ZstandardCompressionOptions.Default with { CompressionLevel = 1 }));
-        Assert.Equal(data, BclDecompress(compressed));
-    }
-
-    [Theory]
-    [MemberData(nameof(Inputs))]
-    public async Task CompressAsync_SafeFileHandle(string name)
-    {
-        var data = GetInput(name);
-        var path = TempFile(name + ".bin");
-        await File.WriteAllBytesAsync(path, data);
-
-        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        var compressed = await Collect(w => Zstandard.CompressAsync(handle, w));
-        Assert.Equal(data, BclDecompress(compressed));
-
-        compressed = await Collect(w => Zstandard.CompressAsync(handle, w, ZstandardCompressionOptions.Default with { CompressionLevel = 7 }));
-        Assert.Equal(data, BclDecompress(compressed));
-    }
-
-    [Fact]
-    public async Task CompressAsync_SafeFileHandle_WithOffset()
-    {
-        var header = Encoding.ASCII.GetBytes("HEADER-TO-SKIP-");
-        var data = GetInput("compressible3m");
-        var path = TempFile("offset.bin");
-        await File.WriteAllBytesAsync(path, header.Concat(data).ToArray());
-
-        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        var compressed = await Collect(w => Zstandard.CompressAsync(handle, header.Length, w));
-        Assert.Equal(data, BclDecompress(compressed));
-
-        using var encoder = new ZstandardEncoder(ZstandardCompressionOptions.Default with { ChecksumFlag = true });
-        compressed = await Collect(w => Zstandard.CompressAsync(handle, header.Length, w, encoder));
         Assert.Equal(data, BclDecompress(compressed));
     }
 
@@ -370,42 +337,6 @@ public class ZstandardAsyncApiTest : IDisposable
 
     [Theory]
     [MemberData(nameof(Inputs))]
-    public async Task DecompressAsync_SafeFileHandle(string name)
-    {
-        var data = GetInput(name);
-        var compressed = BclCompress(data);
-        var path = TempFile(name + ".zst");
-        await File.WriteAllBytesAsync(path, compressed);
-
-        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        var decompressed = await Collect(w => Zstandard.DecompressAsync(handle, w));
-        Assert.Equal(data, decompressed);
-
-        using var decoder = new ZstandardDecoder();
-        decompressed = await Collect(w => Zstandard.DecompressAsync(handle, w, decoder));
-        Assert.Equal(data, decompressed);
-    }
-
-    [Fact]
-    public async Task DecompressAsync_SafeFileHandle_WithOffset()
-    {
-        var header = Encoding.ASCII.GetBytes("HEADER-TO-SKIP-");
-        var data = GetInput("compressible3m");
-        var compressed = BclCompress(data);
-        var path = TempFile("offset.zst");
-        await File.WriteAllBytesAsync(path, header.Concat(compressed).ToArray());
-
-        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        var decompressed = await Collect(w => Zstandard.DecompressAsync(handle, header.Length, w));
-        Assert.Equal(data, decompressed);
-
-        using var decoder = new ZstandardDecoder();
-        decompressed = await Collect(w => Zstandard.DecompressAsync(handle, header.Length, w, decoder));
-        Assert.Equal(data, decompressed);
-    }
-
-    [Theory]
-    [MemberData(nameof(Inputs))]
     public async Task DecompressAsync_Stream_AllKinds(string name)
     {
         var data = GetInput(name);
@@ -497,10 +428,6 @@ public class ZstandardAsyncApiTest : IDisposable
         Assert.Equal(expected, await Collect(w => Zstandard.DecompressAsync(new NonSeekableStream(compressed, 97), w)));
         Assert.Equal(expected, await Collect(w => Zstandard.DecompressAsync(path, w)));
 
-        using (var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous))
-        {
-            Assert.Equal(expected, await Collect(w => Zstandard.DecompressAsync(handle, w)));
-        }
 
         var source = new Pipe();
         var feeding = Task.Run(async () =>

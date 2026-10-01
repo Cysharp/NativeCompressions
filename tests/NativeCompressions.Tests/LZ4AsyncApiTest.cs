@@ -56,17 +56,6 @@ public class LZ4AsyncApiTest : IDisposable
         _ => throw new ArgumentException(name)
     };
 
-    public static IEnumerable<object[]> InputsAndParallelism()
-    {
-        foreach (var input in Inputs())
-        {
-            foreach (var dop in new[] { 1, 2, 4 })
-            {
-                yield return new object[] { input[0], dop };
-            }
-        }
-    }
-
     static byte[] StreamDecompress(byte[] compressed)
     {
         using var zs = new LZ4Stream(new MemoryStream(compressed), CompressionMode.Decompress);
@@ -146,8 +135,8 @@ public class LZ4AsyncApiTest : IDisposable
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
-    // Independent blocks with both checksums, the frame shape the parallel decoder handles.
-    static readonly LZ4CompressionOptions ParallelFriendly = LZ4CompressionOptions.Default with
+    // Independent blocks with both checksums, so every check of the decoder is exercised.
+    static readonly LZ4CompressionOptions IndependentBlocksWithChecksums = LZ4CompressionOptions.Default with
     {
         BlockMode = BlockMode.BlockIndependent,
         BlockSizeID = BlockSizeId.Max64KB,
@@ -155,106 +144,103 @@ public class LZ4AsyncApiTest : IDisposable
         BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled,
     };
 
-    // Parallel compression cannot produce a content checksum, so the compress side drops that flag.
-    static readonly LZ4CompressionOptions ParallelCompressFriendly = ParallelFriendly with { ContentChecksumFlag = ContentChecksum.NoContentChecksum };
+    static readonly LZ4CompressionOptions IndependentBlocks = IndependentBlocksWithChecksums with { ContentChecksumFlag = ContentChecksum.NoContentChecksum };
 
     // ---- CompressAsync
 
     [Theory]
     [InlineData("small")]
     [InlineData("compressible5m")]
-    public async Task CompressAsync_ParallelWithContentChecksum_Throws(string name)
+    public async Task CompressAsync_KeepsContentChecksum(string name)
     {
         var data = GetInput(name);
         var options = LZ4CompressionOptions.Default with { ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled };
-        var path = TempFile(name + ".checksum.bin");
-        await File.WriteAllBytesAsync(path, data);
 
-        // rejected up front for every parallel capable source, regardless of size
-        foreach (var dop in new[] { 2, 4 })
-        {
-            await Assert.ThrowsAsync<NotSupportedException>(async () => await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, options, dop)));
-            await Assert.ThrowsAsync<NotSupportedException>(async () => await Collect(w => LZ4.CompressAsync(ToSequence(data, 5000), w, options, dop)));
-            await Assert.ThrowsAsync<NotSupportedException>(async () => await Collect(w => LZ4.CompressAsync(path, w, options, dop)));
-            using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-            await Assert.ThrowsAsync<NotSupportedException>(async () => await Collect(w => LZ4.CompressAsync(handle, w, options, dop)));
-        }
-
-        // sequential keeps the checksum
-        foreach (var dop in new int?[] { null, 1 })
-        {
-            var compressed = await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, options, dop));
-            Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
-            Assert.Equal(ContentChecksum.ContentChecksumEnabled, info.ContentChecksumFlag);
-            Assert.Equal(data, LZ4.Decompress(compressed));
-        }
+        var compressed = await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, options));
+        Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
+        Assert.Equal(ContentChecksum.ContentChecksumEnabled, info.ContentChecksumFlag);
+        Assert.Equal(data, LZ4.Decompress(compressed));
     }
 
     [Fact]
-    public async Task CompressAsync_NullParallelism_IsSequential()
+    public async Task CompressAsync_RecordsContentSizeAndKeepsBlockMode()
     {
         var data = GetInput("compressible5m");
         var compressed = await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w));
         Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
-        Assert.Equal(BlockMode.BlockLinked, info.BlockMode); // parallel compression would have switched to independent blocks
-        Assert.Equal(data, LZ4.Decompress(compressed));
-    }
-
-    [Theory]
-    [MemberData(nameof(InputsAndParallelism))]
-    public async Task CompressAsync_ReadOnlyMemory(string name, int dop)
-    {
-        var data = GetInput(name);
-        var compressed = await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, maxDegreeOfParallelism: dop));
-        Assert.Equal(data, LZ4.Decompress(compressed));
-        Assert.Equal(data, StreamDecompress(compressed));
-
-        compressed = await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, ParallelCompressFriendly with { CompressionLevel = 3 }, maxDegreeOfParallelism: dop));
-        Assert.Equal(data, LZ4.Decompress(compressed));
-    }
-
-    [Theory]
-    [MemberData(nameof(InputsAndParallelism))]
-    public async Task CompressAsync_ReadOnlySequence(string name, int dop)
-    {
-        var data = GetInput(name);
-        var compressed = await Collect(w => LZ4.CompressAsync(ToSequence(data, 70_001), w, maxDegreeOfParallelism: dop));
-        Assert.Equal(data, LZ4.Decompress(compressed));
-
-        compressed = await Collect(w => LZ4.CompressAsync(ToSequence(data, 5000), w, ParallelCompressFriendly, maxDegreeOfParallelism: dop));
-        Assert.Equal(data, LZ4.Decompress(compressed));
-    }
-
-    [Theory]
-    [MemberData(nameof(InputsAndParallelism))]
-    public async Task CompressAsync_SafeFileHandle(string name, int dop)
-    {
-        var data = GetInput(name);
-        var path = TempFile($"{name}.{dop}.bin");
-        await File.WriteAllBytesAsync(path, data);
-
-        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        var compressed = await Collect(w => LZ4.CompressAsync(handle, w, maxDegreeOfParallelism: dop));
-        Assert.Equal(data, LZ4.Decompress(compressed));
-
-        compressed = await Collect(w => LZ4.CompressAsync(handle, w, ParallelCompressFriendly, maxDegreeOfParallelism: dop));
+        Assert.Equal(BlockMode.BlockLinked, info.BlockMode);
+        Assert.Equal((ulong)data.Length, info.ContentSize);
         Assert.Equal(data, LZ4.Decompress(compressed));
     }
 
     [Fact]
-    public async Task CompressAsync_SafeFileHandle_WithOffset()
+    public async Task CompressAsync_ContentSize_RecordedWithoutOptions_AsAskedWithOptions()
     {
-        var header = Encoding.ASCII.GetBytes("HEADER-TO-SKIP-");
         var data = GetInput("compressible5m");
-        var path = TempFile("offset.bin");
-        await File.WriteAllBytesAsync(path, header.Concat(data).ToArray());
+        var path = TempFile("contentsize.bin");
+        await File.WriteAllBytesAsync(path, data);
+        using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
 
-        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        foreach (var dop in new[] { 1, 4 })
+        // every source with a known length records it when no options are given
+        var sources = new (string Name, byte[] Compressed)[]
         {
-            var compressed = await Collect(w => LZ4.CompressAsync(handle, header.Length, w, maxDegreeOfParallelism: dop));
-            Assert.Equal(data, LZ4.Decompress(compressed));
+            ("memory", await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w))),
+            ("sequence", await Collect(w => LZ4.CompressAsync(ToSequence(data, 5000), w))),
+            ("file", await Collect(w => LZ4.CompressAsync(file, w))),
+            ("memorystream", await Collect(w => LZ4.CompressAsync(new MemoryStream(data), w))),
+        };
+        foreach (var (name, compressed) in sources)
+        {
+            Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
+            Assert.True((ulong)data.Length == info.ContentSize, $"{name}: content size {info.ContentSize}");
         }
+
+        // the default options declare nothing
+        Assert.True(LZ4.TryGetFrameInfo(await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, LZ4CompressionOptions.Default)), out var none));
+        Assert.Equal(0ul, none.ContentSize);
+
+        // a declared length is recorded and has to be the real one
+        var declared = LZ4CompressionOptions.Default with { ContentSize = (ulong)data.Length };
+        Assert.True(LZ4.TryGetFrameInfo(await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, declared)), out var some));
+        Assert.Equal((ulong)data.Length, some.ContentSize);
+
+        var wrong = LZ4CompressionOptions.Default with { ContentSize = 1 };
+        await Assert.ThrowsAsync<ArgumentException>(async () => await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, wrong)));
+        await Assert.ThrowsAsync<ArgumentException>(async () => await Collect(w => LZ4.CompressAsync(ToSequence(data, 5000), w, wrong)));
+        file.Position = 0;
+        await Assert.ThrowsAsync<ArgumentException>(async () => await Collect(w => LZ4.CompressAsync(file, w, wrong)));
+
+        // a source of unknown length cannot be checked up front, the frame fails to close instead
+        await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.CompressAsync(new NonSeekableStream(data, 4096), w, wrong)));
+        Assert.True(LZ4.TryGetFrameInfo(await Collect(w => LZ4.CompressAsync(new NonSeekableStream(data, 4096), w, declared)), out var pledged));
+        Assert.Equal((ulong)data.Length, pledged.ContentSize);
+        Assert.True(LZ4.TryGetFrameInfo(await Collect(w => LZ4.CompressAsync(new NonSeekableStream(data, 4096), w)), out var unknown));
+        Assert.Equal(0ul, unknown.ContentSize);
+    }
+
+    [Theory]
+    [MemberData(nameof(Inputs))]
+    public async Task CompressAsync_ReadOnlyMemory(string name)
+    {
+        var data = GetInput(name);
+        var compressed = await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w));
+        Assert.Equal(data, LZ4.Decompress(compressed));
+        Assert.Equal(data, StreamDecompress(compressed));
+
+        compressed = await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, IndependentBlocks with { CompressionLevel = 3 }));
+        Assert.Equal(data, LZ4.Decompress(compressed));
+    }
+
+    [Theory]
+    [MemberData(nameof(Inputs))]
+    public async Task CompressAsync_ReadOnlySequence(string name)
+    {
+        var data = GetInput(name);
+        var compressed = await Collect(w => LZ4.CompressAsync(ToSequence(data, 70_001), w));
+        Assert.Equal(data, LZ4.Decompress(compressed));
+
+        compressed = await Collect(w => LZ4.CompressAsync(ToSequence(data, 5000), w, IndependentBlocks));
+        Assert.Equal(data, LZ4.Decompress(compressed));
     }
 
     [Theory]
@@ -301,18 +287,18 @@ public class LZ4AsyncApiTest : IDisposable
     }
 
     [Theory]
-    [MemberData(nameof(InputsAndParallelism))]
-    public async Task CompressAsync_FilePath_AndFileToFile(string name, int dop)
+    [MemberData(nameof(Inputs))]
+    public async Task CompressAsync_FilePath_AndFileToFile(string name)
     {
         var data = GetInput(name);
-        var source = TempFile($"{name}.{dop}.src");
-        var destination = TempFile($"{name}.{dop}.lz4");
+        var source = TempFile($"{name}.src");
+        var destination = TempFile($"{name}.lz4");
         await File.WriteAllBytesAsync(source, data);
 
-        var compressed = await Collect(w => LZ4.CompressAsync(source, w, maxDegreeOfParallelism: dop));
+        var compressed = await Collect(w => LZ4.CompressAsync(source, w));
         Assert.Equal(data, LZ4.Decompress(compressed));
 
-        await LZ4.CompressAsync(source, destination, maxDegreeOfParallelism: dop);
+        await LZ4.CompressAsync(source, destination);
         Assert.Equal(data, LZ4.Decompress(await File.ReadAllBytesAsync(destination)));
     }
 
@@ -329,7 +315,7 @@ public class LZ4AsyncApiTest : IDisposable
         });
     }
 
-    // ---- DecompressAsync, sequential and block parallel
+    // ---- DecompressAsync
 
     static byte[] MultiFrameInput(out byte[] expected)
     {
@@ -340,95 +326,63 @@ public class LZ4AsyncApiTest : IDisposable
         BitConverter.TryWriteBytes(skippable.AsSpan(0, 4), 0x184D2A50u);
         BitConverter.TryWriteBytes(skippable.AsSpan(4, 4), 4u);
         expected = a.Concat(b).Concat(c).ToArray();
-        return LZ4.Compress(a, ParallelFriendly)
+        return LZ4.Compress(a, IndependentBlocksWithChecksums)
             .Concat(skippable)
-            .Concat(LZ4.Compress(b, LZ4CompressionOptions.Default with { ContentSize = 1 }))
+            .Concat(LZ4.Compress(b, LZ4CompressionOptions.Default with { ContentSize = (ulong)b.Length }))
             .Concat(LZ4.Compress(ReadOnlySpan<byte>.Empty))
-            .Concat(LZ4.Compress(c, ParallelFriendly with { BlockSizeID = BlockSizeId.Max256KB }))
+            .Concat(LZ4.Compress(c, IndependentBlocksWithChecksums with { BlockSizeID = BlockSizeId.Max256KB }))
             .ToArray();
     }
 
     [Theory]
-    [MemberData(nameof(InputsAndParallelism))]
-    public async Task DecompressAsync_ReadOnlyMemory(string name, int dop)
+    [MemberData(nameof(Inputs))]
+    public async Task DecompressAsync_ReadOnlyMemory(string name)
     {
         var data = GetInput(name);
-        foreach (var compressed in new[] { LZ4.Compress(data), LZ4.Compress(data, ParallelFriendly) })
+        foreach (var compressed in new[] { LZ4.Compress(data), LZ4.Compress(data, IndependentBlocksWithChecksums) })
         {
-            Assert.Equal(data, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)compressed, w, maxDegreeOfParallelism: dop)));
-            Assert.Equal(data, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)compressed, w, LZ4DecompressionOptions.Default, dop)));
+            Assert.Equal(data, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)compressed, w)));
+            Assert.Equal(data, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)compressed, w, LZ4DecompressionOptions.Default)));
         }
     }
 
     [Theory]
-    [MemberData(nameof(InputsAndParallelism))]
-    public async Task DecompressAsync_ReadOnlySequence(string name, int dop)
+    [MemberData(nameof(Inputs))]
+    public async Task DecompressAsync_ReadOnlySequence(string name)
     {
         var data = GetInput(name);
-        foreach (var compressed in new[] { LZ4.Compress(data), LZ4.Compress(data, ParallelFriendly) })
+        foreach (var compressed in new[] { LZ4.Compress(data), LZ4.Compress(data, IndependentBlocksWithChecksums) })
         {
-            Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 333), w, maxDegreeOfParallelism: dop)));
-            Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 100_000), w, maxDegreeOfParallelism: dop)));
+            Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 333), w)));
+            Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 100_000), w)));
         }
     }
 
     [Theory]
-    [MemberData(nameof(InputsAndParallelism))]
-    public async Task DecompressAsync_SafeFileHandle(string name, int dop)
+    [MemberData(nameof(Inputs))]
+    public async Task DecompressAsync_Stream_AllKinds(string name)
     {
         var data = GetInput(name);
-        var compressed = LZ4.Compress(data, ParallelFriendly);
-        var path = TempFile($"{name}.{dop}.lz4");
-        await File.WriteAllBytesAsync(path, compressed);
+        var compressed = LZ4.Compress(data, IndependentBlocksWithChecksums);
 
-        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(handle, w, maxDegreeOfParallelism: dop)));
+        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(new MemoryStream(compressed), w)));
 
-        // the handle is still open and usable afterwards
-        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(handle, w, maxDegreeOfParallelism: dop)));
-    }
-
-    [Fact]
-    public async Task DecompressAsync_SafeFileHandle_WithOffset()
-    {
-        var header = Encoding.ASCII.GetBytes("HEADER-TO-SKIP-");
-        var data = GetInput("compressible5m");
-        var compressed = LZ4.Compress(data, ParallelFriendly);
-        var path = TempFile("offset.lz4");
-        await File.WriteAllBytesAsync(path, header.Concat(compressed).ToArray());
-
-        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        foreach (var dop in new[] { 1, 4 })
-        {
-            Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(handle, header.Length, w, maxDegreeOfParallelism: dop)));
-        }
-    }
-
-    [Theory]
-    [MemberData(nameof(InputsAndParallelism))]
-    public async Task DecompressAsync_Stream_AllKinds(string name, int dop)
-    {
-        var data = GetInput(name);
-        var compressed = LZ4.Compress(data, ParallelFriendly);
-
-        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(new MemoryStream(compressed), w, maxDegreeOfParallelism: dop)));
-
-        var path = TempFile($"{name}.{dop}.stream.lz4");
+        var path = TempFile($"{name}.stream.lz4");
         await File.WriteAllBytesAsync(path, compressed);
         await using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous))
         {
-            Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(fs, w, maxDegreeOfParallelism: dop)));
+            Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(fs, w)));
         }
 
-        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(new NonSeekableStream(compressed, maxRead: 97), w, maxDegreeOfParallelism: dop)));
+        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(new NonSeekableStream(compressed, maxRead: 97), w)));
     }
 
     [Theory]
-    [MemberData(nameof(InputsAndParallelism))]
-    public async Task DecompressAsync_PipeReader(string name, int dop)
+    [MemberData(nameof(Inputs))]
+    public async Task DecompressAsync_PipeReader(string name)
     {
         var data = GetInput(name);
-        var compressed = LZ4.Compress(data, ParallelFriendly);
+        var compressed = LZ4.Compress(data, IndependentBlocksWithChecksums);
 
         var source = new Pipe();
         var feeding = Task.Run(async () =>
@@ -440,45 +394,38 @@ public class LZ4AsyncApiTest : IDisposable
             await source.Writer.CompleteAsync();
         });
 
-        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(source.Reader, w, maxDegreeOfParallelism: dop)));
+        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(source.Reader, w)));
         await feeding;
     }
 
     [Theory]
-    [MemberData(nameof(InputsAndParallelism))]
-    public async Task DecompressAsync_FilePath_AndFileToFile(string name, int dop)
+    [MemberData(nameof(Inputs))]
+    public async Task DecompressAsync_FilePath_AndFileToFile(string name)
     {
         var data = GetInput(name);
-        var source = TempFile($"{name}.{dop}.in.lz4");
-        var destination = TempFile($"{name}.{dop}.out.bin");
-        await File.WriteAllBytesAsync(source, LZ4.Compress(data, ParallelFriendly));
+        var source = TempFile($"{name}.in.lz4");
+        var destination = TempFile($"{name}.out.bin");
+        await File.WriteAllBytesAsync(source, LZ4.Compress(data, IndependentBlocksWithChecksums));
 
-        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(source, w, maxDegreeOfParallelism: dop)));
+        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync(source, w)));
 
-        await LZ4.DecompressAsync(source, destination, maxDegreeOfParallelism: dop);
+        await LZ4.DecompressAsync(source, destination);
         Assert.Equal(data, await File.ReadAllBytesAsync(destination));
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(4)]
-    public async Task DecompressAsync_MultipleFrames_AllSources(int dop)
+    [Fact]
+    public async Task DecompressAsync_MultipleFrames_AllSources()
     {
         var compressed = MultiFrameInput(out var expected);
-        var path = TempFile($"multi.{dop}.lz4");
+        var path = TempFile("multi.lz4");
         await File.WriteAllBytesAsync(path, compressed);
 
-        Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)compressed, w, maxDegreeOfParallelism: dop)));
-        Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 333), w, maxDegreeOfParallelism: dop)));
-        Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(new MemoryStream(compressed), w, maxDegreeOfParallelism: dop)));
-        Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(new NonSeekableStream(compressed, 97), w, maxDegreeOfParallelism: dop)));
-        Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(path, w, maxDegreeOfParallelism: dop)));
+        Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)compressed, w)));
+        Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 333), w)));
+        Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(new MemoryStream(compressed), w)));
+        Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(new NonSeekableStream(compressed, 97), w)));
+        Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(path, w)));
 
-        using (var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous))
-        {
-            Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(handle, w, maxDegreeOfParallelism: dop)));
-        }
 
         var source = new Pipe();
         var feeding = Task.Run(async () =>
@@ -489,7 +436,7 @@ public class LZ4AsyncApiTest : IDisposable
             }
             await source.Writer.CompleteAsync();
         });
-        Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(source.Reader, w, maxDegreeOfParallelism: dop)));
+        Assert.Equal(expected, await Collect(w => LZ4.DecompressAsync(source.Reader, w)));
         await feeding;
 
         // one-shot and stream agree
@@ -497,27 +444,23 @@ public class LZ4AsyncApiTest : IDisposable
         Assert.Equal(expected, StreamDecompress(compressed));
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(4)]
-    public async Task DecompressAsync_EmptyInput_WritesNothing(int dop)
+    [Fact]
+    public async Task DecompressAsync_EmptyInput_WritesNothing()
     {
-        Assert.Empty(await Collect(w => LZ4.DecompressAsync(ReadOnlyMemory<byte>.Empty, w, maxDegreeOfParallelism: dop)));
-        Assert.Empty(await Collect(w => LZ4.DecompressAsync(ReadOnlySequence<byte>.Empty, w, maxDegreeOfParallelism: dop)));
-        Assert.Empty(await Collect(w => LZ4.DecompressAsync(new MemoryStream(), w, maxDegreeOfParallelism: dop)));
-        Assert.Empty(await Collect(w => LZ4.DecompressAsync(new NonSeekableStream([], 10), w, maxDegreeOfParallelism: dop)));
+        Assert.Empty(await Collect(w => LZ4.DecompressAsync(ReadOnlyMemory<byte>.Empty, w)));
+        Assert.Empty(await Collect(w => LZ4.DecompressAsync(ReadOnlySequence<byte>.Empty, w)));
+        Assert.Empty(await Collect(w => LZ4.DecompressAsync(new MemoryStream(), w)));
+        Assert.Empty(await Collect(w => LZ4.DecompressAsync(new NonSeekableStream([], 10), w)));
 
-        var path = TempFile($"empty.{dop}.lz4");
+        var path = TempFile("empty.lz4");
         await File.WriteAllBytesAsync(path, []);
-        Assert.Empty(await Collect(w => LZ4.DecompressAsync(path, w, maxDegreeOfParallelism: dop)));
+        Assert.Empty(await Collect(w => LZ4.DecompressAsync(path, w)));
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(4)]
-    public async Task DecompressAsync_BadInput_Throws(int dop)
+    [Fact]
+    public async Task DecompressAsync_BadInput_Throws()
     {
-        var good = LZ4.Compress(GetInput("compressible5m"), ParallelFriendly);
+        var good = LZ4.Compress(GetInput("compressible5m"), IndependentBlocksWithChecksums);
         var truncated = good.AsSpan(0, good.Length / 2).ToArray();
         var trailing = good.Concat(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }).ToArray();
         var garbage = Random(4096, 99);
@@ -526,20 +469,17 @@ public class LZ4AsyncApiTest : IDisposable
 
         foreach (var bad in new[] { truncated, trailing, garbage, corruptBlock })
         {
-            await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)bad, w, maxDegreeOfParallelism: dop)));
-            await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.DecompressAsync(ToSequence(bad, 1000), w, maxDegreeOfParallelism: dop)));
-            await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.DecompressAsync(new NonSeekableStream(bad, 1000), w, maxDegreeOfParallelism: dop)));
+            await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)bad, w)));
+            await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.DecompressAsync(ToSequence(bad, 1000), w)));
+            await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.DecompressAsync(new NonSeekableStream(bad, 1000), w)));
         }
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(4)]
-    public async Task DecompressAsync_VerifiesChecksums_InEveryPath(int dop)
+    [Fact]
+    public async Task DecompressAsync_VerifiesChecksums()
     {
         var data = GetInput("compressible5m");
-        var compressed = LZ4.Compress(data, ParallelFriendly);
+        var compressed = LZ4.Compress(data, IndependentBlocksWithChecksums);
 
         // flip a byte in the content checksum (last 4 bytes of the frame)
         var badContent = compressed.ToArray();
@@ -551,13 +491,13 @@ public class LZ4AsyncApiTest : IDisposable
 
         foreach (var bad in new[] { badContent, badBlock })
         {
-            await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)bad, w, maxDegreeOfParallelism: dop)));
+            await Assert.ThrowsAsync<LZ4Exception>(async () => await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)bad, w)));
             Assert.Throws<LZ4Exception>(() => LZ4.Decompress(bad));
         }
 
         // SkipChecksums accepts the corrupt content checksum in every path
         var skip = LZ4DecompressionOptions.Default with { SkipChecksums = true };
-        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)badContent, w, skip, dop)));
+        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)badContent, w, skip)));
         Assert.Equal(data, LZ4.Decompress(badContent, skip));
     }
 
@@ -571,44 +511,38 @@ public class LZ4AsyncApiTest : IDisposable
         foreach (var compressed in new[]
         {
             LZ4.Compress(data, LZ4CompressionOptions.Default with { Dictionary = dict }),
-            LZ4.Compress(data, ParallelFriendly with { Dictionary = dict }),
+            LZ4.Compress(data, IndependentBlocksWithChecksums with { Dictionary = dict }),
         })
         {
-            foreach (var dop in new[] { 1, 4 })
-            {
-                Assert.Equal(data, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)compressed, w, options, dop)));
-            }
+            Assert.Equal(data, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)compressed, w, options)));
         }
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(4)]
-    public async Task CompressAsync_WithDictionary_ParallelAndSequential(int dop)
+    [Fact]
+    public async Task CompressAsync_WithDictionary()
     {
         var data = GetInput("compressible5m");
         using var dict = LZ4Dictionary.Create(Encoding.ASCII.GetBytes(string.Concat(Enumerable.Repeat("lz4 native compression dotnet async ", 64))), 11);
         var options = LZ4CompressionOptions.Default with { Dictionary = dict };
 
-        var compressed = await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, options, maxDegreeOfParallelism: dop));
+        var compressed = await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, options));
         Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
         Assert.Equal(11u, info.DictionaryID);
 
         var decompressionOptions = LZ4DecompressionOptions.Default with { Dictionary = dict };
         Assert.Equal(data, LZ4.Decompress(compressed, decompressionOptions));
-        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)compressed, w, decompressionOptions, maxDegreeOfParallelism: 4)));
-        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)compressed, w, decompressionOptions, maxDegreeOfParallelism: 1)));
+        Assert.Equal(data, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)compressed, w, decompressionOptions)));
     }
 
     [Fact]
-    public async Task RoundTrip_AsyncBothWays_Parallel()
+    public async Task RoundTrip_AsyncBothWays()
     {
         var data = GetInput("compressible5m");
-        var compressed = await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, maxDegreeOfParallelism: 4));
+        var compressed = await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, IndependentBlocks));
         Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
         Assert.Equal(BlockMode.BlockIndependent, info.BlockMode);
 
-        var decompressed = await Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 4096), w, maxDegreeOfParallelism: 4));
+        var decompressed = await Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 4096), w));
         Assert.Equal(data, decompressed);
     }
 }

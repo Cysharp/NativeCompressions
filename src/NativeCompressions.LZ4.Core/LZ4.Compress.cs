@@ -8,12 +8,14 @@ namespace NativeCompressions;
 
 public static partial class LZ4
 {
-    public static byte[] Compress(ReadOnlySpan<byte> source) => Compress(source, LZ4CompressionOptions.Default);
+    // Without options the length is known and gets recorded. With options, ContentSize is what the caller asked for.
+    public static byte[] Compress(ReadOnlySpan<byte> source) => Compress(source, LZ4CompressionOptions.Default with { ContentSize = (ulong)source.Length });
 
     public static unsafe byte[] Compress(ReadOnlySpan<byte> source, in LZ4CompressionOptions options)
     {
+        options.ThrowIfContentSizeDiffers(source.Length);
         var dictionary = options.Dictionary;
-        var pref = options.ToPreferencesWithContentSize(options.ContentSize);
+        var pref = options.ToPreferences();
 
         var maxLength = LZ4F_compressFrameBound((uint)source.Length, &pref);
         var buffer = ArrayPool<byte>.Shared.Rent((int)maxLength);
@@ -30,12 +32,13 @@ public static partial class LZ4
                 }
                 else
                 {
+                    using var lease = dictionary.Acquire();
                     LZ4F_cctx_s* cctx = default;
                     var code = LZ4F_createCompressionContext(&cctx, LZ4.FrameVersion);
                     LZ4.ThrowIfError(code);
                     try
                     {
-                        var bytesWrittenOrErrorCode = LZ4F_compressFrame_usingCDict(cctx, dest, (nuint)buffer.Length, src, (nuint)source.Length, dictionary.Handle, &pref);
+                        var bytesWrittenOrErrorCode = LZ4F_compressFrame_usingCDict(cctx, dest, (nuint)buffer.Length, src, (nuint)source.Length, lease.Compression, &pref);
                         ThrowIfError(bytesWrittenOrErrorCode);
                         return buffer.AsSpan(0, (int)bytesWrittenOrErrorCode).ToArray();
                     }
@@ -52,14 +55,13 @@ public static partial class LZ4
         }
     }
 
-    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination) => Compress(source, destination, LZ4CompressionOptions.Default);
+    public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination) => Compress(source, destination, LZ4CompressionOptions.Default with { ContentSize = (ulong)source.Length });
 
     public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, in LZ4CompressionOptions options)
     {
+        options.ThrowIfContentSizeDiffers(source.Length);
         var dictionary = options.Dictionary;
-        // Same rule as the array overload: LZ4F_compressFrame records the content size only when the
-        // preference is non zero, and then corrects it to the real size. So ContentSize acts as a flag here.
-        var pref = options.ToPreferencesWithContentSize(options.ContentSize);
+        var pref = options.ToPreferences();
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)
@@ -72,12 +74,13 @@ public static partial class LZ4
             }
             else
             {
+                using var lease = dictionary.Acquire();
                 LZ4F_cctx_s* cctx = default;
                 var code = LZ4F_createCompressionContext(&cctx, LZ4.FrameVersion);
                 LZ4.ThrowIfError(code);
                 try
                 {
-                    var bytesWrittenOrErrorCode = LZ4F_compressFrame_usingCDict(cctx, dest, (nuint)destination.Length, src, (nuint)source.Length, dictionary.Handle, &pref);
+                    var bytesWrittenOrErrorCode = LZ4F_compressFrame_usingCDict(cctx, dest, (nuint)destination.Length, src, (nuint)source.Length, lease.Compression, &pref);
                     ThrowIfError(bytesWrittenOrErrorCode);
                     return (int)bytesWrittenOrErrorCode;
                 }

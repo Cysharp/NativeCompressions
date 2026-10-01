@@ -41,6 +41,7 @@ public static partial class Zstandard
         }
     }
 
+    /// <remarks>The encoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardEncoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static unsafe byte[] Compress(ReadOnlySpan<byte> source, ZstandardEncoder encoder)
     {
         var maxLength = GetMaxCompressedLength(source.Length);
@@ -74,6 +75,7 @@ public static partial class Zstandard
         fixed (byte* dest = destination)
         {
             nuint bytesWritten;
+            using var lease = compressionOptions.AcquireDictionary();
             var context = ZSTD_createCCtx();
             if (context == null)
             {
@@ -82,7 +84,7 @@ public static partial class Zstandard
 
             try
             {
-                compressionOptions.SetParameter(context);
+                compressionOptions.SetParameter(context, lease);
                 bytesWritten = ZSTD_compress2(context, dest, (nuint)destination.Length, src, (nuint)source.Length);
             }
             finally
@@ -95,6 +97,7 @@ public static partial class Zstandard
         }
     }
 
+    /// <remarks>The encoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardEncoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination, ZstandardEncoder encoder)
     {
         var status = encoder.Compress(source, destination, out var bytesConsumed, out var bytesWritten, isFinalBlock: true);

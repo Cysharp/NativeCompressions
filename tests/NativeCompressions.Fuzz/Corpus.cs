@@ -95,7 +95,7 @@ public static class Corpus
         yield return ("empty-frame", LZ4.Compress(ReadOnlySpan<byte>.Empty));
         yield return ("text", LZ4.Compress(text));
         yield return ("text-checksums", LZ4.Compress(text, d with { ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled, BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled }));
-        yield return ("text-size", LZ4.Compress(text, d with { ContentSize = 1 }));
+        yield return ("text-size", LZ4.Compress(text, d with { ContentSize = (ulong)text.Length }));
         yield return ("text-level9", LZ4.Compress(text, d with { CompressionLevel = 9 }));
         yield return ("random-independent", LZ4.Compress(random, d with { BlockMode = BlockMode.BlockIndependent, BlockSizeID = BlockSizeId.Max64KB }));
         yield return ("multi-frame", LZ4.Compress(text).Concat(LZ4.Compress(random)).Concat(LZ4.Compress(ReadOnlySpan<byte>.Empty)).ToArray());

@@ -16,6 +16,11 @@
     <DefineConstants>$(DefineConstants);__IOS__</DefineConstants>
   </PropertyGroup>
 
+  <!-- Fails the build of an iOS or Mac Catalyst app older than .NET 10, which would get the generic assembly. -->
+  <ItemGroup>
+    <None Include="buildTransitive/NativeCompressions.LZ4.Core.targets" Pack="true" PackagePath="buildTransitive/" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="PolySharp" Version="1.15.0">
       <PrivateAssets>all</PrivateAssets>
@@ -32,13 +37,10 @@
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' or '$(TargetFramework)' == 'netstandard2.1'">
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
     <PackageReference Include="System.IO.Pipelines" Version="9.0.8" />
-    <PackageReference Include="System.Threading.Channels" Version="9.0.8" />
-    <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="9.0.8" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <PackageReference Include="System.IO.Pipelines" Version="9.0.8" />
-    <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="9.0.8" />
   </ItemGroup>
 
 </Project>

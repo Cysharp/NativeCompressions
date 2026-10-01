@@ -18,8 +18,8 @@ a fixed set of deterministic mutations, and every file under `regressions/`.
 | `lz4-decompress` | `LZ4.Decompress` (trusted and untrusted), span overload, `LZ4Stream` and `TryGetFrameInfo`, all must agree | `LZ4Exception` |
 | `lz4-decoder` | `LZ4Decoder` with input and output chunk sizes taken from the data, multi frame, drain | none (returns `InvalidData`) |
 | `lz4-stream` | `LZ4Stream` reading from an inner stream that returns small reads | `LZ4Exception` |
-| `lz4-decompress-async` | `DecompressAsync` over a multi segment sequence with parallelism 1 and 2, compared with one-shot | `LZ4Exception` |
-| `lz4-roundtrip` | compress with options taken from the data, decompress through every path including block parallel | none |
+| `lz4-decompress-async` | `DecompressAsync` over a multi segment sequence, compared with one-shot | `LZ4Exception` |
+| `lz4-roundtrip` | compress with options taken from the data, decompress through every path | none |
 | `lz4-dictionary` | raw dictionaries with an id: create, compress, decompress with and without, frame header id | `LZ4Exception` only when decoding without the dictionary |
 
 Anything else escaping a target is a finding: a native crash, a hang, an unexpected exception type, or a `FuzzAssertionException` for a broken invariant.

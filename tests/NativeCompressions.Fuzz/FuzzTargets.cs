@@ -176,23 +176,22 @@ public static class FuzzTargets
         var segmentSize = 1 + (data[0] % 64) * 32;
         var sequence = ToSequence(data.ToArray(), segmentSize);
 
-        foreach (var dop in new[] { 1, 2 })
         {
             byte[]? actual = null;
             try
             {
-                actual = Collect(w => LZ4.DecompressAsync(sequence, w, maxDegreeOfParallelism: dop));
+                actual = Collect(w => LZ4.DecompressAsync(sequence, w));
             }
             catch (LZ4Exception) { }
 
             if (expected != null)
             {
-                Check(actual != null, $"DecompressAsync(dop {dop}) rejected input that Decompress accepted");
-                Check(expected.AsSpan().SequenceEqual(actual), $"DecompressAsync(dop {dop}) differs from one-shot");
+                Check(actual != null, "DecompressAsync rejected input that Decompress accepted");
+                Check(expected.AsSpan().SequenceEqual(actual), "DecompressAsync differs from one-shot");
             }
             else
             {
-                Check(actual == null, $"DecompressAsync(dop {dop}) accepted input that Decompress rejected");
+                Check(actual == null, "DecompressAsync accepted input that Decompress rejected");
             }
         }
     }
@@ -217,7 +216,7 @@ public static class FuzzTargets
             BlockMode = independent ? BlockMode.BlockIndependent : BlockMode.BlockLinked,
             ContentChecksumFlag = contentChecksum ? ContentChecksum.ContentChecksumEnabled : ContentChecksum.NoContentChecksum,
             BlockChecksumFlag = blockChecksum ? BlockChecksum.BlockChecksumEnabled : BlockChecksum.NoBlockChecksum,
-            ContentSize = contentSize ? 1ul : 0ul,
+            ContentSize = contentSize ? (ulong)payload.Length : 0ul,
         };
 
         // one-shot
@@ -258,11 +257,10 @@ public static class FuzzTargets
             Check(result.ToArray().AsSpan().SequenceEqual(payload), "LZ4Stream round trip differs");
         }
 
-        // async, sequential and parallel
-        foreach (var dop in new[] { 1, 2 })
+        // async
         {
-            var viaAsync = Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 1000), w, maxDegreeOfParallelism: dop));
-            Check(viaAsync.AsSpan().SequenceEqual(payload), $"DecompressAsync(dop {dop}) round trip differs");
+            var viaAsync = Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 1000), w));
+            Check(viaAsync.AsSpan().SequenceEqual(payload), "DecompressAsync round trip differs");
         }
     }
 
@@ -613,10 +611,10 @@ public static class FuzzTargets
         for (int i = 0; i < sampleCount; i++) lengths[i] = each;
         lengths[^1] += samples.Length - each * sampleCount;
 
-        ZstandardDictionary dict;
+        byte[] trained;
         try
         {
-            dict = ZstandardDictionary.Train(samples, lengths, maxDictionarySize);
+            trained = ZstandardDictionary.Train(samples, lengths, maxDictionarySize);
         }
         catch (ZstandardException)
         {
@@ -627,10 +625,10 @@ public static class FuzzTargets
             return; // zero length samples etc.
         }
 
-        using (dict)
+        Check(trained.Length > 0 && trained.Length <= maxDictionarySize, "trained dictionary size out of range");
+
+        using (var dict = ZstandardDictionary.Create(trained))
         {
-            Check(dict.Data.Length > 0 && dict.Data.Length <= maxDictionarySize, "trained dictionary size out of range");
-            Check(dict.DictionaryId != 0, "trained dictionary has no id");
 
             var payload = samples.Slice(0, Math.Min(samples.Length, lengths[0]));
             var compressed = Zstandard.Compress(payload, ZstandardCompressionOptions.Default with { Dictionary = dict });

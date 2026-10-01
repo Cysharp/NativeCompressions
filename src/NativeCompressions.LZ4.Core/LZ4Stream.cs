@@ -59,7 +59,7 @@ public sealed class LZ4Stream : Stream
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.needDisposeNativeCompressor = true;
-        this.decoder = new LZ4Decoder(options);
+        this.decoder = new LZ4Decoder(options.WithoutStableDst());
         this.mode = CompressionMode.Decompress;
     }
 
@@ -72,17 +72,21 @@ public sealed class LZ4Stream : Stream
         this.mode = CompressionMode.Compress;
     }
 
+    /// <exception cref="ArgumentException">The decoder was created with <see cref="LZ4DecompressionOptions.StableDst"/>. Buffers handed to Read do not stay at one address, so such a decoder cannot be used by a stream.</exception>
     public LZ4Stream(Stream stream, LZ4Decoder decoder, bool leaveOpen = false)
     {
+        if (decoder == null) throw new ArgumentNullException(nameof(decoder));
+        if (decoder.StableDst) throw new ArgumentException("A decoder created with StableDst cannot be used by a stream. Buffers handed to Read do not stay at one address.", nameof(decoder));
+
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.needDisposeNativeCompressor = false;
-        this.decoder = decoder ?? throw new ArgumentNullException(nameof(decoder));
+        this.decoder = decoder;
         this.mode = CompressionMode.Decompress;
     }
 
-    public override bool CanRead => mode == CompressionMode.Decompress && stream.CanRead;
-    public override bool CanWrite => mode == CompressionMode.Compress && stream.CanWrite;
+    public override bool CanRead => !isDisposed && mode == CompressionMode.Decompress && stream.CanRead;
+    public override bool CanWrite => !isDisposed && mode == CompressionMode.Compress && stream.CanWrite;
     public override bool CanSeek => false;
     public override long Length => throw new NotSupportedException();
     public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
@@ -153,7 +157,9 @@ public sealed class LZ4Stream : Stream
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
 
-        if (buffer == null) return;
+        // An encoder handed in by the caller may hold data this stream never saw, so the buffer is rented here too.
+        // Sized for Close as well, which may follow without any Write.
+        buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxCompressedLength(0));
 
         // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
         var written = encoder!.Flush(buffer);
@@ -169,7 +175,14 @@ public sealed class LZ4Stream : Stream
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
-        if (buffer == null) return;
+
+        // Checked before the encoder is touched. Output taken from the encoder cannot be put back,
+        // so a cancelled write after that would lose it.
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // An encoder handed in by the caller may hold data this stream never saw, so the buffer is rented here too.
+        // Sized for Close as well, which may follow without any Write.
+        buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxCompressedLength(0));
 
         // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
         var written = encoder!.Flush(buffer);
@@ -423,6 +436,9 @@ public sealed class LZ4Stream : Stream
             throw new InvalidOperationException("Read operation must be Decompress mode.");
         }
 
+        // checked before the decoder is touched, a cancelled read must not consume input
+        cancellationToken.ThrowIfCancellationRequested();
+
         buffer ??= ArrayPool<byte>.Shared.Rent(DecoderBufferSize);
         var totalRead = 0;
 
@@ -541,6 +557,19 @@ public sealed class LZ4Stream : Stream
 
     #endregion
 
+    // Close writes the header of an empty frame, buffered data and the footer, so the buffer must have room for all of it.
+    void EnsureCloseBuffer()
+    {
+        var closeLength = encoder!.GetMaxCompressedLength(0);
+        if (buffer != null && buffer.Length >= closeLength) return;
+
+        if (buffer != null)
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+        buffer = ArrayPool<byte>.Shared.Rent(closeLength);
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (isDisposed) return;
@@ -549,12 +578,14 @@ public sealed class LZ4Stream : Stream
         Exception? closeFailure = null;
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            // also without any Write, so an empty source still produces a valid frame
+            if (mode == CompressionMode.Compress)
             {
                 try
                 {
-                    var written = encoder!.Close(buffer);
-                    stream.Write(buffer, 0, written);
+                    EnsureCloseBuffer();
+                    var written = encoder!.Close(buffer!);
+                    stream.Write(buffer!, 0, written);
                 }
                 catch (Exception ex)
                 {
@@ -601,11 +632,13 @@ public sealed class LZ4Stream : Stream
         Exception? closeFailure = null;
         try
         {
-            if (buffer != null && mode == CompressionMode.Compress)
+            // also without any Write, so an empty source still produces a valid frame
+            if (mode == CompressionMode.Compress)
             {
                 try
                 {
-                    var written = encoder!.Close(buffer);
+                    EnsureCloseBuffer();
+                    var written = encoder!.Close(buffer!);
                     await stream.WriteAsync(buffer.AsMemory(0, written));
                 }
                 catch (Exception ex)

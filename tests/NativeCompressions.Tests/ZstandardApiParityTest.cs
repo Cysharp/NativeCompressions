@@ -1,5 +1,6 @@
 using System.Text;
 using BclCompressionOptions = System.IO.Compression.ZstandardCompressionOptions;
+using BclDecoder = System.IO.Compression.ZstandardDecoder;
 using BclDictionary = System.IO.Compression.ZstandardDictionary;
 using BclStream = System.IO.Compression.ZstandardStream;
 using CompressionLevel = System.IO.Compression.CompressionLevel;
@@ -8,7 +9,7 @@ using CompressionMode = System.IO.Compression.CompressionMode;
 namespace NativeCompressions.Tests;
 
 // Covers the APIs added for parity with System.IO.Compression in .NET 11:
-// ZstandardDictionary.Create / Data / DictionaryId, Zstandard.TryCompress / TryDecompress,
+// ZstandardDictionary.Create / Data, Zstandard.TryCompress / TryDecompress,
 // ZstandardStream(CompressionLevel), ZstandardStream(mode, dictionary), ZstandardStream.BaseStream.
 public class ZstandardApiParityTest
 {
@@ -39,7 +40,6 @@ public class ZstandardApiParityTest
 
         Assert.Equal(bytes, dict.Data.ToArray());
         Assert.Equal(5, dict.CompressionLevel);
-        Assert.Equal(0u, dict.DictionaryId); // raw content dictionary has no header
         Assert.False(dict.IsDisposed);
     }
 
@@ -75,7 +75,7 @@ public class ZstandardApiParityTest
     }
 
     [Fact]
-    public void Dictionary_TrainedByBcl_HasDictionaryIdAndInteroperates()
+    public void Dictionary_TrainedByBcl_Interoperates()
     {
         // build a trained dictionary with the BCL, then load the same bytes on the native side
         var rand = new Random(7);
@@ -93,7 +93,6 @@ public class ZstandardApiParityTest
         using var bclDict = BclDictionary.Train(concatenated, lengths, 16 * 1024);
         using var nativeDict = ZstandardDictionary.Create(bclDict.Data.Span, 3);
 
-        Assert.NotEqual(0u, nativeDict.DictionaryId);
         Assert.Equal(bclDict.Data.ToArray(), nativeDict.Data.ToArray());
 
         var data = samples[0].Concat(samples[1]).ToArray();
@@ -120,10 +119,11 @@ public class ZstandardApiParityTest
     {
         var (concatenated, lengths, samples) = TrainingSamples(seed: 11);
 
-        using var trained = ZstandardDictionary.Train(concatenated, lengths, 16 * 1024, compressionLevel: 5);
+        var bytes = ZstandardDictionary.Train(concatenated, lengths, 16 * 1024);
+        Assert.True(bytes.Length > 0 && bytes.Length <= 16 * 1024);
 
-        Assert.NotEqual(0u, trained.DictionaryId);
-        Assert.True(trained.Data.Length > 0 && trained.Data.Length <= 16 * 1024);
+        using var trained = ZstandardDictionary.Create(bytes, 5);
+        Assert.Equal(bytes, trained.Data.ToArray());
         Assert.Equal(5, trained.CompressionLevel);
 
         var data = samples[0].Concat(samples[1]).Concat(samples[2]).ToArray();
@@ -150,10 +150,10 @@ public class ZstandardApiParityTest
         // both wrap ZDICT_trainFromBuffer, so the same samples and size should give the same bytes
         var (concatenated, lengths, _) = TrainingSamples(seed: 13);
 
-        using var native = ZstandardDictionary.Train(concatenated, lengths, 8 * 1024);
+        var native = ZstandardDictionary.Train(concatenated, lengths, 8 * 1024);
         using var bcl = BclDictionary.Train(concatenated, lengths, 8 * 1024);
 
-        Assert.Equal(bcl.Data.ToArray(), native.Data.ToArray());
+        Assert.Equal(bcl.Data.ToArray(), native);
     }
 
     [Fact]
@@ -276,6 +276,36 @@ public class ZstandardApiParityTest
 
         // wrong dictionary is an error
         Assert.Throws<ZstandardException>(() => Zstandard.TryDecompress(compressed, new byte[data.Length], out _));
+    }
+
+    [Fact]
+    public void TryDecompress_DecodesAllFrames_LikeBcl()
+    {
+        var a = SampleData();
+        var b = Utf8("second frame");
+        var empty = Zstandard.Compress(ReadOnlySpan<byte>.Empty);
+        var concatenated = Zstandard.Compress(a).Concat(empty).Concat(Zstandard.Compress(b, ZstandardCompressionOptions.Default with { ChecksumFlag = true })).ToArray();
+        var expected = a.Concat(b).ToArray();
+
+        // one native call decodes every frame, the same as the BCL one-shot decoder
+        var dest = new byte[expected.Length];
+        Assert.True(Zstandard.TryDecompress(concatenated, dest, out var written));
+        Assert.Equal(expected, dest.AsSpan(0, written).ToArray());
+
+        var bclDest = new byte[expected.Length];
+        Assert.True(BclDecoder.TryDecompress(concatenated, bclDest, out var bclWritten));
+        Assert.Equal(expected, bclDest.AsSpan(0, bclWritten).ToArray());
+
+        // room for the first frame only is too small, and nothing is reported as written
+        Assert.False(Zstandard.TryDecompress(concatenated, new byte[a.Length], out written));
+        Assert.Equal(0, written);
+
+        // the dictionary applies to every frame
+        using var dict = ZstandardDictionary.Create(DictionaryBytes(), 3);
+        var options = ZstandardCompressionOptions.Default with { Dictionary = dict };
+        var withDict = Zstandard.Compress(a, options).Concat(Zstandard.Compress(b, options)).ToArray();
+        Assert.True(Zstandard.TryDecompress(withDict, dest, out written, ZstandardDecompressionOptions.Default with { Dictionary = dict }));
+        Assert.Equal(expected, dest.AsSpan(0, written).ToArray());
     }
 
     // ---- ZstandardStream
