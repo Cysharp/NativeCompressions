@@ -12,6 +12,7 @@ namespace NativeCompressions;
 /// <remarks>
 /// Call <see cref="Dispose"/> to release the native context. A finalizer releases it if Dispose is never called.
 /// Instances are not thread-safe.
+/// After Compress, Flush or Close returns <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset()"/> before reusing the encoder, or dispose it.
 /// </remarks>
 public sealed unsafe class ZstandardEncoder : IDisposable
 {
@@ -109,6 +110,8 @@ public sealed unsafe class ZstandardEncoder : IDisposable
     /// This method follows the same pattern as System.IO.Compression.BrotliEncoder.
     /// When isFinalBlock is true, the method will attempt to flush all internal buffers and finalize the frame.
     /// The method is designed to be called multiple times for streaming scenarios.
+    /// After <see cref="OperationStatus.InvalidData"/> the native context is in an error state and the frame cannot be continued.
+    /// Call <see cref="Reset()"/> before reusing the encoder, or dispose it.
     /// </remarks>
     public OperationStatus Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
     {
@@ -116,11 +119,27 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         return CompressCore(source, destination, out bytesConsumed, out bytesWritten, endOp);
     }
 
+    /// <summary>
+    /// Writes out everything the encoder holds so far, without ending the frame.
+    /// </summary>
+    /// <returns>
+    /// <see cref="OperationStatus.Done"/> when everything is written;
+    /// <see cref="OperationStatus.DestinationTooSmall"/> when more is left, call again with more room;
+    /// <see cref="OperationStatus.InvalidData"/> on failure. Then call <see cref="Reset()"/> before reusing the encoder, or dispose it.
+    /// </returns>
     public OperationStatus Flush(Span<byte> destination, out int bytesWritten)
     {
         return CompressCore([], destination, out _, out bytesWritten, ZSTD_EndDirective.ZSTD_e_flush);
     }
 
+    /// <summary>
+    /// Ends the current frame and writes out everything the encoder holds. The encoder can then compress another frame.
+    /// </summary>
+    /// <returns>
+    /// <see cref="OperationStatus.Done"/> when the frame is completely written;
+    /// <see cref="OperationStatus.DestinationTooSmall"/> when more is left, call again with more room;
+    /// <see cref="OperationStatus.InvalidData"/> on failure. Then call <see cref="Reset()"/> before reusing the encoder, or dispose it.
+    /// </returns>
     public OperationStatus Close(Span<byte> destination, out int bytesWritten)
     {
         return CompressCore([], destination, out _, out bytesWritten, ZSTD_EndDirective.ZSTD_e_end);

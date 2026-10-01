@@ -16,6 +16,7 @@ public static partial class Zstandard
         await CompressAsync(source, destination, encoder, cancellationToken);
     }
 
+    /// <remarks>The encoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardEncoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask CompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, ZstandardEncoder encoder, CancellationToken cancellationToken = default)
     {
         // checked before anything is compressed, output already handed to the destination cannot be taken back
@@ -46,6 +47,7 @@ public static partial class Zstandard
         await CompressAsync(source, destination, encoder, cancellationToken);
     }
 
+    /// <remarks>The encoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardEncoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask CompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, ZstandardEncoder encoder, CancellationToken cancellationToken = default)
     {
         // checked before anything is compressed, output already handed to the destination cannot be taken back
@@ -112,6 +114,7 @@ public static partial class Zstandard
         await CompressAsync(source, destination, encoder, cancellationToken);
     }
 
+    /// <remarks>The encoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardEncoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask CompressAsync(Stream source, PipeWriter destination, ZstandardEncoder encoder, CancellationToken cancellationToken = default)
     {
         if (source is MemoryStream ms && ms.TryGetBuffer(out var buffer))
@@ -146,6 +149,7 @@ public static partial class Zstandard
         await CompressAsync(source, destination, encoder, cancellationToken);
     }
 
+    /// <remarks>The encoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardEncoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask CompressAsync(PipeReader source, PipeWriter destination, ZstandardEncoder encoder, CancellationToken cancellationToken = default)
     {
         // checked before anything is compressed, output already handed to the destination cannot be taken back
@@ -237,6 +241,7 @@ public static partial class Zstandard
         await CompressAsync(sourceFilePath, destination, encoder, cancellationToken);
     }
 
+    /// <remarks>The encoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardEncoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask CompressAsync(string sourceFilePath, PipeWriter destination, ZstandardEncoder encoder, CancellationToken cancellationToken = default)
     {
         using var source = OpenSource(sourceFilePath);
@@ -249,6 +254,7 @@ public static partial class Zstandard
         await CompressAsync(sourceFilePath, destinationFilePath, encoder, cancellationToken);
     }
 
+    /// <remarks>The encoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardEncoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask CompressAsync(string sourceFilePath, string destinationFilePath, ZstandardEncoder encoder, CancellationToken cancellationToken = default)
     {
         // checked before any file is opened, a cancelled call must not truncate the destination

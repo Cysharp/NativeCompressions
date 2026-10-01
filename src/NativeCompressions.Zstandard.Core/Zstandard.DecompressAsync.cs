@@ -16,6 +16,7 @@ public static partial class Zstandard
         await DecompressAsync(source, destination, decoder, cancellationToken);
     }
 
+    /// <remarks>The decoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask DecompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
         // checked before anything is decoded, output already handed to the destination cannot be taken back
@@ -30,6 +31,7 @@ public static partial class Zstandard
         await DecompressAsync(source, destination, decoder, cancellationToken);
     }
 
+    /// <remarks>The decoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask DecompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
         // checked before anything is decoded, output already handed to the destination cannot be taken back
@@ -52,6 +54,7 @@ public static partial class Zstandard
         await DecompressAsync(source, destination, decoder, cancellationToken);
     }
 
+    /// <remarks>The decoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask DecompressAsync(Stream source, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
         if (source is MemoryStream ms && ms.TryGetBuffer(out var buffer))
@@ -86,6 +89,7 @@ public static partial class Zstandard
         await DecompressAsync(source, destination, decoder, cancellationToken);
     }
 
+    /// <remarks>The decoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask DecompressAsync(PipeReader source, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
         // checked before anything is decoded, output already handed to the destination cannot be taken back
@@ -128,6 +132,7 @@ public static partial class Zstandard
         await DecompressAsync(sourceFilePath, destination, decoder, cancellationToken);
     }
 
+    /// <remarks>The decoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask DecompressAsync(string sourceFilePath, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
         using var source = OpenSource(sourceFilePath);
@@ -140,6 +145,7 @@ public static partial class Zstandard
         await DecompressAsync(sourceFilePath, destinationFilePath, decoder, cancellationToken);
     }
 
+    /// <remarks>The decoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask DecompressAsync(string sourceFilePath, string destinationFilePath, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
         // checked before any file is opened, a cancelled call must not truncate the destination

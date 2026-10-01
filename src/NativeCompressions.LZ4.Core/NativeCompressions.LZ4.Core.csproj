@@ -16,6 +16,11 @@
     <DefineConstants>$(DefineConstants);__IOS__</DefineConstants>
   </PropertyGroup>
 
+  <!-- Fails the build of an iOS or Mac Catalyst app older than .NET 10, which would get the generic assembly. -->
+  <ItemGroup>
+    <None Include="buildTransitive/NativeCompressions.LZ4.Core.targets" Pack="true" PackagePath="buildTransitive/" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="PolySharp" Version="1.15.0">
       <PrivateAssets>all</PrivateAssets>

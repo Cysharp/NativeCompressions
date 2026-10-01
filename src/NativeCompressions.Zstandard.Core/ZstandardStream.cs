@@ -122,6 +122,10 @@ public sealed class ZstandardStream : Stream
         encoder!.SetSourceLength(length);
     }
 
+    /// <summary>
+    /// Initializes a stream that compresses with an encoder owned by the caller. The stream does not dispose the encoder.
+    /// </summary>
+    /// <remarks>When a write fails, reset the encoder with <see cref="ZstandardEncoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public ZstandardStream(Stream stream, ZstandardEncoder encoder, bool leaveOpen = false)
     {
         this.stream = stream;
@@ -131,6 +135,10 @@ public sealed class ZstandardStream : Stream
         this.mode = CompressionMode.Compress;
     }
 
+    /// <summary>
+    /// Initializes a stream that decompresses with a decoder owned by the caller. The stream does not dispose the decoder.
+    /// </summary>
+    /// <remarks>When a read fails, reset the decoder with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public ZstandardStream(Stream stream, ZstandardDecoder decoder, bool leaveOpen = false)
     {
         this.stream = stream;

@@ -29,6 +29,11 @@
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Polyfill\TaskToAsyncResult.cs" Link="Internal\Polyfill\TaskToAsyncResult.cs" />
   </ItemGroup>
 
+  <!-- Fails the build of an iOS or Mac Catalyst app older than .NET 10, which would get the generic assembly. -->
+  <ItemGroup>
+    <None Include="buildTransitive/NativeCompressions.Zstandard.Core.targets" Pack="true" PackagePath="buildTransitive/" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="PolySharp" Version="1.15.0">
       <PrivateAssets>all</PrivateAssets>

@@ -25,6 +25,8 @@ dotnet add package NativeCompressions
 
 The package includes native libraries for Windows (x64, arm64), Linux (x64, arm64), macOS (x64, arm64), Android (arm, arm64, x64), iOS and Mac Catalyst. The macOS libraries require macOS 15.0 or later.
 
+iOS and Mac Catalyst apps need .NET 10 or later. The native libraries are linked statically on those platforms, and the assemblies that call them that way are built for `net10.0-ios` and `net10.0-maccatalyst` onward. An app that targets .NET 8 or 9 there fails at build time with a message saying so.
+
 ```csharp
 // for LZ4
 using NativeCompressions;
@@ -254,7 +256,7 @@ Zstandard
 ---
 It is generally similar to the LZ4 API. The `Zstandard` class has static methods, and there are `ZstandardEncoder` and `ZstandardDecoder` as Streamless-streaming APIs. `CompressAsync`/`DecompressAsync` with `PipeReader`/`PipeWriter` are provided as well.
 
-`ZstandardEncoder` and `ZstandardDecoder` API is completely same as `BrotliEncoder`/`BrotliDecoder` unlike `LZ4Encoder/Decoder`. In other words, Compress returns an `OperationStatus`, which contains `int bytesConsumed`, `int bytesWritten`, and `bool isFinalBlock`.
+`ZstandardEncoder` and `ZstandardDecoder` API is completely same as `BrotliEncoder`/`BrotliDecoder` unlike `LZ4Encoder/Decoder`. In other words, Compress returns an `OperationStatus`, which contains `int bytesConsumed`, `int bytesWritten`, and `bool isFinalBlock`. After `OperationStatus.InvalidData`, call `Reset()` before reusing the encoder or decoder, or dispose it.
 
 Unlike `BrotliEncoder`/`BrotliDecoder` (which are structs), `ZstandardEncoder` and `ZstandardDecoder` are sealed classes that own a single native context (`ZSTD_CCtx`/`ZSTD_DCtx`). This matches the design of `System.IO.Compression.ZstandardEncoder`/`ZstandardDecoder` in .NET 11, and makes it safe to cache and share a single instance by reference (for example in a serializer) without the copy-then-dispose pitfalls of a struct. The native context is stored as a raw pointer rather than a `SafeHandle`, so creating an encoder costs one managed allocation plus the native context. Always call `Dispose()`; a finalizer releases the native context if you forget, and `Dispose()` is safe to call multiple times. Using an instance after `Dispose()` throws `ObjectDisposedException`. Instances are not thread-safe.
 
@@ -339,7 +341,7 @@ iOS builds need one additional package. iOS links native libraries statically, w
 https://github.com/Cysharp/NativeCompressions.git?path=src/NativeCompressions.Unity
 ```
 
-During an iOS player build it rewrites the library names to `__Internal` in the build output, before IL2CPP runs. The assemblies in your project are not modified, so the Editor and other platforms are unaffected. This limitation is Unity specific. .NET for iOS and .NET MAUI use the `net10.0-ios` build of the Core assemblies, which already uses `__Internal`.
+During an iOS player build it rewrites the library names to `__Internal` in the build output, before IL2CPP runs. The assemblies in your project are not modified, so the Editor and other platforms are unaffected. This limitation is Unity specific. .NET for iOS and .NET MAUI use the `net10.0-ios` build of the Core assemblies, which already uses `__Internal`. That is why .NET 10 is the minimum on iOS and Mac Catalyst.
 
 The iOS Simulator on Apple Silicon is not supported in Unity. The packages ship an `iossimulator-arm64` library, but the runtime settings above do not register it, so NuGetForUnity does not import it. Unity links every iOS plugin into one build and cannot pick the simulator library over the device library of the same architecture. Use a device build, or the Intel simulator (`ios-x64`) on a Rosetta Editor.
 

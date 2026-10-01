@@ -12,6 +12,7 @@ namespace NativeCompressions;
 /// <remarks>
 /// Call <see cref="Dispose"/> to release the native context. A finalizer releases it if Dispose is never called.
 /// Instances are not thread-safe.
+/// After Decompress returns <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset()"/> before reusing the decoder, or dispose it.
 /// </remarks>
 public sealed unsafe class ZstandardDecoder : IDisposable
 {
@@ -78,11 +79,31 @@ public sealed unsafe class ZstandardDecoder : IDisposable
     // true once bytes of a frame were taken and until that frame completes or the decoder is reset
     internal bool IsFrameInProgress => frameInProgress;
 
+    /// <inheritdoc cref="Decompress(ReadOnlySpan{byte}, Span{byte}, out int, out int, out int)"/>
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten)
     {
         return Decompress(source, destination, out bytesConsumed, out bytesWritten, out _);
     }
 
+    /// <summary>
+    /// Decompresses source data and writes the result to the destination buffer.
+    /// </summary>
+    /// <param name="source">The compressed data. It may hold part of a frame.</param>
+    /// <param name="destination">The buffer to write decompressed data to.</param>
+    /// <param name="bytesConsumed">When this method returns, contains the number of bytes read from source.</param>
+    /// <param name="bytesWritten">When this method returns, contains the number of bytes written to destination.</param>
+    /// <param name="hintOfNextSrcSize">A hint of how many source bytes the next call expects. Any source size is still accepted. 0 when the frame is complete or on error.</param>
+    /// <returns>
+    /// <see cref="OperationStatus.Done"/> if the current frame is completely decompressed;
+    /// <see cref="OperationStatus.NeedMoreData"/> if more compressed data is needed to continue;
+    /// <see cref="OperationStatus.DestinationTooSmall"/> if output or input is left over, call again with more room;
+    /// <see cref="OperationStatus.InvalidData"/> if the data is invalid.
+    /// </returns>
+    /// <exception cref="ObjectDisposedException">Thrown when the decoder has been disposed.</exception>
+    /// <remarks>
+    /// After <see cref="OperationStatus.InvalidData"/> the native context is in an error state, and what further calls do is undefined.
+    /// Call <see cref="Reset()"/> before reusing the decoder, or dispose it.
+    /// </remarks>
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, out int hintOfNextSrcSize)
     {
         var context = GetContext();
@@ -155,6 +176,10 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         }
     }
 
+    /// <summary>
+    /// Abandons the current frame, if one is in progress, so the next Decompress starts a new frame with the same options.
+    /// Required after Decompress returned <see cref="OperationStatus.InvalidData"/>.
+    /// </summary>
     public void Reset()
     {
         var context = GetContext();
