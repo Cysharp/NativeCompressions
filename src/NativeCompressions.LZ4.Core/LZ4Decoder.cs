@@ -1,4 +1,4 @@
-using NativeCompressions.Internal;
+﻿using NativeCompressions.Internal;
 using NativeCompressions.Interop;
 using System.Buffers;
 using System.Runtime.CompilerServices;
@@ -22,7 +22,9 @@ public sealed unsafe class LZ4Decoder : IDisposable
     LZ4F_dctx_s* dctx;
 
     LZ4F_decompressOptions_t options;
-    LZ4Dictionary? dictionary; // keeps the dictionary reachable while this decoder uses it
+    // lz4frame reads the dictionary bytes for the whole frame. The decoder holds a lease on the dictionary
+    // from the moment it is chosen until the context is freed.
+    LZ4Dictionary.Lease dictionary;
     bool frameInProgress; // tracked here so the layout of the native context is never read
 
     /// <summary>
@@ -46,17 +48,15 @@ public sealed unsafe class LZ4Decoder : IDisposable
 
         this.dctx = context;
         this.options = options.ToDecompressOptions();
-        this.dictionary = options.Dictionary;
-    }
 
-    ~LZ4Decoder()
-    {
-        // Finalizer runs only when the object is unreachable, so no race with Dispose.
-        var context = dctx;
-        if (context != null)
+        try
         {
-            dctx = null;
-            LZ4F_freeDecompressionContext(context);
+            this.dictionary = options.AcquireDictionary();
+        }
+        catch
+        {
+            Dispose();
+            throw;
         }
     }
 
@@ -67,6 +67,9 @@ public sealed unsafe class LZ4Decoder : IDisposable
 
     // true once bytes of a frame were taken and until that frame completes or the decoder is reset
     internal bool IsFrameInProgress => frameInProgress;
+
+    // The decoder was created with StableDst, so it expects every destination to stay where it is.
+    internal bool StableDst => options.stableDst != 0;
 
     /// <summary>
     /// Determines the size of an LZ4 frame header from the beginning of a compressed stream.
@@ -116,8 +119,8 @@ public sealed unsafe class LZ4Decoder : IDisposable
     /// </exception>
     /// <remarks>
     /// This method serves two purposes: it extracts frame metadata from the header and it
-    /// initializes the decompression context for subsequent <see cref="Decompress"/> calls.
-    /// The bytes consumed should be skipped from the source when calling <see cref="Decompress"/>.
+    /// initializes the decompression context for subsequent <see cref="Decompress(ReadOnlySpan{byte}, Span{byte}, out int, out int)"/> calls.
+    /// The bytes consumed should be skipped from the source when calling <see cref="Decompress(ReadOnlySpan{byte}, Span{byte}, out int, out int)"/>.
     /// </remarks>
     public LZ4FrameInfo GetFrameInfo(ReadOnlySpan<byte> source, out int bytesConsumed)
     {
@@ -179,7 +182,7 @@ public sealed unsafe class LZ4Decoder : IDisposable
     /// <remarks>
     /// The decoder maintains internal state between calls. When <see cref="OperationStatus.Done"/> is returned,
     /// the frame is complete and the decoder is ready for the next frame.
-    /// After <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset"/> before reusing the decoder.
+    /// After <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset()"/> before reusing the decoder.
     /// The distinction between <see cref="OperationStatus.NeedMoreData"/> and <see cref="OperationStatus.DestinationTooSmall"/>
     /// is heuristic: a completely filled destination is reported as too small, otherwise more source is requested.
     /// </remarks>
@@ -195,7 +198,7 @@ public sealed unsafe class LZ4Decoder : IDisposable
             var written = (nuint)destination.Length;
 
             nuint hintOrErrorCode;
-            if (dictionary == null)
+            if (dictionary.IsEmpty)
             {
                 hintOrErrorCode = LZ4F_decompress(context, dest, &written, src, &consumed, dOptPtr: optionsPtr);
             }
@@ -203,7 +206,7 @@ public sealed unsafe class LZ4Decoder : IDisposable
             {
                 // lz4frame stores this address at the first call and reads from it for every block of the frame,
                 // so the dictionary keeps its bytes pinned rather than pinning them per call here
-                hintOrErrorCode = LZ4F_decompress_usingDict(context, dest, &written, src, &consumed, dictionary.RawDictionaryPointer, (nuint)dictionary.RawDictionaryLength, decompressOptionsPtr: optionsPtr);
+                hintOrErrorCode = LZ4F_decompress_usingDict(context, dest, &written, src, &consumed, dictionary.Data, (nuint)dictionary.DataLength, decompressOptionsPtr: optionsPtr);
             }
             GC.KeepAlive(this);
 
@@ -262,22 +265,22 @@ public sealed unsafe class LZ4Decoder : IDisposable
     }
 
     /// <summary>
-    /// Releases the native decompression context. Safe to call multiple times.
+    /// Resets the decoder to start decoding a new frame with new options, also after an error.
     /// </summary>
-    public void Dispose()
+    /// <exception cref="ObjectDisposedException">Thrown when the decoder has been disposed.</exception>
+    public void Reset(in LZ4DecompressionOptions options)
     {
-        // Interlocked has no pointer overload, so swap the field as an IntPtr while it is pinned.
-        LZ4F_dctx_s* context;
-        fixed (LZ4F_dctx_s** p = &dctx)
-        {
-            context = (LZ4F_dctx_s*)Interlocked.Exchange(ref *(IntPtr*)p, IntPtr.Zero);
-        }
+        var context = GetContext();
 
-        if (context != null)
-        {
-            LZ4F_freeDecompressionContext(context);
-        }
-        GC.SuppressFinalize(this);
+        var next = options.AcquireDictionary();
+        LZ4F_resetDecompressionContext(context); // the reset ends the frame that read the previous dictionary
+        frameInProgress = false;
+        this.options = options.ToDecompressOptions();
+
+        var previous = dictionary;
+        dictionary = next;
+        previous.Dispose();
+        GC.KeepAlive(this);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -292,5 +295,41 @@ public sealed unsafe class LZ4Decoder : IDisposable
     void ThrowIfDisposed()
     {
         if (dctx == null) Throws.ObjectDisposedException(nameof(LZ4Decoder));
+    }
+
+    ~LZ4Decoder()
+    {
+        // Finalizer runs only when the object is unreachable, so no race with Dispose.
+        var context = dctx;
+        if (context != null)
+        {
+            dctx = null;
+            LZ4F_freeDecompressionContext(context);
+        }
+        dictionary.Dispose();
+    }
+
+    /// <summary>
+    /// Releases the native decompression context. Safe to call multiple times.
+    /// </summary>
+    public void Dispose()
+    {
+        // Interlocked has no pointer overload, so swap the field as an IntPtr while it is pinned.
+        LZ4F_dctx_s* context;
+        fixed (LZ4F_dctx_s** p = &dctx)
+        {
+            context = (LZ4F_dctx_s*)Interlocked.Exchange(ref *(IntPtr*)p, IntPtr.Zero);
+        }
+
+        // Only the call that took the context releases the rest, so concurrent Dispose calls never release the lease twice.
+        if (context != null)
+        {
+            LZ4F_freeDecompressionContext(context);
+
+            // freeing the context ends everything that reads the dictionary
+            dictionary.Dispose();
+            dictionary = default;
+        }
+        GC.SuppressFinalize(this);
     }
 }

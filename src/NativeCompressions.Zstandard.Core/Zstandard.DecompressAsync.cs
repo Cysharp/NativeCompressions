@@ -1,4 +1,3 @@
-using Microsoft.Win32.SafeHandles;
 using NativeCompressions.Internal;
 using System.Buffers;
 using System.IO.Pipelines;
@@ -17,8 +16,11 @@ public static partial class Zstandard
         await DecompressAsync(source, destination, decoder, cancellationToken);
     }
 
+    /// <remarks>The decoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask DecompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
+        // checked before anything is decoded, output already handed to the destination cannot be taken back
+        cancellationToken.ThrowIfCancellationRequested();
         var status = await FeedAsync(decoder, source, destination, MinimumBufferSize, cancellationToken);
         await FinishAsync(decoder, status, source.Length > 0, destination, MinimumBufferSize, cancellationToken);
     }
@@ -29,8 +31,11 @@ public static partial class Zstandard
         await DecompressAsync(source, destination, decoder, cancellationToken);
     }
 
+    /// <remarks>The decoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask DecompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
+        // checked before anything is decoded, output already handed to the destination cannot be taken back
+        cancellationToken.ThrowIfCancellationRequested();
         var status = OperationStatus.NeedMoreData;
         var anyInput = false;
         foreach (var segment in source)
@@ -43,61 +48,13 @@ public static partial class Zstandard
         await FinishAsync(decoder, status, anyInput, destination, MinimumBufferSize, cancellationToken);
     }
 
-    public static ValueTask DecompressAsync(SafeFileHandle source, PipeWriter destination, ZstandardDecompressionOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        return DecompressAsync(source, 0, destination, options, cancellationToken);
-    }
-
-    public static ValueTask DecompressAsync(SafeFileHandle source, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
-    {
-        return DecompressAsync(source, 0, destination, decoder, cancellationToken);
-    }
-
-    public static async ValueTask DecompressAsync(SafeFileHandle source, long offset, PipeWriter destination, ZstandardDecompressionOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        using var decoder = new ZstandardDecoder(options ?? ZstandardDecompressionOptions.Default);
-        await DecompressAsync(source, offset, destination, decoder, cancellationToken);
-    }
-
-    public static async ValueTask DecompressAsync(SafeFileHandle source, long offset, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
-    {
-#if NETSTANDARD
-        var fs = NonOwningFileStream.Open(source, offset); // not disposed, it does not own the handle
-        await DecompressAsync(fs, destination, decoder, cancellationToken);
-#else
-        var sourceLength = RandomAccess.GetLength(source);
-        var sourceBuffer = ArrayPool<byte>.Shared.Rent(MinimumBufferSize);
-        try
-        {
-            var status = OperationStatus.NeedMoreData;
-            var anyInput = false;
-            var remaining = sourceLength - offset;
-            while (remaining > 0)
-            {
-                var currentOffset = sourceLength - remaining; // remaining already accounts for offset
-                var read = await RandomAccess.ReadAsync(source, sourceBuffer, currentOffset, cancellationToken);
-                if (read == 0) break; // EOF, the file shrank while reading
-
-                anyInput = true;
-                status = await FeedAsync(decoder, sourceBuffer.AsMemory(0, read), destination, MinimumBufferSize, cancellationToken);
-                remaining -= read;
-            }
-
-            await FinishAsync(decoder, status, anyInput, destination, MinimumBufferSize, cancellationToken);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(sourceBuffer, clearArray: false);
-        }
-#endif
-    }
-
     public static async ValueTask DecompressAsync(Stream source, PipeWriter destination, ZstandardDecompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
         using var decoder = new ZstandardDecoder(options ?? ZstandardDecompressionOptions.Default);
         await DecompressAsync(source, destination, decoder, cancellationToken);
     }
 
+    /// <remarks>The decoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask DecompressAsync(Stream source, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
         if (source is MemoryStream ms && ms.TryGetBuffer(out var buffer))
@@ -115,18 +72,15 @@ public static partial class Zstandard
             return;
         }
 
-#if !NETSTANDARD
-        if (source is FileStream fs && fs.CanSeek)
-        {
-            await DecompressAsync(fs.SafeFileHandle, fs.Position, destination, decoder, cancellationToken);
-            fs.Position = fs.Length; // the handle was read directly, leave the stream at the end like a normal read would
-            return;
-        }
-#endif
-
         var pipeReader = PipeReader.Create(source, LeaveOpenPipeReaderOptions);
-        await DecompressAsync(pipeReader, destination, decoder, cancellationToken);
-        await pipeReader.CompleteAsync();
+        try
+        {
+            await DecompressAsync(pipeReader, destination, decoder, cancellationToken);
+        }
+        finally
+        {
+            await pipeReader.CompleteAsync(); // returns the buffers of the reader, also after a failure
+        }
     }
 
     public static async ValueTask DecompressAsync(PipeReader source, PipeWriter destination, ZstandardDecompressionOptions? options = null, CancellationToken cancellationToken = default)
@@ -135,10 +89,14 @@ public static partial class Zstandard
         await DecompressAsync(source, destination, decoder, cancellationToken);
     }
 
+    /// <remarks>The decoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask DecompressAsync(PipeReader source, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
+        // checked before anything is decoded, output already handed to the destination cannot be taken back
+        cancellationToken.ThrowIfCancellationRequested();
         var status = OperationStatus.NeedMoreData;
         var anyInput = false;
+        var progress = new FeedProgress();
 
         ReadResult result = default;
         while (!result.IsCompleted)
@@ -146,14 +104,23 @@ public static partial class Zstandard
             result = await source.ReadAsync(cancellationToken);
             if (result.IsCanceled) throw new OperationCanceledException();
 
+            // The reader is advanced by what the decoder took, also when the destination fails on the way.
+            // Otherwise the reader would stay in the middle of a read and refuse the next one.
             var buffer = result.Buffer;
-            foreach (var segment in buffer)
+            progress.Consumed = 0;
+            try
             {
-                if (segment.IsEmpty) continue;
-                anyInput = true;
-                status = await FeedAsync(decoder, segment, destination, MinimumBufferSize, cancellationToken);
+                foreach (var segment in buffer)
+                {
+                    if (segment.IsEmpty) continue;
+                    anyInput = true;
+                    status = await FeedAsync(decoder, segment, destination, MinimumBufferSize, cancellationToken, progress);
+                }
             }
-            source.AdvanceTo(buffer.End);
+            finally
+            {
+                source.AdvanceTo(buffer.GetPosition(progress.Consumed)); // examined only up to there, so what is left is readable right away
+            }
         }
 
         await FinishAsync(decoder, status, anyInput, destination, MinimumBufferSize, cancellationToken);
@@ -165,10 +132,11 @@ public static partial class Zstandard
         await DecompressAsync(sourceFilePath, destination, decoder, cancellationToken);
     }
 
+    /// <remarks>The decoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask DecompressAsync(string sourceFilePath, PipeWriter destination, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
-        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
-        await DecompressAsync(sourceHandle, destination, decoder, cancellationToken);
+        using var source = OpenSource(sourceFilePath);
+        await DecompressAsync(source, destination, decoder, cancellationToken);
     }
 
     public static async ValueTask DecompressAsync(string sourceFilePath, string destinationFilePath, ZstandardDecompressionOptions? options = null, CancellationToken cancellationToken = default)
@@ -177,28 +145,47 @@ public static partial class Zstandard
         await DecompressAsync(sourceFilePath, destinationFilePath, decoder, cancellationToken);
     }
 
+    /// <remarks>The decoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardDecoder.Reset()"/> before reusing it, or dispose it.</remarks>
     public static async ValueTask DecompressAsync(string sourceFilePath, string destinationFilePath, ZstandardDecoder decoder, CancellationToken cancellationToken = default)
     {
-        using var sourceHandle = File.OpenHandle(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
+        // checked before any file is opened, a cancelled call must not truncate the destination
+        cancellationToken.ThrowIfCancellationRequested();
+        using var source = OpenSource(sourceFilePath);
         using var destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
         var destinationWriter = PipeWriter.Create(destinationStream);
-        await DecompressAsync(sourceHandle, destinationWriter, decoder, cancellationToken);
+        try
+        {
+            await DecompressAsync(source, destinationWriter, decoder, cancellationToken);
+        }
+        finally
+        {
+            await destinationWriter.CompleteAsync(); // returns the buffers of the writer
+        }
     }
 
     // Feeds one chunk of compressed input and writes whatever it decodes to destination.
     // A frame may end and the next one start anywhere inside the chunk.
-    static async ValueTask<OperationStatus> FeedAsync(ZstandardDecoder decoder, ReadOnlyMemory<byte> chunk, PipeWriter destination, int sizeHint, CancellationToken cancellationToken)
+    // progress, when given, counts the bytes of chunk the decoder took, also when this method fails
+    static async ValueTask<OperationStatus> FeedAsync(ZstandardDecoder decoder, ReadOnlyMemory<byte> chunk, PipeWriter destination, int sizeHint, CancellationToken cancellationToken, FeedProgress? progress = null)
     {
         var status = OperationStatus.NeedMoreData;
         var pending = 0; // bytes advanced but not yet flushed
 
-        while (chunk.Length > 0)
+        // DestinationTooSmall means the decoder still holds output, which is taken out with empty input.
+        // Leaving it there would hold it back until more input arrives.
+        while (chunk.Length > 0 || status == OperationStatus.DestinationTooSmall)
         {
             var dest = destination.GetMemory(sizeHint);
             status = decoder.Decompress(chunk.Span, dest.Span, out var bytesConsumed, out var bytesWritten);
             chunk = chunk.Slice(bytesConsumed);
+            if (progress != null) progress.Consumed += bytesConsumed;
             destination.Advance(bytesWritten);
             pending += bytesWritten;
+
+            if (bytesConsumed == 0 && bytesWritten == 0 && status == OperationStatus.DestinationTooSmall)
+            {
+                throw new ZstandardException("Zstandard decoder made no progress.");
+            }
 
             switch (status)
             {
@@ -213,14 +200,14 @@ public static partial class Zstandard
 
             if (pending >= sizeHint)
             {
-                await destination.FlushAsync(cancellationToken);
+                await destination.FlushAndCheckAsync(cancellationToken);
                 pending = 0;
             }
         }
 
         if (pending > 0)
         {
-            await destination.FlushAsync(cancellationToken);
+            await destination.FlushAndCheckAsync(cancellationToken);
         }
 
         return status;
@@ -234,7 +221,7 @@ public static partial class Zstandard
             var dest = destination.GetMemory(sizeHint);
             status = decoder.Decompress(ReadOnlySpan<byte>.Empty, dest.Span, out _, out var bytesWritten);
             destination.Advance(bytesWritten);
-            await destination.FlushAsync(cancellationToken);
+            await destination.FlushAndCheckAsync(cancellationToken);
 
             if (status == OperationStatus.Done)
             {
@@ -257,5 +244,11 @@ public static partial class Zstandard
         {
             throw new ZstandardException($"Zstandard decoder returns {status}.");
         }
+    }
+
+    // How much of the input of one read the decoder took so far.
+    sealed class FeedProgress
+    {
+        public long Consumed;
     }
 }

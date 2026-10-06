@@ -9,7 +9,7 @@ public static partial class Zstandard
     static unsafe Zstandard()
     {
         Version = new string((sbyte*)ZSTD_versionString());
-        VersionNumber = ZSTD_versionNumber();
+        VersionNumber = (int)ZSTD_versionNumber();
         MinCompressionLevel = ZSTD_minCLevel();
         MaxCompressionLevel = ZSTD_maxCLevel();
 
@@ -42,7 +42,7 @@ public static partial class Zstandard
     /// <summary>
     /// Gets the version number of the Zstandard library.
     /// </summary>
-    public static readonly uint VersionNumber;
+    public static readonly int VersionNumber;
 
     /// <summary>
     /// Gets the minimum compression level.
@@ -77,6 +77,10 @@ public static partial class Zstandard
         return ZSTD_compressBound(inputSize);
     }
 
+    /// <summary>
+    /// Reads the content size recorded in the frame header at the start of source.
+    /// Returns false when the header does not record it, when source is too short for the header, or when source does not start with a Zstandard frame.
+    /// </summary>
     public static unsafe bool TryGetFrameContentSize(ReadOnlySpan<byte> source, out ulong size)
     {
         const ulong ZSTD_CONTENTSIZE_UNKNOWN = unchecked(0UL - 1);
@@ -88,17 +92,15 @@ public static partial class Zstandard
             // @return : -decompressed size of `src` frame content, if known
             // -ZSTD_CONTENTSIZE_UNKNOWN if the size cannot be determined
             // -ZSTD_CONTENTSIZE_ERROR if an error occurred(e.g.invalid magic number, srcSize too small)
-            size = ZSTD_getFrameContentSize(src, (nuint)source.Length);
+            var result = ZSTD_getFrameContentSize(src, (nuint)source.Length);
 
-            if (size == ZSTD_CONTENTSIZE_UNKNOWN)
+            if (result == ZSTD_CONTENTSIZE_UNKNOWN || result == ZSTD_CONTENTSIZE_ERROR)
             {
+                size = 0;
                 return false;
             }
-            else if (size == ZSTD_CONTENTSIZE_ERROR)
-            {
-                throw new ZstandardException("Error determining content size(e.g.invalid magic number, srcSize too small)");
-            }
 
+            size = result;
             return true;
         }
     }
@@ -123,6 +125,15 @@ public static partial class Zstandard
 
             length = (long)bound;
             return true;
+        }
+    }
+
+    // zstd clamps a level outside the bounds silently. The BCL throws instead, and so does this binding.
+    internal static void ThrowIfCompressionLevelOutOfRange(int compressionLevel, string paramName)
+    {
+        if (compressionLevel < MinCompressionLevel || compressionLevel > MaxCompressionLevel)
+        {
+            throw new ArgumentOutOfRangeException(paramName, compressionLevel, $"The compression level must be between {MinCompressionLevel} and {MaxCompressionLevel}.");
         }
     }
 

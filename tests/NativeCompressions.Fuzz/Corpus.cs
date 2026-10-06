@@ -95,15 +95,15 @@ public static class Corpus
         yield return ("empty-frame", LZ4.Compress(ReadOnlySpan<byte>.Empty));
         yield return ("text", LZ4.Compress(text));
         yield return ("text-checksums", LZ4.Compress(text, d with { ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled, BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled }));
-        yield return ("text-size", LZ4.Compress(text, d with { ContentSize = 1 }));
+        yield return ("text-size", LZ4.Compress(text, d with { ContentSize = (ulong)text.Length }));
         yield return ("text-level9", LZ4.Compress(text, d with { CompressionLevel = 9 }));
-        yield return ("random-independent", LZ4.Compress(random, d with { BlockMode = BlockMode.BlockIndependent, BlockSizeID = BlockSizeId.Max64KB }));
+        yield return ("random-independent", LZ4.Compress(random, d with { BlockMode = BlockMode.BlockIndependent, BlockSizeId = BlockSizeId.Max64KB }));
         yield return ("multi-frame", LZ4.Compress(text).Concat(LZ4.Compress(random)).Concat(LZ4.Compress(ReadOnlySpan<byte>.Empty)).ToArray());
         yield return ("skippable-then-frame", SkippableFrame(Utf8("meta")).Concat(LZ4.Compress(text)).ToArray());
 
         var multiBlock = Text(3000); // several 64KB blocks
-        yield return ("multi-block-independent", LZ4.Compress(multiBlock, d with { BlockMode = BlockMode.BlockIndependent, BlockSizeID = BlockSizeId.Max64KB, BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled }));
-        yield return ("multi-block-linked", LZ4.Compress(multiBlock, d with { BlockSizeID = BlockSizeId.Max64KB }));
+        yield return ("multi-block-independent", LZ4.Compress(multiBlock, d with { BlockMode = BlockMode.BlockIndependent, BlockSizeId = BlockSizeId.Max64KB, BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled }));
+        yield return ("multi-block-linked", LZ4.Compress(multiBlock, d with { BlockSizeId = BlockSizeId.Max64KB }));
 
         using var dict = LZ4Dictionary.Create(Utf8("lz4 native compression dotnet fuzz seed dictionary"), 5);
         yield return ("with-dictionary", LZ4.Compress(text, d with { Dictionary = dict }));
@@ -118,7 +118,7 @@ public static class Corpus
         "decompress" or "decoder" or "stream" or "decompress-async" => Frames(),
         "roundtrip" or "dictionary" or "train" => Payloads(),
         "lz4-decompress" or "lz4-decoder" or "lz4-stream" or "lz4-decompress-async" => LZ4Frames(),
-        "lz4-roundtrip" or "lz4-dictionary" => Payloads(),
+        "lz4-roundtrip" or "lz4-dictionary" or "lz4-block" => Payloads(),
         _ => throw new ArgumentException($"unknown target: {target}", nameof(target))
     };
 

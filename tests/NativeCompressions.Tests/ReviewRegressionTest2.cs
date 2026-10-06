@@ -126,18 +126,18 @@ public class ReviewRegressionTest2 : IDisposable
         public override void Write(byte[] buffer, int offset, int count) => Count += count;
     }
 
-    // ---- 1. parallel compression of a sequence whose blocks span several segments
+    // ---- 1. compression of a sequence whose blocks span several segments
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task LZ4_ParallelCompress_SequenceWithSmallSegments(bool autoFlush)
+    public async Task LZ4_CompressAsync_SequenceWithSmallSegments(bool autoFlush)
     {
         var data = Random(2 * 1024 * 1024, 21);
         var source = ToSequence(data, 16 * 1024);
         var options = LZ4CompressionOptions.Default with { AutoFlush = autoFlush };
 
-        var compressed = await Collect(w => LZ4.CompressAsync(source, w, options, maxDegreeOfParallelism: 2));
+        var compressed = await Collect(w => LZ4.CompressAsync(source, w, options));
         Assert.Equal(data, LZ4.Decompress(compressed));
     }
 
@@ -235,21 +235,19 @@ public class ReviewRegressionTest2 : IDisposable
     // ---- 5. requested destination sizes must satisfy the native API
 
     [Theory]
-    [InlineData(0, 1)]
-    [InlineData(0, 2)]
-    [InlineData(100, 1)]
-    [InlineData(2 * 1024 * 1024, 1)]
-    [InlineData(2 * 1024 * 1024, 2)]
-    public async Task LZ4_CompressAsync_WorksWithExactSizePipeWriter(int size, int dop)
+    [InlineData(0)]
+    [InlineData(100)]
+    [InlineData(2 * 1024 * 1024)]
+    public async Task LZ4_CompressAsync_WorksWithExactSizePipeWriter(int size)
     {
         var data = Random(size, 22);
 
         var fromMemory = new ExactSizePipeWriter();
-        await LZ4.CompressAsync((ReadOnlyMemory<byte>)data, fromMemory, maxDegreeOfParallelism: dop);
+        await LZ4.CompressAsync((ReadOnlyMemory<byte>)data, fromMemory);
         Assert.Equal(data, LZ4.Decompress(fromMemory.ToArray()));
 
         var fromSequence = new ExactSizePipeWriter();
-        await LZ4.CompressAsync(new ReadOnlySequence<byte>(data), fromSequence, maxDegreeOfParallelism: dop);
+        await LZ4.CompressAsync(new ReadOnlySequence<byte>(data), fromSequence);
         Assert.Equal(data, LZ4.Decompress(fromSequence.ToArray()));
 
         var fromStream = new ExactSizePipeWriter();
@@ -269,16 +267,16 @@ public class ReviewRegressionTest2 : IDisposable
         Assert.Empty(LZ4.Decompress(buffer.AsSpan(0, written)));
     }
 
-    // ---- 6. a sequence of 2GB or more must not overflow the block offset
+    // ---- 6. a sequence of 2GB or more
 
     [Fact]
-    public async Task LZ4_ParallelCompress_SequenceOver2GB()
+    public async Task LZ4_CompressAsync_SequenceOver2GB()
     {
         var shared = new byte[1024 * 1024];
         var source = ToSequence(Enumerable.Repeat((ReadOnlyMemory<byte>)shared, 2049));
         Assert.True(source.Length > int.MaxValue);
 
-        var compressed = await Collect(w => LZ4.CompressAsync(source, w, maxDegreeOfParallelism: 2));
+        var compressed = await Collect(w => LZ4.CompressAsync(source, w));
 
         using var reader = new LZ4Stream(new MemoryStream(compressed), CompressionMode.Decompress);
         var counter = new CountingStream();

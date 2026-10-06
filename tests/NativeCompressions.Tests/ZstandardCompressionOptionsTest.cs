@@ -67,7 +67,7 @@ public class ZstandardCompressionOptionsTest
         "CompressionLevel", "WindowLog", "HashLog", "ChainLog", "SearchLog", "MinMatch", "TargetLength",
         "Strategy.fast", "Strategy.greedy", "Strategy.lazy2", "Strategy.btultra2",
         "EnableLongDistanceMatching", "LdmHashLog", "LdmMinMatch", "LdmBucketSizeLog", "LdmHashRateLog",
-        "ContentSizeFlag", "ChecksumFlag", "DictIDFlag", "Combined",
+        "ContentSizeFlag", "ChecksumFlag", "DictIdFlag", "Combined",
     }.Select(x => new object[] { x });
 
     static ZstandardCompressionOptions Build(string name)
@@ -93,7 +93,7 @@ public class ZstandardCompressionOptionsTest
             "LdmHashRateLog" => d with { EnableLongDistanceMatching = true, LdmHashRateLog = 4 },
             "ContentSizeFlag" => d with { ContentSizeFlag = false },
             "ChecksumFlag" => d with { ChecksumFlag = true },
-            "DictIDFlag" => d with { DictIDFlag = false },
+            "DictIdFlag" => d with { DictIdFlag = false },
             "Combined" => d with { CompressionLevel = 7, WindowLog = 20, ChecksumFlag = true, EnableLongDistanceMatching = true },
             _ => throw new ArgumentException(name)
         };
@@ -192,7 +192,7 @@ public class ZstandardCompressionOptionsTest
         Assert.Equal(3, new ZstandardCompressionOptions(3).CompressionLevel);
         Assert.True(ZstandardCompressionOptions.Default.ContentSizeFlag);
         Assert.False(ZstandardCompressionOptions.Default.ChecksumFlag);
-        Assert.True(ZstandardCompressionOptions.Default.DictIDFlag);
+        Assert.True(ZstandardCompressionOptions.Default.DictIdFlag);
     }
 
     [Theory]

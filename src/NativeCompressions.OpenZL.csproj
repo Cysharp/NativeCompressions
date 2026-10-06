@@ -14,7 +14,7 @@
   <ItemGroup>
     <None Remove="**" />
     <Compile Remove="**" />
-    <EmbededResources Remove="**" />
+    <EmbeddedResource Remove="**" />
   </ItemGroup>
 
   <ItemGroup>

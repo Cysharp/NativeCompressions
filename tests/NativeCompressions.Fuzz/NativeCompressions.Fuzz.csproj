@@ -23,7 +23,8 @@
 
   <ItemGroup>
     <!-- Crash reproductions found by fuzzing. Path: regressions/<target>/<any name>. Replayed by the unit tests. -->
-    <EmbeddedResource Include="regressions\**\*" Exclude="regressions\**\*.md" LogicalName="regressions/%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- RecursiveDir uses the separator of the build host, the resource name always uses a slash -->
+    <EmbeddedResource Include="regressions\**\*" Exclude="regressions\**\*.md" LogicalName="regressions/$([System.String]::Copy('%(RecursiveDir)').Replace('\', '/'))%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

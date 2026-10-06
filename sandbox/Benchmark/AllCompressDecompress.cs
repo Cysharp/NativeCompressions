@@ -48,14 +48,11 @@ public class AllCompressDecompress
         i = NativeCompressions_LZ4_Compress();
         compressed3 = dest.AsSpan(0, i).ToArray();
 
-        i = NativeCompressions_LZ4_CompressMultiThread().GetAwaiter().GetResult();
+        i = NativeCompressions_LZ4_Block_Compress();
         compressed4 = dest.AsSpan(0, i).ToArray();
 
         i = NativeCompressions_Zstandard_Compress_Default();
         compressed5 = dest.AsSpan(0, i).ToArray();
-
-        //i = NativeCompressions_Zstandard_Compress_Multithread();
-        //compressed6 = dest.AsSpan(0, i).ToArray();
 
         i = NativeCompressions_Zstandard_Compress_Minus4();
         compressed7 = dest.AsSpan(0, i).ToArray();
@@ -90,51 +87,49 @@ public class AllCompressDecompress
     //}
 
 
-    [Benchmark]
+    [Benchmark(Description = "K4os LZ4 Encode(Block)")]
     [BenchmarkCategory("Compress")]
     public int K4os_LZ4_Encode()
     {
         return K4os.Compression.LZ4.LZ4Codec.Encode(src, dest, K4os.Compression.LZ4.LZ4Level.L00_FAST);
     }
 
-    [Benchmark]
+    [Benchmark(Description = "K4os LZ4 Encode(Frame)")]
     [BenchmarkCategory("Compress")]
     public int K4os_LZ4_FrameEncode()
     {
         return K4os.Compression.LZ4.Streams.LZ4Frame.Encode(src, dest, K4os.Compression.LZ4.LZ4Level.L00_FAST);
     }
 
-    [Benchmark]
+    [Benchmark(Description = "NativeCompressions LZ4 Compress(Frame)")]
     [BenchmarkCategory("Compress")]
     public int NativeCompressions_LZ4_Compress()
     {
         return NativeCompressions.LZ4.Compress(src, dest);
     }
 
-    [Benchmark]
+    [Benchmark(Description = "NativeCompressions LZ4 Compress(Block)")]
     [BenchmarkCategory("Compress")]
-    public async Task<int> NativeCompressions_LZ4_CompressMultiThread()
+    public int NativeCompressions_LZ4_Block_Compress()
     {
-        writer.ResetWrittenCount();
-        await NativeCompressions.LZ4.CompressAsync(src, writer, LZ4CompressionOptions.Default);
-        return (int)writer.WrittenCount;
+        return NativeCompressions.LZ4.Block.Compress(src, dest);
     }
 
-    [Benchmark]
+    [Benchmark(Description = "NativeCompressions Zstandard Compress(Default)")]
     [BenchmarkCategory("Compress")]
     public int NativeCompressions_Zstandard_Compress_Default()
     {
         return NativeCompressions.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default);
     }
 
-    [Benchmark]
+    [Benchmark(Description = "NativeCompressions Zstandard Compress(Level: -4)")]
     [BenchmarkCategory("Compress")]
     public int NativeCompressions_Zstandard_Compress_Minus4()
     {
         return NativeCompressions.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default with { CompressionLevel = -4 });
     }
 
-    [Benchmark]
+    [Benchmark(Description = "BrotliEncoder TryCompress(Default)")]
     [BenchmarkCategory("Compress")]
     public int BrotliEncoder_TryCompress()
     {
@@ -142,7 +137,7 @@ public class AllCompressDecompress
         return bytesWritten;
     }
 
-    [Benchmark]
+    [Benchmark(Description = "GZipStream Compress(Level: Optimal)")]
     [BenchmarkCategory("Compress")]
     public int GZipStream_Optimal_Compress()
     {
@@ -158,14 +153,14 @@ public class AllCompressDecompress
 
     // decompress
 
-    [Benchmark]
+    [Benchmark(Description = "K4os LZ4 Decode(Block)")]
     [BenchmarkCategory("Decompress")]
     public int K4os_LZ4_Decode()
     {
         return K4os.Compression.LZ4.LZ4Codec.Decode(compressed1, dest);
     }
 
-    [Benchmark]
+    [Benchmark(Description = "K4os LZ4 Decode(Frame)")]
     [BenchmarkCategory("Decompress")]
     public int K4os_LZ4_FrameDecode()
     {
@@ -173,37 +168,35 @@ public class AllCompressDecompress
         return reader.ReadManyBytes(dest);
     }
 
-    [Benchmark]
+    [Benchmark(Description = "NativeCompressions LZ4 Decompress(Frame)")]
     [BenchmarkCategory("Decompress")]
     public int NativeCompressions_LZ4_Decompress()
     {
         return NativeCompressions.LZ4.Decompress(compressed3, dest);
     }
 
-    [Benchmark]
+    [Benchmark(Description = "NativeCompressions LZ4 Decompress(Block)")]
     [BenchmarkCategory("Decompress")]
-    public async Task<int> NativeCompressions_LZ4_DecompressMultiThread()
+    public int NativeCompressions_LZ4_Block_Decompress()
     {
-        writer.ResetWrittenCount();
-        await NativeCompressions.LZ4.DecompressAsync(compressed4, writer);
-        return writer.WrittenCount;
+        return NativeCompressions.LZ4.Block.Decompress(compressed4, dest);
     }
 
-    [Benchmark]
+    [Benchmark(Description = "NativeCompressions Zstandard Decompress(Default)")]
     [BenchmarkCategory("Decompress")]
     public int NativeCompressions_Zstandard_Decompress_Default()
     {
         return NativeCompressions.Zstandard.Decompress(compressed5, dest);
     }
 
-    [Benchmark]
+    [Benchmark(Description = "NativeCompressions Zstandard Decompress(Level: -4)")]
     [BenchmarkCategory("Decompress")]
     public int NativeCompressions_Zstandard_Decompress_Minus4()
     {
         return NativeCompressions.Zstandard.Decompress(compressed7, dest);
     }
 
-    [Benchmark]
+    [Benchmark(Description = "BrotliDecoder TryDecompress(Default)")]
     [BenchmarkCategory("Decompress")]
     public int BrotliDecoder_TryDecompress()
     {
@@ -212,7 +205,7 @@ public class AllCompressDecompress
     }
 
 
-    [Benchmark]
+    [Benchmark(Description = "GZipStream Decompress(Level: Optimal)")]
     [BenchmarkCategory("Decompress")]
     public int GZipStream_Optimal_Decompress()
     {
@@ -225,9 +218,6 @@ public class AllCompressDecompress
 
         return (int)ms.Position;
     }
-
-
-
 }
 
 //[PayloadColumn]

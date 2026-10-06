@@ -14,7 +14,7 @@
 
 param(
     [ValidateSet("decompress", "decoder", "stream", "decompress-async", "roundtrip", "dictionary", "train",
-                 "lz4-decompress", "lz4-decoder", "lz4-stream", "lz4-decompress-async", "lz4-roundtrip", "lz4-dictionary")]
+                 "lz4-decompress", "lz4-decoder", "lz4-stream", "lz4-decompress-async", "lz4-roundtrip", "lz4-dictionary", "lz4-block")]
     [string]$Target = "decompress",
     [string]$LibFuzzer = "$PSScriptRoot/tools/libfuzzer-dotnet-windows.exe",
     [int]$MaxLen = 65536,
@@ -35,7 +35,9 @@ if (-not (Test-Path $LibFuzzer)) {
 
 $root = Resolve-Path "$PSScriptRoot/../.."
 $bin = "$root/artifacts/bin/NativeCompressions.Fuzz/release"
-$instrumented = "$bin/NativeCompressions.Zstandard.Core.dll"
+# coverage feedback comes from the binding the target exercises
+$assembly = if ($Target.StartsWith("lz4-")) { "NativeCompressions.LZ4.Core.dll" } else { "NativeCompressions.Zstandard.Core.dll" }
+$instrumented = "$bin/$assembly"
 
 # The instrumented assembly is newer than its source, so an incremental build would keep it. Remove it first.
 if (Test-Path $instrumented) { Remove-Item $instrumented }

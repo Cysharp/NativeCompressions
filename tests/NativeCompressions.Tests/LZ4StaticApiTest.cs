@@ -84,7 +84,7 @@ public class LZ4StaticApiTest
         Assert.Equal((nuint)bound, LZ4.GetMaxCompressedLength((nuint)size, LZ4CompressionOptions.Default));
 
         // options change the bound only through block size and checksums, still sane
-        var withOptions = LZ4.GetMaxCompressedLength(size, LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max4MB, ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled, BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled });
+        var withOptions = LZ4.GetMaxCompressedLength(size, LZ4CompressionOptions.Default with { BlockSizeId = BlockSizeId.Max4MB, ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled, BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled });
         Assert.True(withOptions >= size);
         Assert.True(withOptions <= 2 * size + 8 * 1024 * 1024);
     }
@@ -95,8 +95,8 @@ public class LZ4StaticApiTest
         foreach (var options in new[]
         {
             LZ4CompressionOptions.Default,
-            LZ4CompressionOptions.Default with { ContentSize = 1, ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled, BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled },
-            LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB, BlockMode = BlockMode.BlockIndependent },
+            LZ4CompressionOptions.Default with { ContentSize = 100_000, ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled, BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled },
+            LZ4CompressionOptions.Default with { BlockSizeId = BlockSizeId.Max64KB, BlockMode = BlockMode.BlockIndependent },
         })
         {
             var random = new byte[100_000];
@@ -124,7 +124,7 @@ public class LZ4StaticApiTest
         Assert.False(LZ4.TryGetFrameInfo(Zstandard.Compress(Data), out _));
 
         // a real frame cut inside the header
-        var compressed = LZ4.Compress(Data, LZ4CompressionOptions.Default with { ContentSize = 1 });
+        var compressed = LZ4.Compress(Data, LZ4CompressionOptions.Default with { ContentSize = (ulong)Data.Length });
         Assert.False(LZ4.TryGetFrameInfo(compressed.AsSpan(0, 6), out _));
         Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
         Assert.Equal(FrameType.Frame, info.FrameType);
@@ -136,48 +136,59 @@ public class LZ4StaticApiTest
     {
         var options = LZ4CompressionOptions.Default with
         {
-            BlockSizeID = BlockSizeId.Max256KB,
+            BlockSizeId = BlockSizeId.Max256KB,
             BlockMode = BlockMode.BlockIndependent,
             ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled,
             BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled,
-            ContentSize = 1,
+            ContentSize = (ulong)Data.Length,
         };
         var compressed = LZ4.Compress(Data, options);
 
         Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
-        Assert.Equal(BlockSizeId.Max256KB, info.BlockSizeID);
+        Assert.Equal(BlockSizeId.Max256KB, info.BlockSizeId);
         Assert.Equal(BlockMode.BlockIndependent, info.BlockMode);
         Assert.Equal(ContentChecksum.ContentChecksumEnabled, info.ContentChecksumFlag);
         Assert.Equal(BlockChecksum.BlockChecksumEnabled, info.BlockChecksumFlag);
         Assert.Equal((ulong)Data.Length, info.ContentSize);
-        Assert.Equal(0u, info.DictionaryID);
+        Assert.Equal(0u, info.DictionaryId);
 
         // skippable frames are reported as such
         Assert.True(LZ4.TryGetFrameInfo(SkippableFrame(Utf8("meta")), out var skippable));
         Assert.Equal(FrameType.SkippableFrame, skippable.FrameType);
     }
 
-    // ---- static Compress and ContentSize (reported: span overload always recorded the size)
+    // ---- static Compress and ContentSize
 
     [Fact]
-    public void Compress_ContentSizeIsRecordedOnlyWhenRequested_BothOverloads()
+    public void Compress_ContentSize_RecordedWithoutOptions_AsAskedWithOptions()
     {
         var dest = new byte[LZ4.GetMaxCompressedLength(Data.Length)];
 
-        // default: not recorded
+        // without options the length is known and recorded
         Assert.True(LZ4.TryGetFrameInfo(LZ4.Compress(Data), out var a));
-        Assert.Equal(0ul, a.ContentSize);
+        Assert.Equal((ulong)Data.Length, a.ContentSize);
         var written = LZ4.Compress(Data, dest);
         Assert.True(LZ4.TryGetFrameInfo(dest.AsSpan(0, written).ToArray(), out var b));
-        Assert.Equal(0ul, b.ContentSize);
+        Assert.Equal((ulong)Data.Length, b.ContentSize);
 
-        // any non zero value asks for the real size to be recorded
-        var options = LZ4CompressionOptions.Default with { ContentSize = 1 };
+        // the default options declare nothing, so nothing is recorded
+        Assert.True(LZ4.TryGetFrameInfo(LZ4.Compress(Data, LZ4CompressionOptions.Default), out var none));
+        Assert.Equal(0ul, none.ContentSize);
+        written = LZ4.Compress(Data, dest, LZ4CompressionOptions.Default);
+        Assert.True(LZ4.TryGetFrameInfo(dest.AsSpan(0, written).ToArray(), out none));
+        Assert.Equal(0ul, none.ContentSize);
+
+        // a declared length is recorded, and has to be the real one
+        var options = LZ4CompressionOptions.Default with { ContentSize = (ulong)Data.Length };
         Assert.True(LZ4.TryGetFrameInfo(LZ4.Compress(Data, options), out var c));
         Assert.Equal((ulong)Data.Length, c.ContentSize);
         written = LZ4.Compress(Data, dest, options);
         Assert.True(LZ4.TryGetFrameInfo(dest.AsSpan(0, written).ToArray(), out var d));
         Assert.Equal((ulong)Data.Length, d.ContentSize);
+
+        var wrong = LZ4CompressionOptions.Default with { ContentSize = 1 };
+        Assert.Throws<ArgumentException>(() => LZ4.Compress(Data, wrong));
+        Assert.Throws<ArgumentException>(() => LZ4.Compress(Data, dest, wrong));
 
         // both overloads produce identical bytes for identical options
         Assert.Equal(LZ4.Compress(Data, options), dest.AsSpan(0, written).ToArray());
@@ -212,8 +223,8 @@ public class LZ4StaticApiTest
         var c = Compressible(70_000, 62);
         var concatenated = LZ4.Compress(a)
             .Concat(SkippableFrame(Utf8("skip me")))
-            .Concat(LZ4.Compress(b, LZ4CompressionOptions.Default with { ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled, ContentSize = 1 }))
-            .Concat(LZ4.Compress(c, LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockIndependent, BlockSizeID = BlockSizeId.Max64KB }))
+            .Concat(LZ4.Compress(b, LZ4CompressionOptions.Default with { ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled, ContentSize = (ulong)b.Length }))
+            .Concat(LZ4.Compress(c, LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockIndependent, BlockSizeId = BlockSizeId.Max64KB }))
             .ToArray();
         var expected = a.Concat(b).Concat(c).ToArray();
 
@@ -231,7 +242,7 @@ public class LZ4StaticApiTest
     [Fact]
     public void Decompress_TrustedUsesRecordedSize_AndContinuesWithMoreFrames()
     {
-        var first = LZ4.Compress(Data, LZ4CompressionOptions.Default with { ContentSize = 1 });
+        var first = LZ4.Compress(Data, LZ4CompressionOptions.Default with { ContentSize = (ulong)Data.Length });
         Assert.Equal(Data, LZ4.Decompress(first, trustedData: true));
 
         var second = LZ4.Compress(Utf8("tail"));

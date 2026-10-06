@@ -9,8 +9,10 @@ public static partial class Zstandard
     /// Compresses data into the destination buffer.
     /// Returns false when the destination is too small. Other failures throw <see cref="ZstandardException"/>.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">compressionLevel is outside <see cref="MinCompressionLevel"/> to <see cref="MaxCompressionLevel"/>.</exception>
     public static unsafe bool TryCompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten, int compressionLevel = DefaultCompressionLevel)
     {
+        ThrowIfCompressionLevelOutOfRange(compressionLevel, nameof(compressionLevel));
         fixed (byte* src = source)
         fixed (byte* dest = destination)
         {
@@ -23,18 +25,19 @@ public static partial class Zstandard
     /// Compresses data into the destination buffer with specified options.
     /// Returns false when the destination is too small. Other failures throw <see cref="ZstandardException"/>.
     /// </summary>
-    public static unsafe bool TryCompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten, in ZstandardCompressionOptions compressionOptions)
+    public static unsafe bool TryCompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten, in ZstandardCompressionOptions options)
     {
         fixed (byte* src = source)
         fixed (byte* dest = destination)
         {
+            using var lease = options.AcquireDictionary();
             var context = ZSTD_createCCtx();
             if (context == null) throw new ZstandardException("Failed to create compression context");
 
             nuint result;
             try
             {
-                compressionOptions.SetParameter(context);
+                options.SetParameter(context, lease);
                 result = ZSTD_compress2(context, dest, (nuint)destination.Length, src, (nuint)source.Length);
             }
             finally
@@ -43,7 +46,6 @@ public static partial class Zstandard
             }
 
             var ok = TryGetResult(result, out bytesWritten);
-            GC.KeepAlive(compressionOptions.Dictionary);
             return ok;
         }
     }
@@ -66,9 +68,9 @@ public static partial class Zstandard
     /// Decompresses data into the destination buffer with specified options.
     /// Returns false when the destination is too small. Other failures throw <see cref="ZstandardException"/>.
     /// </summary>
-    public static unsafe bool TryDecompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten, in ZstandardDecompressionOptions decompressionOptions)
+    public static unsafe bool TryDecompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten, in ZstandardDecompressionOptions options)
     {
-        if (decompressionOptions.Dictionary == null)
+        if (options.Dictionary == null)
         {
             return TryDecompress(source, destination, out bytesWritten);
         }
@@ -76,13 +78,14 @@ public static partial class Zstandard
         fixed (byte* src = source)
         fixed (byte* dest = destination)
         {
+            using var lease = options.Dictionary.Acquire();
             var context = ZSTD_createDCtx();
             if (context == null) throw new ZstandardException("Failed to create decompression context");
 
             nuint result;
             try
             {
-                result = ZSTD_decompress_usingDDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, decompressionOptions.Dictionary.DecompressionHandle);
+                result = ZSTD_decompress_usingDDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, lease.Decompression);
             }
             finally
             {
@@ -90,7 +93,6 @@ public static partial class Zstandard
             }
 
             var ok = TryGetResult(result, out bytesWritten);
-            GC.KeepAlive(decompressionOptions.Dictionary);
             return ok;
         }
     }

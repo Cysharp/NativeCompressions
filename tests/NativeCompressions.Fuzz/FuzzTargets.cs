@@ -1,5 +1,7 @@
 using System.Buffers;
+using System.Buffers.Binary;
 using System.IO.Pipelines;
+using static NativeCompressions.Interop.ZstandardNativeMethods;
 using BclDecoder = System.IO.Compression.ZstandardDecoder;
 using BclDictionary = System.IO.Compression.ZstandardDictionary;
 using BclEncoder = System.IO.Compression.ZstandardEncoder;
@@ -41,6 +43,7 @@ public static class FuzzTargets
         ["lz4-decompress-async"] = LZ4DecompressAsync,
         ["lz4-roundtrip"] = LZ4RoundTrip,
         ["lz4-dictionary"] = LZ4DictionaryTarget,
+        ["lz4-block"] = LZ4BlockTarget,
     };
 
     // ---- LZ4: one-shot and frame inspection, every path must agree
@@ -176,23 +179,22 @@ public static class FuzzTargets
         var segmentSize = 1 + (data[0] % 64) * 32;
         var sequence = ToSequence(data.ToArray(), segmentSize);
 
-        foreach (var dop in new[] { 1, 2 })
         {
             byte[]? actual = null;
             try
             {
-                actual = Collect(w => LZ4.DecompressAsync(sequence, w, maxDegreeOfParallelism: dop));
+                actual = Collect(w => LZ4.DecompressAsync(sequence, w));
             }
             catch (LZ4Exception) { }
 
             if (expected != null)
             {
-                Check(actual != null, $"DecompressAsync(dop {dop}) rejected input that Decompress accepted");
-                Check(expected.AsSpan().SequenceEqual(actual), $"DecompressAsync(dop {dop}) differs from one-shot");
+                Check(actual != null, "DecompressAsync rejected input that Decompress accepted");
+                Check(expected.AsSpan().SequenceEqual(actual), "DecompressAsync differs from one-shot");
             }
             else
             {
-                Check(actual == null, $"DecompressAsync(dop {dop}) accepted input that Decompress rejected");
+                Check(actual == null, "DecompressAsync accepted input that Decompress rejected");
             }
         }
     }
@@ -213,11 +215,11 @@ public static class FuzzTargets
         var options = LZ4CompressionOptions.Default with
         {
             CompressionLevel = level,
-            BlockSizeID = blockSize,
+            BlockSizeId = blockSize,
             BlockMode = independent ? BlockMode.BlockIndependent : BlockMode.BlockLinked,
             ContentChecksumFlag = contentChecksum ? ContentChecksum.ContentChecksumEnabled : ContentChecksum.NoContentChecksum,
             BlockChecksumFlag = blockChecksum ? BlockChecksum.BlockChecksumEnabled : BlockChecksum.NoBlockChecksum,
-            ContentSize = contentSize ? 1ul : 0ul,
+            ContentSize = contentSize ? (ulong)payload.Length : 0ul,
         };
 
         // one-shot
@@ -258,11 +260,10 @@ public static class FuzzTargets
             Check(result.ToArray().AsSpan().SequenceEqual(payload), "LZ4Stream round trip differs");
         }
 
-        // async, sequential and parallel
-        foreach (var dop in new[] { 1, 2 })
+        // async
         {
-            var viaAsync = Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 1000), w, maxDegreeOfParallelism: dop));
-            Check(viaAsync.AsSpan().SequenceEqual(payload), $"DecompressAsync(dop {dop}) round trip differs");
+            var viaAsync = Collect(w => LZ4.DecompressAsync(ToSequence(compressed, 1000), w));
+            Check(viaAsync.AsSpan().SequenceEqual(payload), "DecompressAsync round trip differs");
         }
     }
 
@@ -281,7 +282,7 @@ public static class FuzzTargets
         var compressed = LZ4.Compress(payload, LZ4CompressionOptions.Default with { Dictionary = dict, ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled });
         var options = LZ4DecompressionOptions.Default with { Dictionary = dict };
         Check(LZ4.Decompress(compressed, options).AsSpan().SequenceEqual(payload), "dictionary round trip differs");
-        Check(LZ4.TryGetFrameInfo(compressed, out var info) && info.DictionaryID == id, "dictionary id not in frame");
+        Check(LZ4.TryGetFrameInfo(compressed, out var info) && info.DictionaryId == id, "dictionary id not in frame");
 
         try
         {
@@ -294,6 +295,48 @@ public static class FuzzTargets
         var dest = new byte[payload.Length];
         var status = decoder.Decompress(compressed, dest, out _, out var w);
         Check(status == OperationStatus.Done && w == payload.Length && dest.AsSpan().SequenceEqual(payload), "streaming dictionary decode differs");
+    }
+
+    // ---- LZ4 block format: round trip, a dictionary, and arbitrary bytes as a block
+
+    public static void LZ4BlockTarget(ReadOnlySpan<byte> data)
+    {
+        if (data.Length < 2) return;
+        var payload = data.Slice(2);
+
+        var compressed = new byte[LZ4.Block.GetMaxCompressedLength(payload.Length)];
+        var compressedLength = LZ4.Block.Compress(payload, compressed);
+        Check(compressedLength > 0, "block compression into a bound sized buffer failed");
+        var block = compressed.AsSpan(0, compressedLength);
+
+        var dest = new byte[payload.Length];
+        Check(LZ4.Block.Decompress(block, dest) == payload.Length && dest.AsSpan().SequenceEqual(payload), "block round trip differs");
+
+        // the block does not reference the dictionary, so decoding with one agrees too
+        using var dict = LZ4Dictionary.Create(data.Slice(0, 1 + data[0] % data.Length), data[1]);
+        Check(LZ4.Block.Decompress(block, dest, dict) == payload.Length && dest.AsSpan().SequenceEqual(payload), "block round trip with a dictionary differs");
+
+        if (payload.Length > 0)
+        {
+            try
+            {
+                LZ4.Block.Decompress(block, new byte[payload.Length - 1]);
+                Check(false, "a destination that is too small was accepted");
+            }
+            catch (LZ4Exception) { }
+        }
+
+        // arbitrary bytes as a block, the destination size comes from the data
+        var arbitrary = new byte[data[0] * 64 + data[1]];
+        try
+        {
+            var written = LZ4.Block.Decompress(payload, arbitrary);
+            Check(written >= 0 && written <= arbitrary.Length, "block decode reported more than the destination holds");
+        }
+        catch (LZ4Exception) { }
+
+        try { LZ4.Block.Decompress(payload, arbitrary, dict); }
+        catch (LZ4Exception) { }
     }
 
     static void Check(bool condition, string message)
@@ -488,9 +531,51 @@ public static class FuzzTargets
         }
         if (expected != null && actual == null)
         {
-            // one-shot accepted every frame, so the async path must too
+            // The streaming decoder refuses a frame whose window exceeds the default limit, while one-shot
+            // decompression needs no window buffer and accepts it. zstd and the BCL behave the same way.
+            if (ExceedsDefaultWindow(data)) return;
+
+            // otherwise one-shot accepted every frame, so the async path must too
             throw new FuzzAssertionException("DecompressAsync rejected input that ZSTD_decompress accepted");
         }
+    }
+
+    // Whether any frame in the input declares a window larger than the default limit of the streaming decoder.
+    static unsafe bool ExceedsDefaultWindow(ReadOnlySpan<byte> data)
+    {
+        var limit = 1UL << Zstandard.DefaultWindowLogMax;
+        while (data.Length >= 4)
+        {
+            var magic = BinaryPrimitives.ReadUInt32LittleEndian(data);
+            if ((magic & 0xFFFFFFF0) == 0x184D2A50) // skippable frame: magic, 4 byte size, payload
+            {
+                if (data.Length < 8) return false;
+                var size = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(4));
+                if (8UL + size > (ulong)data.Length) return false;
+                data = data.Slice(8 + (int)size);
+                continue;
+            }
+
+            if (magic != 0xFD2FB528 || data.Length < 6) return false;
+
+            // Window_Descriptor follows the descriptor byte unless Single_Segment_Flag is set, then the content size is the window
+            if ((data[4] & 0x20) == 0)
+            {
+                var descriptor = data[5];
+                var windowBase = 1UL << (10 + (descriptor >> 3));
+                var windowSize = windowBase + (windowBase / 8) * (ulong)(descriptor & 7);
+                if (windowSize > limit) return true;
+            }
+
+            nuint frameSize;
+            fixed (byte* p = data)
+            {
+                frameSize = ZSTD_findFrameCompressedSize(p, (nuint)data.Length);
+            }
+            if (ZSTD_isError(frameSize) != 0 || frameSize == 0) return false;
+            data = data.Slice((int)frameSize);
+        }
+        return false;
     }
 
     // ---- compress then decompress through every path, options taken from the data
@@ -613,10 +698,10 @@ public static class FuzzTargets
         for (int i = 0; i < sampleCount; i++) lengths[i] = each;
         lengths[^1] += samples.Length - each * sampleCount;
 
-        ZstandardDictionary dict;
+        byte[] trained;
         try
         {
-            dict = ZstandardDictionary.Train(samples, lengths, maxDictionarySize);
+            trained = ZstandardDictionary.Train(samples, lengths, maxDictionarySize);
         }
         catch (ZstandardException)
         {
@@ -627,10 +712,10 @@ public static class FuzzTargets
             return; // zero length samples etc.
         }
 
-        using (dict)
+        Check(trained.Length > 0 && trained.Length <= maxDictionarySize, "trained dictionary size out of range");
+
+        using (var dict = ZstandardDictionary.Create(trained))
         {
-            Check(dict.Data.Length > 0 && dict.Data.Length <= maxDictionarySize, "trained dictionary size out of range");
-            Check(dict.DictionaryId != 0, "trained dictionary has no id");
 
             var payload = samples.Slice(0, Math.Min(samples.Length, lengths[0]));
             var compressed = Zstandard.Compress(payload, ZstandardCompressionOptions.Default with { Dictionary = dict });

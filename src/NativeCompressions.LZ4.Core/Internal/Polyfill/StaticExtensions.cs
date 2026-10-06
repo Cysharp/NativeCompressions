@@ -1,6 +1,5 @@
 ﻿#if NETSTANDARD
 
-using Microsoft.Win32.SafeHandles;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 
@@ -23,26 +22,6 @@ namespace NativeCompressions.Internal
             public static ValueTask FromCanceled(CancellationToken cancellationToken) => new ValueTask(Task.FromCanceled(cancellationToken));
         }
 
-        extension(File)
-        {
-            public static SafeFileHandle OpenHandle(string path, FileMode mode = FileMode.Open, FileAccess access = FileAccess.Read, FileShare share = FileShare.Read, FileOptions options = FileOptions.None, long preallocationSize = 0)
-            {
-                var fs = new FileStream(path, mode, access, share, bufferSize: 1, options);
-
-                // only the handle is handed out, the stream must not close it when it is finalized
-                GC.SuppressFinalize(fs);
-                return fs.SafeFileHandle;
-            }
-        }
-
-        extension(ThreadPool)
-        {
-            public static void UnsafeQueueUserWorkItem(IThreadPoolWorkItem workItem, bool preferLocal)
-            {
-                ThreadPool.QueueUserWorkItem(_ => workItem.Execute());
-            }
-        }
-
 #if NETSTANDARD2_0
         extension(RuntimeHelpers)
         {
@@ -55,14 +34,6 @@ namespace NativeCompressions.Internal
             public ReadOnlySpan<T> FirstSpan => sequence.First.Span;
         }
 #endif
-    }
-}
-
-namespace System.Threading
-{
-    internal interface IThreadPoolWorkItem
-    {
-        void Execute();
     }
 }
 

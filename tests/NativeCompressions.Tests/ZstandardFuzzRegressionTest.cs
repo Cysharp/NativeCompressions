@@ -54,7 +54,7 @@ public class ZstandardFuzzRegressionTest
         var assembly = typeof(FuzzTargets).Assembly;
         foreach (var resource in assembly.GetManifestResourceNames().Where(x => x.StartsWith("regressions/", StringComparison.Ordinal)))
         {
-            var parts = resource.Split('/');
+            var parts = resource.Split('/', '\\'); // RecursiveDir uses the separator of the build host
             Assert.True(parts.Length >= 3, $"unexpected regression resource name {resource}, expected regressions/<target>/<name>");
             var target = parts[1];
             Assert.True(FuzzTargets.All.ContainsKey(target), $"unknown fuzz target in {resource}");

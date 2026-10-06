@@ -36,7 +36,7 @@ public class ZstandardStaticApiTest
 
         var parts = Zstandard.Version.Split('.').Select(int.Parse).ToArray();
         Assert.Equal(3, parts.Length);
-        Assert.Equal((uint)(parts[0] * 10000 + parts[1] * 100 + parts[2]), Zstandard.VersionNumber);
+        Assert.Equal(parts[0] * 10000 + parts[1] * 100 + parts[2], Zstandard.VersionNumber);
     }
 
     [Fact]
@@ -270,8 +270,8 @@ public class ZstandardStaticApiTest
         Assert.Equal(data, Zstandard.Decompress(noSize));
         Assert.Equal(data, Zstandard.Decompress(noSize, trustedData: true)); // falls back to streaming
 
-        // garbage is an error, not "unknown"
-        Assert.Throws<ZstandardException>(() => Zstandard.TryGetFrameContentSize(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }, out _));
+        // garbage is not a frame, so there is no size to report
+        Assert.False(Zstandard.TryGetFrameContentSize(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }, out _));
     }
 
     [Fact]
@@ -286,15 +286,17 @@ public class ZstandardStaticApiTest
             for (int j = 0; j < 64; j++) sb.Append("key").Append(rand.Next(50)).Append('=').Append(rand.Next(1000)).Append(';');
             samples.Add(Utf8(sb.ToString()));
         }
-        using var dict = ZstandardDictionary.Train(samples.SelectMany(x => x).ToArray(), samples.Select(x => x.Length).ToArray(), 8 * 1024);
-        Assert.NotEqual(0u, dict.DictionaryId);
+        var trained = ZstandardDictionary.Train(samples.SelectMany(x => x).ToArray(), samples.Select(x => x.Length).ToArray(), 8 * 1024);
+        using var dict = ZstandardDictionary.Create(trained);
+        var dictionaryId = GetDictIdFromDictionary(trained);
+        Assert.NotEqual(0u, dictionaryId);
 
         var data = samples[0].Concat(samples[1]).ToArray();
 
         var withId = Zstandard.Compress(data, ZstandardCompressionOptions.Default with { Dictionary = dict });
-        Assert.Equal(dict.DictionaryId, GetDictIdFromFrame(withId));
+        Assert.Equal(dictionaryId, GetDictIdFromFrame(withId));
 
-        var withoutId = Zstandard.Compress(data, ZstandardCompressionOptions.Default with { Dictionary = dict, DictIDFlag = false });
+        var withoutId = Zstandard.Compress(data, ZstandardCompressionOptions.Default with { Dictionary = dict, DictIdFlag = false });
         Assert.Equal(0u, GetDictIdFromFrame(withoutId));
 
         var options = ZstandardDecompressionOptions.Default with { Dictionary = dict };
@@ -306,6 +308,14 @@ public class ZstandardStaticApiTest
             fixed (byte* p = frame)
             {
                 return ZstandardNativeMethods.ZSTD_getDictID_fromFrame(p, (nuint)frame.Length);
+            }
+        }
+
+        static unsafe uint GetDictIdFromDictionary(byte[] dictionary)
+        {
+            fixed (byte* p = dictionary)
+            {
+                return ZstandardNativeMethods.ZSTD_getDictID_fromDict(p, (nuint)dictionary.Length);
             }
         }
     }

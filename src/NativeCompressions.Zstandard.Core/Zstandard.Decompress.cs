@@ -27,14 +27,14 @@ public static partial class Zstandard
     /// Decompresses one or more concatenated frames into a new array with specified options.
     /// </summary>
     /// <param name="source">Compressed data. Empty input returns an empty array.</param>
-    /// <param name="decompressionOptions">Decompression options such as a dictionary.</param>
+    /// <param name="options">Decompression options such as a dictionary.</param>
     /// <param name="trustedData">
     /// When true, the result array is allocated up front from the sizes recorded in the frame headers and the
     /// whole input is decoded in one call. Only use this for data you control, since the headers are not verified
     /// before the allocation. When false, the data is decoded in blocks into a growing buffer instead. Every frame
     /// in the input is decoded either way.
     /// </param>
-    public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, in ZstandardDecompressionOptions decompressionOptions, bool trustedData = false)
+    public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, in ZstandardDecompressionOptions options, bool trustedData = false)
     {
         if (source.IsEmpty)
         {
@@ -50,7 +50,7 @@ public static partial class Zstandard
 
             // zstd itself rejects a frame whose decoded size differs from the recorded content size,
             // so a short result only means some frame had no recorded size.
-            var bytesWritten = Decompress(source, destination, decompressionOptions);
+            var bytesWritten = Decompress(source, destination, options);
             if (bytesWritten == destination.Length)
             {
                 return destination;
@@ -62,45 +62,52 @@ public static partial class Zstandard
         }
         else
         {
-            using var decoder = new ZstandardDecoder(decompressionOptions);
+            using var decoder = new ZstandardDecoder(options);
 
             Span<byte> scratch = stackalloc byte[256];
             var arrayProvider = new SegmentedArrayProvider<byte>(scratch);
-            var dest = arrayProvider.GetSpan();
-
-            // Same behavior as ZstandardStream and DecompressAsync: every frame is decoded,
-            // input that ends inside a frame or trailing garbage is an error.
-            while (true)
+            try
             {
-                var status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
+                var dest = arrayProvider.GetSpan();
 
-                source = source.Slice(bytesConsumed);
-                dest = dest.Slice(bytesWritten);
-                arrayProvider.Advance(bytesWritten);
+                // Same behavior as ZstandardStream and DecompressAsync: every frame is decoded,
+                // input that ends inside a frame or trailing garbage is an error.
+                while (true)
+                {
+                    var status = decoder.Decompress(source, dest, out var bytesConsumed, out var bytesWritten);
 
-                if (status == OperationStatus.Done)
-                {
-                    if (source.IsEmpty) break;
-                    decoder.Reset(); // another frame follows
-                }
-                else if (status == OperationStatus.NeedMoreData && source.IsEmpty)
-                {
-                    throw new ZstandardException("Decompression failed: input ends inside a frame.");
-                }
-                else if (status == OperationStatus.InvalidData)
-                {
-                    throw new ZstandardException("Decompression failed: invalid data.");
+                    source = source.Slice(bytesConsumed);
+                    dest = dest.Slice(bytesWritten);
+                    arrayProvider.Advance(bytesWritten);
+
+                    if (status == OperationStatus.Done)
+                    {
+                        if (source.IsEmpty) break;
+                        decoder.Reset(); // another frame follows
+                    }
+                    else if (status == OperationStatus.NeedMoreData && source.IsEmpty)
+                    {
+                        throw new ZstandardException("Decompression failed: input ends inside a frame.");
+                    }
+                    else if (status == OperationStatus.InvalidData)
+                    {
+                        throw new ZstandardException("Decompression failed: invalid data.");
+                    }
+
+                    if (dest.Length == 0)
+                    {
+                        dest = arrayProvider.GetSpan();
+                    }
                 }
 
-                if (dest.Length == 0)
-                {
-                    dest = arrayProvider.GetSpan();
-                }
+                var result = GC.AllocateUninitializedArray<byte>(arrayProvider.Count);
+                arrayProvider.CopyToAndClear(result);
+                return result;
             }
-
-            var result = GC.AllocateUninitializedArray<byte>(arrayProvider.Count);
-            arrayProvider.CopyToAndClear(result);
-            return result;
+            finally
+            {
+                arrayProvider.Clear(); // invalid data throws in the middle, the rented segments go back either way
+            }
         }
     }
 
@@ -109,7 +116,7 @@ public static partial class Zstandard
         return Decompress(source, destination, ZstandardDecompressionOptions.Default);
     }
 
-    public static unsafe int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, in ZstandardDecompressionOptions decompressionOptions)
+    public static unsafe int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, in ZstandardDecompressionOptions options)
     {
         // Currently DecompressionOptions.WindowLogMax in only used in streaming mode.
         // So always use simple API when default options are used.
@@ -118,18 +125,19 @@ public static partial class Zstandard
         fixed (byte* dest = destination)
         {
             nuint bytesWritten;
-            if (decompressionOptions.Dictionary == null)
+            if (options.Dictionary == null)
             {
                 bytesWritten = ZSTD_decompress(dest, (nuint)destination.Length, src, (nuint)source.Length);
             }
             else
             {
+                using var lease = options.Dictionary.Acquire();
                 var context = ZSTD_createDCtx();
                 if (context == null) throw new ZstandardException("Failed to create decompression context");
 
                 try
                 {
-                    bytesWritten = ZSTD_decompress_usingDDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, decompressionOptions.Dictionary.DecompressionHandle);
+                    bytesWritten = ZSTD_decompress_usingDDict(context, dest, (nuint)destination.Length, src, (nuint)source.Length, lease.Decompression);
                 }
                 finally
                 {

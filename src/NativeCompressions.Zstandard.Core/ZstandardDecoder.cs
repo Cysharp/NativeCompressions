@@ -1,4 +1,4 @@
-using NativeCompressions.Internal;
+﻿using NativeCompressions.Internal;
 using NativeCompressions.Interop;
 using System.Buffers;
 using System.Runtime.CompilerServices;
@@ -12,6 +12,7 @@ namespace NativeCompressions;
 /// <remarks>
 /// Call <see cref="Dispose"/> to release the native context. A finalizer releases it if Dispose is never called.
 /// Instances are not thread-safe.
+/// After Decompress returns <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset()"/> before reusing the decoder, or dispose it.
 /// </remarks>
 public sealed unsafe class ZstandardDecoder : IDisposable
 {
@@ -19,8 +20,9 @@ public sealed unsafe class ZstandardDecoder : IDisposable
     // Released by Dispose or the finalizer.
     ZSTD_DCtx_s* dctx;
 
-    // The native context only references the dictionary, so keep it reachable while this decoder is alive.
-    ZstandardDictionary? dictionary;
+    // The native context only references the dictionary. The decoder holds a lease on it
+    // from the moment the context refers to it until the context lets go of it.
+    ZstandardDictionary.Lease dictionary;
 
     // Pinned prefix set by SetPrefix. zstd references the memory, so it stays pinned until Reset, Dispose or the next SetPrefix.
     MemoryHandle prefixHandle;
@@ -39,13 +41,12 @@ public sealed unsafe class ZstandardDecoder : IDisposable
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardDecoder"/> with specified options.
     /// </summary>
-    public ZstandardDecoder(in ZstandardDecompressionOptions decompressionOptions)
+    public ZstandardDecoder(in ZstandardDecompressionOptions options)
     {
         this.dctx = CreateContext();
         try
         {
-            decompressionOptions.SetParameter(dctx);
-            this.dictionary = decompressionOptions.Dictionary;
+            this.dictionary = Configure(dctx, options);
         }
         catch
         {
@@ -54,16 +55,20 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         }
     }
 
-    ~ZstandardDecoder()
+    // Applies the options and returns the lease on their dictionary. On failure nothing is leased.
+    static ZstandardDictionary.Lease Configure(ZSTD_DCtx_s* context, in ZstandardDecompressionOptions options)
     {
-        // Finalizer runs only when the object is unreachable, so no race with Dispose.
-        var context = dctx;
-        if (context != null)
+        var lease = options.AcquireDictionary();
+        try
         {
-            dctx = null;
-            ZSTD_freeDCtx(context);
+            options.SetParameter(context, lease);
         }
-        prefixHandle.Dispose();
+        catch
+        {
+            lease.Dispose();
+            throw;
+        }
+        return lease;
     }
 
     /// <summary>
@@ -74,11 +79,31 @@ public sealed unsafe class ZstandardDecoder : IDisposable
     // true once bytes of a frame were taken and until that frame completes or the decoder is reset
     internal bool IsFrameInProgress => frameInProgress;
 
+    /// <inheritdoc cref="Decompress(ReadOnlySpan{byte}, Span{byte}, out int, out int, out int)"/>
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten)
     {
         return Decompress(source, destination, out bytesConsumed, out bytesWritten, out _);
     }
 
+    /// <summary>
+    /// Decompresses source data and writes the result to the destination buffer.
+    /// </summary>
+    /// <param name="source">The compressed data. It may hold part of a frame.</param>
+    /// <param name="destination">The buffer to write decompressed data to.</param>
+    /// <param name="bytesConsumed">When this method returns, contains the number of bytes read from source.</param>
+    /// <param name="bytesWritten">When this method returns, contains the number of bytes written to destination.</param>
+    /// <param name="hintOfNextSrcSize">A hint of how many source bytes the next call expects. Any source size is still accepted. 0 when the frame is complete or on error.</param>
+    /// <returns>
+    /// <see cref="OperationStatus.Done"/> if the current frame is completely decompressed;
+    /// <see cref="OperationStatus.NeedMoreData"/> if more compressed data is needed to continue;
+    /// <see cref="OperationStatus.DestinationTooSmall"/> if output or input is left over, call again with more room;
+    /// <see cref="OperationStatus.InvalidData"/> if the data is invalid.
+    /// </returns>
+    /// <exception cref="ObjectDisposedException">Thrown when the decoder has been disposed.</exception>
+    /// <remarks>
+    /// After <see cref="OperationStatus.InvalidData"/> the native context is in an error state, and what further calls do is undefined.
+    /// Call <see cref="Reset()"/> before reusing the decoder, or dispose it.
+    /// </remarks>
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, out int hintOfNextSrcSize)
     {
         var context = GetContext();
@@ -151,6 +176,10 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         }
     }
 
+    /// <summary>
+    /// Abandons the current frame, if one is in progress, so the next Decompress starts a new frame with the same options.
+    /// Required after Decompress returned <see cref="OperationStatus.InvalidData"/>.
+    /// </summary>
     public void Reset()
     {
         var context = GetContext();
@@ -168,6 +197,11 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         GC.KeepAlive(this);
     }
 
+    /// <summary>
+    /// Abandons the current frame, if one is in progress, and applies new options. The next Decompress starts a new frame with them.
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">Thrown when the decoder has been disposed.</exception>
+    /// <exception cref="ZstandardException">Thrown when the reset fails or the new options cannot be applied.</exception>
     public void Reset(in ZstandardDecompressionOptions options)
     {
         var context = GetContext();
@@ -175,11 +209,19 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         var result = ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
         Zstandard.ThrowIfError(result);
         frameInProgress = false;
-        dictionary = null;
         ReleasePrefix();
 
-        options.SetParameter(context);
-        dictionary = options.Dictionary;
+        // the reset dropped the native reference to the previous dictionary, whether or not the new options apply
+        var previous = dictionary;
+        dictionary = default;
+        try
+        {
+            dictionary = Configure(context, options);
+        }
+        finally
+        {
+            previous.Dispose();
+        }
         GC.KeepAlive(this);
     }
 
@@ -207,7 +249,8 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         ReleasePrefix();
         prefixHandle = handle;
         hasPrefix = true;
-        dictionary = null; // refPrefix clears the referenced dictionary
+        dictionary.Dispose(); // refPrefix replaced the referenced dictionary
+        dictionary = default;
         GC.KeepAlive(this);
     }
 
@@ -218,12 +261,24 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         hasPrefix = false;
     }
 
+    ~ZstandardDecoder()
+    {
+        // Finalizer runs only when the object is unreachable, so no race with Dispose.
+        var context = dctx;
+        if (context != null)
+        {
+            dctx = null;
+            ZSTD_freeDCtx(context);
+        }
+        prefixHandle.Dispose();
+        dictionary.Dispose();
+    }
+
     /// <summary>
     /// Releases the native decompression context. Safe to call multiple times.
     /// </summary>
     public void Dispose()
     {
-        ReleasePrefix();
         // Interlocked has no pointer overload, so swap the field as an IntPtr while it is pinned.
         ZSTD_DCtx_s* context;
         fixed (ZSTD_DCtx_s** p = &dctx)
@@ -231,9 +286,15 @@ public sealed unsafe class ZstandardDecoder : IDisposable
             context = (ZSTD_DCtx_s*)Interlocked.Exchange(ref *(IntPtr*)p, IntPtr.Zero);
         }
 
+        // Only the call that took the context releases the rest, so concurrent Dispose calls never release the lease or the prefix twice.
         if (context != null)
         {
             ZSTD_freeDCtx(context);
+
+            // freeing the context ends everything that reads the prefix and the dictionary
+            ReleasePrefix();
+            dictionary.Dispose();
+            dictionary = default;
         }
         GC.SuppressFinalize(this);
     }

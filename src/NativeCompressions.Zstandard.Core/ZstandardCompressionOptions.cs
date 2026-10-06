@@ -38,23 +38,22 @@ public readonly record struct ZstandardCompressionOptions
     readonly int minMatch;
     readonly int targetLength;
     readonly int strategy;
-    readonly bool enableLongDistanceMatching = false; // int to bool, default: 0
+    readonly bool enableLongDistanceMatching; // int to bool, default: 0
     readonly int ldmHashLog;
     readonly int ldmMinMatch;
     readonly int ldmBucketSizeLog;
     readonly int ldmHashRateLog;
-    readonly bool contentSizeFlag = true; // int to bool, default: 1
-    readonly bool checksumFlag = false;   // int to bool, default: 0
-    readonly bool dictIDFlag = true;      // int to bool, default: 1
+    // The flags whose zstd default is on are stored inverted, so that default(ZstandardCompressionOptions) equals Default.
+    readonly bool noContentSize; // ZSTD_c_contentSizeFlag, default: 1
+    readonly bool checksumFlag;  // ZSTD_c_checksumFlag, default: 0
+    readonly bool noDictId;      // ZSTD_c_dictIDFlag, default: 1
 
     readonly ZstandardDictionary? dictionary;
 
-    public ZstandardCompressionOptions()
-    {
-    }
-
+    /// <exception cref="ArgumentOutOfRangeException">compressionLevel is outside <see cref="Zstandard.MinCompressionLevel"/> to <see cref="Zstandard.MaxCompressionLevel"/>.</exception>
     public ZstandardCompressionOptions(int compressionLevel)
     {
+        Zstandard.ThrowIfCompressionLevelOutOfRange(compressionLevel, nameof(compressionLevel));
         this.compressionLevel = compressionLevel;
     }
 
@@ -72,10 +71,15 @@ public readonly record struct ZstandardCompressionOptions
     ///   parameters which have not been manually set. The manually set
     ///   ones will 'stick'.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is outside <see cref="Zstandard.MinCompressionLevel"/> to <see cref="Zstandard.MaxCompressionLevel"/>.</exception>
     public int CompressionLevel
     {
         get => compressionLevel;
-        init => compressionLevel = value;
+        init
+        {
+            Zstandard.ThrowIfCompressionLevelOutOfRange(value, nameof(value));
+            compressionLevel = value;
+        }
     }
 
     /// <summary>
@@ -260,8 +264,8 @@ public readonly record struct ZstandardCompressionOptions
     /// </summary>
     public bool ContentSizeFlag
     {
-        get => contentSizeFlag;
-        init => contentSizeFlag = value;
+        get => !noContentSize;
+        init => noContentSize = !value;
     }
 
     /// <summary>
@@ -276,10 +280,10 @@ public readonly record struct ZstandardCompressionOptions
     /// <summary>
     /// When applicable, dictionary's ID is written into frame header (default:true)
     /// </summary>
-    public bool DictIDFlag
+    public bool DictIdFlag
     {
-        get => dictIDFlag;
-        init => dictIDFlag = value;
+        get => !noDictId;
+        init => noDictId = !value;
     }
 
     public ZstandardDictionary? Dictionary
@@ -288,7 +292,21 @@ public readonly record struct ZstandardCompressionOptions
         init => dictionary = value;
     }
 
-    internal unsafe void SetParameter(ZSTD_CCtx_s* context)
+    internal ZstandardDictionary.Lease AcquireDictionary() => dictionary == null ? default : dictionary.Acquire();
+
+    // The lease is the one taken on the dictionary of these options.
+    internal unsafe void SetParameter(ZSTD_CCtx_s* context, in ZstandardDictionary.Lease lease)
+    {
+        SetParameters(context);
+
+        if (!lease.IsEmpty)
+        {
+            var result = ZSTD_CCtx_refCDict(context, lease.Compression);
+            Zstandard.ThrowIfError(result);
+        }
+    }
+
+    unsafe void SetParameters(ZSTD_CCtx_s* context)
     {
         if (IsDefault) return;
 
@@ -305,16 +323,9 @@ public readonly record struct ZstandardCompressionOptions
         SetParameter(context, ZSTD_cParameter.ZSTD_c_ldmMinMatch, ldmMinMatch);
         SetParameter(context, ZSTD_cParameter.ZSTD_c_ldmBucketSizeLog, ldmBucketSizeLog);
         SetParameter(context, ZSTD_cParameter.ZSTD_c_ldmHashRateLog, ldmHashRateLog);
-        SetParameterDefaultIsTrue(context, ZSTD_cParameter.ZSTD_c_contentSizeFlag, contentSizeFlag);
+        SetParameterDefaultIsTrue(context, ZSTD_cParameter.ZSTD_c_contentSizeFlag, !noContentSize);
         SetParameterDefaultIsFalse(context, ZSTD_cParameter.ZSTD_c_checksumFlag, checksumFlag);
-        SetParameterDefaultIsTrue(context, ZSTD_cParameter.ZSTD_c_dictIDFlag, dictIDFlag);
-
-        // and dictionary
-        if (dictionary != null)
-        {
-            var result = ZSTD_CCtx_refCDict(context, dictionary.CompressionHandle);
-            Zstandard.ThrowIfError(result);
-        }
+        SetParameterDefaultIsTrue(context, ZSTD_cParameter.ZSTD_c_dictIDFlag, !noDictId);
     }
 
     // Set parameter if value is not zero(default).

@@ -58,7 +58,7 @@ public class LZ4CompressionOptionsTest
     public static IEnumerable<object[]> ParameterNames() => new[]
     {
         "CompressionLevel.3", "CompressionLevel.Max",
-        "BlockSizeID.64KB", "BlockSizeID.256KB", "BlockSizeID.1MB", "BlockSizeID.4MB",
+        "BlockSizeId.64KB", "BlockSizeId.256KB", "BlockSizeId.1MB", "BlockSizeId.4MB",
         "BlockMode.Independent", "ContentChecksum", "BlockChecksum", "ContentSize", "FavorDecompressionSpeed", "AutoFlush", "Combined",
     }.Select(x => new object[] { x });
 
@@ -69,17 +69,17 @@ public class LZ4CompressionOptionsTest
         {
             "CompressionLevel.3" => d with { CompressionLevel = 3 },
             "CompressionLevel.Max" => d with { CompressionLevel = LZ4.MaxCompressionLevel },
-            "BlockSizeID.64KB" => d with { BlockSizeID = BlockSizeId.Max64KB },
-            "BlockSizeID.256KB" => d with { BlockSizeID = BlockSizeId.Max256KB },
-            "BlockSizeID.1MB" => d with { BlockSizeID = BlockSizeId.Max1MB },
-            "BlockSizeID.4MB" => d with { BlockSizeID = BlockSizeId.Max4MB },
+            "BlockSizeId.64KB" => d with { BlockSizeId = BlockSizeId.Max64KB },
+            "BlockSizeId.256KB" => d with { BlockSizeId = BlockSizeId.Max256KB },
+            "BlockSizeId.1MB" => d with { BlockSizeId = BlockSizeId.Max1MB },
+            "BlockSizeId.4MB" => d with { BlockSizeId = BlockSizeId.Max4MB },
             "BlockMode.Independent" => d with { BlockMode = BlockMode.BlockIndependent },
             "ContentChecksum" => d with { ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled },
             "BlockChecksum" => d with { BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled },
             "ContentSize" => d with { ContentSize = (ulong)Data.Length },
-            "FavorDecompressionSpeed" => d with { CompressionLevel = 10, FavorDecompressionSpeed = 1 },
+            "FavorDecompressionSpeed" => d with { CompressionLevel = 10, FavorDecompressionSpeed = true },
             "AutoFlush" => d with { AutoFlush = true },
-            "Combined" => d with { CompressionLevel = 6, BlockSizeID = BlockSizeId.Max256KB, BlockMode = BlockMode.BlockIndependent, ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled, BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled, ContentSize = (ulong)Data.Length },
+            "Combined" => d with { CompressionLevel = 6, BlockSizeId = BlockSizeId.Max256KB, BlockMode = BlockMode.BlockIndependent, ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled, BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled, ContentSize = (ulong)Data.Length },
             _ => throw new ArgumentException(name)
         };
     }
@@ -95,9 +95,9 @@ public class LZ4CompressionOptionsTest
         Assert.Equal(Data, StreamDecompress(compressed));
 
         Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
-        if (options.BlockSizeID != BlockSizeId.Default) Assert.Equal(options.BlockSizeID, info.BlockSizeID);
+        if (options.BlockSizeId != BlockSizeId.Default) Assert.Equal(options.BlockSizeId, info.BlockSizeId);
         // LZ4F_compressFrame switches a single block frame to independent mode, so linked is only guaranteed for multi block input
-        if (options.BlockMode == BlockMode.BlockIndependent || options.BlockSizeID == BlockSizeId.Max64KB) Assert.Equal(options.BlockMode, info.BlockMode);
+        if (options.BlockMode == BlockMode.BlockIndependent || options.BlockSizeId == BlockSizeId.Max64KB) Assert.Equal(options.BlockMode, info.BlockMode);
         Assert.Equal(options.ContentChecksumFlag, info.ContentChecksumFlag);
         Assert.Equal(options.BlockChecksumFlag, info.BlockChecksumFlag);
         Assert.Equal(options.ContentSize == 0 ? 0ul : (ulong)Data.Length, info.ContentSize);
@@ -147,18 +147,18 @@ public class LZ4CompressionOptionsTest
     {
         using var dict = LZ4Dictionary.Create(Encoding.ASCII.GetBytes(string.Concat(Enumerable.Repeat("lz4 native compression dotnet options ", 32))), 7);
         var options = LZ4CompressionOptions.Default with { Dictionary = dict };
-        Assert.Equal(7u, options.DictionaryID);
+        Assert.Equal(7u, options.DictionaryId);
         Assert.Same(dict, options.Dictionary);
 
         var withoutDictionary = options with { Dictionary = null };
-        Assert.Equal(0u, withoutDictionary.DictionaryID);
+        Assert.Equal(0u, withoutDictionary.DictionaryId);
     }
 
     [Fact]
     public void Equality()
     {
-        var a = LZ4CompressionOptions.Default with { CompressionLevel = 5, BlockSizeID = BlockSizeId.Max1MB };
-        var b = LZ4CompressionOptions.Default with { CompressionLevel = 5, BlockSizeID = BlockSizeId.Max1MB };
+        var a = LZ4CompressionOptions.Default with { CompressionLevel = 5, BlockSizeId = BlockSizeId.Max1MB };
+        var b = LZ4CompressionOptions.Default with { CompressionLevel = 5, BlockSizeId = BlockSizeId.Max1MB };
         Assert.Equal(a, b);
         Assert.Equal(a.GetHashCode(), b.GetHashCode());
         Assert.NotEqual(a, a with { CompressionLevel = 6 });

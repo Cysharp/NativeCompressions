@@ -1,6 +1,7 @@
 using NativeCompressions.Internal;
 using NativeCompressions.Interop;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using static NativeCompressions.Interop.ZstandardNativeMethods;
 
 namespace NativeCompressions;
@@ -15,27 +16,20 @@ namespace NativeCompressions;
 /// </remarks>
 public sealed unsafe class ZstandardDictionary : IDisposable
 {
-    // Held as raw pointers instead of SafeHandle to keep a single managed allocation.
-    // Released by Dispose or the finalizer.
-    ZSTD_CDict_s* cdict;
-    ZSTD_DDict_s* ddict;
+    // A SafeHandle, because encoders and decoders read the native dictionary until their context is freed.
+    // They hold a lease for that time, so neither Dispose nor the order of finalizers frees it earlier.
+    readonly NativeDictionaries native;
+
+    // The handle reports closed only after the last reference is gone, this is set by Dispose right away.
+    int disposed;
 
     readonly byte[] data;
 
-    ZstandardDictionary(byte[] data, int compressionLevel, ZSTD_CDict_s* cdict, ZSTD_DDict_s* ddict, uint dictionaryId)
+    ZstandardDictionary(byte[] data, int compressionLevel, NativeDictionaries native)
     {
         this.data = data;
         this.CompressionLevel = compressionLevel;
-        this.cdict = cdict;
-        this.ddict = ddict;
-        this.DictionaryId = dictionaryId;
-    }
-
-    ~ZstandardDictionary()
-    {
-        Free(cdict, ddict);
-        cdict = null;
-        ddict = null;
+        this.native = native;
     }
 
     /// <summary>
@@ -46,6 +40,7 @@ public sealed unsafe class ZstandardDictionary : IDisposable
     public static ZstandardDictionary Create(ReadOnlySpan<byte> data, int compressionLevel = Zstandard.DefaultCompressionLevel)
     {
         if (data.IsEmpty) throw new ArgumentException("Dictionary data cannot be empty.", nameof(data));
+        Zstandard.ThrowIfCompressionLevelOutOfRange(compressionLevel, nameof(compressionLevel));
 
         var copy = data.ToArray();
         fixed (byte* p = copy)
@@ -60,29 +55,22 @@ public sealed unsafe class ZstandardDictionary : IDisposable
                 throw new ZstandardException("Failed to create decompression dictionary");
             }
 
-            var id = ZSTD_getDictID_fromDict(p, (nuint)copy.Length);
-            return new ZstandardDictionary(copy, compressionLevel, cdict, ddict, id);
+            return new ZstandardDictionary(copy, compressionLevel, new NativeDictionaries(cdict, ddict));
         }
     }
 
     /// <summary>
-    /// Trains a dictionary from samples and prepares it for compression and decompression.
+    /// Trains dictionary bytes from samples. Pass them to <see cref="Create"/> to use them, or store them for later.
     /// </summary>
     /// <param name="samples">All samples concatenated into one buffer.</param>
     /// <param name="sampleLengths">The length of each sample in <paramref name="samples"/>, in order.</param>
     /// <param name="maxDictionarySize">The upper bound of the trained dictionary size. About 100 KB is a typical choice.</param>
-    /// <param name="compressionLevel">The compression level the compression side is prepared for.</param>
     /// <remarks>
     /// Training fails when there are too few samples or most samples are shorter than 8 bytes.
     /// zstd recommends a few thousand samples whose total size is roughly 100 times the dictionary size.
+    /// The bytes also work as an LZ4 dictionary.
     /// </remarks>
-    public static ZstandardDictionary Train(ReadOnlySpan<byte> samples, ReadOnlySpan<int> sampleLengths, int maxDictionarySize, int compressionLevel = Zstandard.DefaultCompressionLevel)
-    {
-        var trained = TrainCore(samples, sampleLengths, maxDictionarySize);
-        return Create(trained, compressionLevel);
-    }
-
-    static byte[] TrainCore(ReadOnlySpan<byte> samples, ReadOnlySpan<int> sampleLengths, int maxDictionarySize)
+    public static byte[] Train(ReadOnlySpan<byte> samples, ReadOnlySpan<int> sampleLengths, int maxDictionarySize)
     {
         if (maxDictionarySize <= 0) throw new ArgumentOutOfRangeException(nameof(maxDictionarySize));
         if (sampleLengths.IsEmpty) throw new ArgumentException("At least one sample is required.", nameof(sampleLengths));
@@ -94,6 +82,20 @@ public sealed unsafe class ZstandardDictionary : IDisposable
             total += length;
         }
         if (total != samples.Length) throw new ArgumentException("The sum of sample lengths must equal the length of samples.", nameof(sampleLengths));
+
+        // zstd trains on the first 75% of the samples and tests on the rest, but only checks that all samples together
+        // are at least 8 bytes. When the training part is shorter than that its dmer count underflows and the trainer
+        // reads out of bounds, so the same condition is rejected here. Found by fuzzing, zstd 1.5.7.
+        var trainingSamples = (int)(sampleLengths.Length * 0.75);
+        long trainingTotal = 0;
+        for (int i = 0; i < trainingSamples; i++)
+        {
+            trainingTotal += sampleLengths[i];
+        }
+        if (trainingTotal < 8)
+        {
+            throw new ZstandardException("Src size is incorrect: the samples used for training are shorter than 8 bytes.");
+        }
 
         var sizes = new nuint[sampleLengths.Length];
         for (int i = 0; i < sizes.Length; i++)
@@ -125,11 +127,6 @@ public sealed unsafe class ZstandardDictionary : IDisposable
     public ReadOnlyMemory<byte> Data => data;
 
     /// <summary>
-    /// Gets the dictionary id stored in the dictionary header, or 0 for raw content dictionaries.
-    /// </summary>
-    public uint DictionaryId { get; }
-
-    /// <summary>
     /// Gets the compression level the compression side was prepared for.
     /// </summary>
     public int CompressionLevel { get; }
@@ -137,52 +134,76 @@ public sealed unsafe class ZstandardDictionary : IDisposable
     /// <summary>
     /// Gets a value indicating whether the dictionary has been disposed.
     /// </summary>
-    public bool IsDisposed => cdict == null;
+    public bool IsDisposed => Volatile.Read(ref disposed) != 0;
 
-    internal ZSTD_CDict_s* CompressionHandle
+
+    internal Lease Acquire()
     {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get
-        {
-            var handle = cdict;
-            if (handle == null) Throws.ObjectDisposedException(nameof(ZstandardDictionary));
-            return handle;
-        }
+        if (IsDisposed) Throws.ObjectDisposedException(nameof(ZstandardDictionary));
+
+        var added = false;
+        native.DangerousAddRef(ref added);
+        return new Lease(this);
     }
 
-    internal ZSTD_DDict_s* DecompressionHandle
-    {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get
-        {
-            var handle = ddict;
-            if (handle == null) Throws.ObjectDisposedException(nameof(ZstandardDictionary));
-            return handle;
-        }
-    }
+    void Release() => native.DangerousRelease();
 
     /// <summary>
     /// Releases the native dictionaries. Safe to call multiple times.
     /// </summary>
+    /// <remarks>
+    /// An encoder or decoder that still uses the dictionary keeps the native memory until it is done with it.
+    /// </remarks>
     public void Dispose()
     {
-        // Interlocked has no pointer overload, so swap the fields as IntPtr while they are pinned.
-        ZSTD_CDict_s* c;
-        ZSTD_DDict_s* d;
-        fixed (ZSTD_CDict_s** pc = &cdict)
-        fixed (ZSTD_DDict_s** pd = &ddict)
+        Volatile.Write(ref disposed, 1);
+        native.Dispose();
+    }
+    
+    // A lease keeps the native dictionaries alive until it is disposed, also when the dictionary is disposed or
+    // finalized meanwhile. It is the only way to the native pointers. A default lease stands for no dictionary.
+    internal readonly struct Lease : IDisposable
+    {
+        readonly ZstandardDictionary? dictionary;
+
+        public readonly ZSTD_CDict_s* Compression;
+        public readonly ZSTD_DDict_s* Decompression;
+
+        internal Lease(ZstandardDictionary dictionary)
         {
-            c = (ZSTD_CDict_s*)Interlocked.Exchange(ref *(IntPtr*)pc, IntPtr.Zero);
-            d = (ZSTD_DDict_s*)Interlocked.Exchange(ref *(IntPtr*)pd, IntPtr.Zero);
+            this.dictionary = dictionary;
+            Compression = dictionary.native.Compression;
+            Decompression = dictionary.native.Decompression;
         }
 
-        Free(c, d);
-        GC.SuppressFinalize(this);
+        // true for the default lease, which stands for no dictionary
+        public bool IsEmpty => dictionary == null;
+
+        // The holder disposes a lease once, and does not use the pointers afterwards.
+        public void Dispose() => dictionary?.Release();
     }
 
-    static void Free(ZSTD_CDict_s* cdict, ZSTD_DDict_s* ddict)
+    sealed class NativeDictionaries : SafeHandle
     {
-        if (cdict != null) ZSTD_freeCDict(cdict);
-        if (ddict != null) ZSTD_freeDDict(ddict);
+        readonly ZSTD_DDict_s* ddict;
+
+        public NativeDictionaries(ZSTD_CDict_s* cdict, ZSTD_DDict_s* ddict)
+            : base(IntPtr.Zero, ownsHandle: true)
+        {
+            this.ddict = ddict;
+            SetHandle((IntPtr)cdict);
+        }
+
+        public override bool IsInvalid => handle == IntPtr.Zero;
+
+        public ZSTD_CDict_s* Compression => (ZSTD_CDict_s*)handle;
+        public ZSTD_DDict_s* Decompression => ddict;
+
+        protected override bool ReleaseHandle()
+        {
+            ZSTD_freeCDict((ZSTD_CDict_s*)handle);
+            ZSTD_freeDDict(ddict);
+            return true;
+        }
     }
 }
