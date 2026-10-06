@@ -347,6 +347,8 @@ jobs:
       - name: Build dynamic library
         working-directory: openzl
         env:
+          # The minimum macOS version is fixed here, not by the runner image. README says the same version.
+          MACOSX_DEPLOYMENT_TARGET: "15.0"
           CC: "clang ${{ matrix.flags }}"
           CFLAGS: ${{ matrix.flags }}
           CXXFLAGS: ${{ matrix.flags }}

@@ -40,6 +40,7 @@ public sealed unsafe class ZstandardDictionary : IDisposable
     public static ZstandardDictionary Create(ReadOnlySpan<byte> data, int compressionLevel = Zstandard.DefaultCompressionLevel)
     {
         if (data.IsEmpty) throw new ArgumentException("Dictionary data cannot be empty.", nameof(data));
+        Zstandard.ThrowIfCompressionLevelOutOfRange(compressionLevel, nameof(compressionLevel));
 
         var copy = data.ToArray();
         fixed (byte* p = copy)
@@ -81,6 +82,20 @@ public sealed unsafe class ZstandardDictionary : IDisposable
             total += length;
         }
         if (total != samples.Length) throw new ArgumentException("The sum of sample lengths must equal the length of samples.", nameof(sampleLengths));
+
+        // zstd trains on the first 75% of the samples and tests on the rest, but only checks that all samples together
+        // are at least 8 bytes. When the training part is shorter than that its dmer count underflows and the trainer
+        // reads out of bounds, so the same condition is rejected here. Found by fuzzing, zstd 1.5.7.
+        var trainingSamples = (int)(sampleLengths.Length * 0.75);
+        long trainingTotal = 0;
+        for (int i = 0; i < trainingSamples; i++)
+        {
+            trainingTotal += sampleLengths[i];
+        }
+        if (trainingTotal < 8)
+        {
+            throw new ZstandardException("Src size is incorrect: the samples used for training are shorter than 8 bytes.");
+        }
 
         var sizes = new nuint[sampleLengths.Length];
         for (int i = 0; i < sizes.Length; i++)

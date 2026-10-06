@@ -129,7 +129,7 @@ public class AllCompressDecompress
         return NativeCompressions.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default with { CompressionLevel = -4 });
     }
 
-    [Benchmark(Description = "BrotliEncoder TryCompress")]
+    [Benchmark(Description = "BrotliEncoder TryCompress(Default)")]
     [BenchmarkCategory("Compress")]
     public int BrotliEncoder_TryCompress()
     {
@@ -196,7 +196,7 @@ public class AllCompressDecompress
         return NativeCompressions.Zstandard.Decompress(compressed7, dest);
     }
 
-    [Benchmark(Description = "BrotliDecoder TryDecompress")]
+    [Benchmark(Description = "BrotliDecoder TryDecompress(Default)")]
     [BenchmarkCategory("Decompress")]
     public int BrotliDecoder_TryDecompress()
     {

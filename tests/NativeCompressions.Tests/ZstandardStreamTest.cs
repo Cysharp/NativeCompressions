@@ -118,7 +118,7 @@ public class ZstandardStreamTest
         using var decompress = new ZstandardStream(new MemoryStream(Zstandard.Compress(Data)), CompressionMode.Decompress);
         Assert.Throws<InvalidOperationException>(() => decompress.Write(new byte[16], 0, 16));
         Assert.Throws<InvalidOperationException>(() => decompress.WriteByte(1));
-        Assert.Throws<InvalidOperationException>(() => decompress.Flush());
+        decompress.Flush(); // nothing to flush while decompressing, the same as the BCL streams
     }
 
     // ---- byte oriented APIs

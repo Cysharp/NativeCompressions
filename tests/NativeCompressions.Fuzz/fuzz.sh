@@ -24,7 +24,12 @@ JOBS="${JOBS:-1}"
 command -v sharpfuzz >/dev/null || { echo "sharpfuzz tool not found. Run: dotnet tool install --global SharpFuzz.CommandLine"; exit 1; }
 [ -x "$LIBFUZZER" ] || { echo "libfuzzer-dotnet not found at $LIBFUZZER"; exit 1; }
 
-INSTRUMENTED="$BIN/NativeCompressions.Zstandard.Core.dll"
+# coverage feedback comes from the binding the target exercises
+case "$TARGET" in
+  lz4-*) ASSEMBLY="NativeCompressions.LZ4.Core.dll" ;;
+  *) ASSEMBLY="NativeCompressions.Zstandard.Core.dll" ;;
+esac
+INSTRUMENTED="$BIN/$ASSEMBLY"
 rm -f "$INSTRUMENTED"
 dotnet build "$HERE/NativeCompressions.Fuzz.csproj" -c Release
 

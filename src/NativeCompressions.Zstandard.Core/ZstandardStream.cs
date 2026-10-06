@@ -44,21 +44,21 @@ public sealed class ZstandardStream : Stream
         }
     }
 
-    public ZstandardStream(Stream stream, in ZstandardCompressionOptions compressionOptions, bool leaveOpen = false)
+    public ZstandardStream(Stream stream, in ZstandardCompressionOptions options, bool leaveOpen = false)
     {
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.needDisposeNativeCompressor = true;
-        this.encoder = new ZstandardEncoder(compressionOptions);
+        this.encoder = new ZstandardEncoder(options);
         this.mode = CompressionMode.Compress;
     }
 
-    public ZstandardStream(Stream stream, in ZstandardDecompressionOptions decompressionOptions, bool leaveOpen = false)
+    public ZstandardStream(Stream stream, in ZstandardDecompressionOptions options, bool leaveOpen = false)
     {
         this.stream = stream;
         this.leaveOpen = leaveOpen;
         this.needDisposeNativeCompressor = true;
-        this.decoder = new ZstandardDecoder(decompressionOptions);
+        this.decoder = new ZstandardDecoder(options);
         this.mode = CompressionMode.Decompress;
     }
 
@@ -217,7 +217,7 @@ public sealed class ZstandardStream : Stream
         ValidateDisposed();
         if (mode != CompressionMode.Compress)
         {
-            throw new InvalidOperationException("Write operation must be Compress mode.");
+            return; // nothing to flush while decompressing, the same as the BCL streams
         }
 
         // An encoder handed in by the caller may hold data this stream never saw, so the buffer is rented here too.
@@ -242,7 +242,7 @@ public sealed class ZstandardStream : Stream
         ValidateDisposed();
         if (mode != CompressionMode.Compress)
         {
-            throw new InvalidOperationException("Write operation must be Compress mode.");
+            return; // nothing to flush while decompressing, the same as the BCL streams
         }
 
         // Checked before the encoder is touched. Output taken from the encoder cannot be put back,

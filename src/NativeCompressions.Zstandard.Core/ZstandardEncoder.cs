@@ -49,21 +49,22 @@ public sealed unsafe class ZstandardEncoder : IDisposable
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardEncoder"/> with compressionLevel.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">compressionLevel is outside <see cref="Zstandard.MinCompressionLevel"/> to <see cref="Zstandard.MaxCompressionLevel"/>.</exception>
     public ZstandardEncoder(int compressionLevel)
-        : this(compressionLevel == Zstandard.DefaultCompressionLevel ? ZstandardCompressionOptions.Default : new ZstandardCompressionOptions(compressionLevel))
+        : this(compressionLevel == Zstandard.DefaultCompressionLevel ? ZstandardCompressionOptions.Default : new ZstandardCompressionOptions(compressionLevel)) // the options constructor validates the level
     {
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardEncoder"/> with specified options.
     /// </summary>
-    public ZstandardEncoder(in ZstandardCompressionOptions compressionOptions)
+    public ZstandardEncoder(in ZstandardCompressionOptions options)
     {
         this.cctx = CreateContext();
         try
         {
-            this.dictionary = Configure(cctx, compressionOptions);
-            this.options = compressionOptions;
+            this.dictionary = Configure(cctx, options);
+            this.options = options;
         }
         catch
         {
@@ -249,6 +250,12 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         GC.KeepAlive(this);
     }
 
+    /// <summary>
+    /// Abandons the current frame, if one is in progress, and applies new options. The next Compress starts a new frame with them.
+    /// Data buffered for the abandoned frame is discarded.
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
+    /// <exception cref="ZstandardException">Thrown when the new options cannot be applied. The previous options stay in effect.</exception>
     public void Reset(in ZstandardCompressionOptions options)
     {
         var context = GetContext();
@@ -279,17 +286,21 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         GC.KeepAlive(this);
     }
 
+    // Puts the previous options back after a failed Reset. The lease on their dictionary is still held, so they
+    // apply even when the caller disposed the dictionary in the meantime.
     void RestoreOptions()
     {
         try
         {
-            ReplaceContext(options);
+            ReplaceContext(options, dictionary);
         }
         catch
         {
-            // the previous options cannot be applied any more, for example their dictionary was disposed
+            // Options that were applied once do not fail again, so this is only a last resort that keeps the encoder usable.
             options = ZstandardCompressionOptions.Default;
-            ReplaceContext(options);
+            ReplaceContext(options, default);
+            dictionary.Dispose();
+            dictionary = default;
         }
 
         ReleasePrefix();
@@ -297,13 +308,13 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         declaredLength = -1;
     }
 
-    void ReplaceContext(in ZstandardCompressionOptions newOptions)
+    // Builds a fresh context with the options and the lease, and swaps it in. The lease stays with the caller.
+    void ReplaceContext(in ZstandardCompressionOptions newOptions, in ZstandardDictionary.Lease lease)
     {
         var fresh = CreateContext();
-        ZstandardDictionary.Lease next;
         try
         {
-            next = Configure(fresh, newOptions);
+            newOptions.SetParameter(fresh, lease);
         }
         catch
         {
@@ -314,9 +325,6 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         var old = cctx;
         cctx = fresh;
         ZSTD_freeCCtx(old);
-
-        dictionary.Dispose();
-        dictionary = next;
     }
 
     /// <summary>
@@ -408,15 +416,16 @@ public sealed unsafe class ZstandardEncoder : IDisposable
             context = (ZSTD_CCtx_s*)Interlocked.Exchange(ref *(IntPtr*)p, IntPtr.Zero);
         }
 
+        // Only the call that took the context releases the rest, so concurrent Dispose calls never release the lease or the prefix twice.
         if (context != null)
         {
             ZSTD_freeCCtx(context);
-        }
 
-        // the context is gone, nothing reads the prefix and the dictionary after that
-        ReleasePrefix();
-        dictionary.Dispose();
-        dictionary = default;
+            // the context is gone, nothing reads the prefix and the dictionary after that
+            ReleasePrefix();
+            dictionary.Dispose();
+            dictionary = default;
+        }
         GC.SuppressFinalize(this);
     }
 

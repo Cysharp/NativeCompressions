@@ -82,7 +82,7 @@ public class LZ4StreamTest
 
         using var decompress = new LZ4Stream(new MemoryStream(LZ4.Compress(Data)), CompressionMode.Decompress);
         Assert.Throws<InvalidOperationException>(() => decompress.Write(new byte[16], 0, 16));
-        Assert.Throws<InvalidOperationException>(() => decompress.Flush());
+        decompress.Flush(); // nothing to flush while decompressing, the same as the BCL streams
     }
 
     [Fact]
@@ -210,7 +210,7 @@ public class LZ4StreamTest
         new Random(5).NextBytes(random);
 
         var ms = new MemoryStream();
-        using (var zs = new LZ4Stream(ms, LZ4CompressionOptions.Default with { BlockSizeID = blockSize }, leaveOpen: true))
+        using (var zs = new LZ4Stream(ms, LZ4CompressionOptions.Default with { BlockSizeId = blockSize }, leaveOpen: true))
         {
             for (int offset = 0; offset < random.Length; offset += 1000)
             {

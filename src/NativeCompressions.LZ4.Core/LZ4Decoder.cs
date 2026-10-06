@@ -119,8 +119,8 @@ public sealed unsafe class LZ4Decoder : IDisposable
     /// </exception>
     /// <remarks>
     /// This method serves two purposes: it extracts frame metadata from the header and it
-    /// initializes the decompression context for subsequent <see cref="Decompress"/> calls.
-    /// The bytes consumed should be skipped from the source when calling <see cref="Decompress"/>.
+    /// initializes the decompression context for subsequent <see cref="Decompress(ReadOnlySpan{byte}, Span{byte}, out int, out int)"/> calls.
+    /// The bytes consumed should be skipped from the source when calling <see cref="Decompress(ReadOnlySpan{byte}, Span{byte}, out int, out int)"/>.
     /// </remarks>
     public LZ4FrameInfo GetFrameInfo(ReadOnlySpan<byte> source, out int bytesConsumed)
     {
@@ -182,7 +182,7 @@ public sealed unsafe class LZ4Decoder : IDisposable
     /// <remarks>
     /// The decoder maintains internal state between calls. When <see cref="OperationStatus.Done"/> is returned,
     /// the frame is complete and the decoder is ready for the next frame.
-    /// After <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset"/> before reusing the decoder.
+    /// After <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset()"/> before reusing the decoder.
     /// The distinction between <see cref="OperationStatus.NeedMoreData"/> and <see cref="OperationStatus.DestinationTooSmall"/>
     /// is heuristic: a completely filled destination is reported as too small, otherwise more source is requested.
     /// </remarks>
@@ -264,6 +264,25 @@ public sealed unsafe class LZ4Decoder : IDisposable
         GC.KeepAlive(this);
     }
 
+    /// <summary>
+    /// Resets the decoder to start decoding a new frame with new options, also after an error.
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">Thrown when the decoder has been disposed.</exception>
+    public void Reset(in LZ4DecompressionOptions options)
+    {
+        var context = GetContext();
+
+        var next = options.AcquireDictionary();
+        LZ4F_resetDecompressionContext(context); // the reset ends the frame that read the previous dictionary
+        frameInProgress = false;
+        this.options = options.ToDecompressOptions();
+
+        var previous = dictionary;
+        dictionary = next;
+        previous.Dispose();
+        GC.KeepAlive(this);
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     LZ4F_dctx_s* GetContext()
     {
@@ -302,14 +321,15 @@ public sealed unsafe class LZ4Decoder : IDisposable
             context = (LZ4F_dctx_s*)Interlocked.Exchange(ref *(IntPtr*)p, IntPtr.Zero);
         }
 
+        // Only the call that took the context releases the rest, so concurrent Dispose calls never release the lease twice.
         if (context != null)
         {
             LZ4F_freeDecompressionContext(context);
-        }
 
-        // freeing the context ends everything that reads the dictionary
-        dictionary.Dispose();
-        dictionary = default;
+            // freeing the context ends everything that reads the dictionary
+            dictionary.Dispose();
+            dictionary = default;
+        }
         GC.SuppressFinalize(this);
     }
 }

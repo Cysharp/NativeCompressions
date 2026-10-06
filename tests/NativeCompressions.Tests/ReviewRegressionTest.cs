@@ -171,7 +171,7 @@ public class ReviewRegressionTest
     public async Task LZ4_PipeReader_DeliversFrameWhileInputStaysOpen()
     {
         var data = Compressible(200_000, 6);
-        var compressed = LZ4.Compress(data, LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockIndependent, BlockSizeID = BlockSizeId.Max64KB });
+        var compressed = LZ4.Compress(data, LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockIndependent, BlockSizeId = BlockSizeId.Max64KB });
 
         var input = new Pipe();
         var output = new Pipe();
@@ -269,7 +269,7 @@ public class ReviewRegressionTest
     public async Task LZ4_CompressAsync_EndsWhenDestinationFails()
     {
         var data = Compressible(8 * 1024 * 1024, 8);
-        var options = LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB };
+        var options = LZ4CompressionOptions.Default with { BlockSizeId = BlockSizeId.Max64KB };
         var writer = new FailingPipeWriter();
 
         var compressing = LZ4.CompressAsync((ReadOnlyMemory<byte>)data, writer, options).AsTask();
@@ -306,7 +306,7 @@ public class ReviewRegressionTest
         {
             ContentSize = claimed,
             BlockMode = BlockMode.BlockIndependent,
-            BlockSizeID = BlockSizeId.Max64KB,
+            BlockSizeId = BlockSizeId.Max64KB,
             AutoFlush = true,
         });
         var buffer = new byte[encoder.GetMaxCompressedLength(body.Length)];
@@ -330,7 +330,7 @@ public class ReviewRegressionTest
     [Fact]
     public async Task LZ4_OversizeBlock_RejectedInEveryPath()
     {
-        var options = LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockIndependent, BlockSizeID = BlockSizeId.Max64KB };
+        var options = LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockIndependent, BlockSizeId = BlockSizeId.Max64KB };
         var headerOnly = LZ4.Compress(ReadOnlySpan<byte>.Empty, options);
         using var probe = new LZ4Decoder();
         var headerSize = probe.GetHeaderSize(headerOnly);
@@ -375,7 +375,7 @@ public class ReviewRegressionTest
         var compressed = LZ4.Compress(data, LZ4CompressionOptions.Default with
         {
             BlockMode = BlockMode.BlockIndependent,
-            BlockSizeID = BlockSizeId.Max64KB,
+            BlockSizeId = BlockSizeId.Max64KB,
             BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled,
         });
 

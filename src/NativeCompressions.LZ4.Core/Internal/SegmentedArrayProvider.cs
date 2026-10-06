@@ -150,7 +150,7 @@ internal struct InlineArray16<T>
 
 #else
 
-#if! NETSTANDARD2_0
+#if !NETSTANDARD2_0
 
 [StructLayout(LayoutKind.Sequential)]
 internal struct InlineArray16<T>

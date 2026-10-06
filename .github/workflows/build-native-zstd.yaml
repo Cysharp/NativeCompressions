@@ -231,10 +231,15 @@ jobs:
           cd ..
           echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build dynamic library
+        env:
+          # The minimum macOS version is fixed here, not by the runner image. README says the same version.
+          MACOSX_DEPLOYMENT_TARGET: "15.0"
         run: |
           cd zstd/lib
           make lib-release-nomt MOREFLAGS="${{ matrix.flags }}" -j "$(sysctl -n hw.ncpu)"
           lipo -info ./*.dylib
+          minos=$(otool -l libzstd.dylib | awk '/LC_BUILD_VERSION/ { found = 1 } found && /minos/ { print $2; exit }')
+          test "$minos" = "$MACOSX_DEPLOYMENT_TARGET" || { echo "minos is $minos, expected $MACOSX_DEPLOYMENT_TARGET"; exit 1; }
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/osx-${{ matrix.arch }}

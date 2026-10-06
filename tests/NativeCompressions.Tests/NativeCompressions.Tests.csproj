@@ -51,11 +51,11 @@
     <!-- restore negotiates package dependencies for this project's own framework, so the netstandard builds' packages must be listed here -->
     <PackageReference Include="System.Memory" Version="4.6.3" />
     <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" />
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.12" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
-    <PackageReference Include="System.IO.Pipelines" Version="9.0.8" />
-    <PackageReference Include="System.Threading.Channels" Version="9.0.8" />
-    <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="9.0.8" />
+    <PackageReference Include="System.IO.Pipelines" Version="10.0.12" />
+    <PackageReference Include="System.Threading.Channels" Version="10.0.12" />
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="10.0.12" />
   </ItemGroup>
 
   <!-- .NET 11 only: System.IO.Compression.Zstandard as an oracle, and the fuzz harness -->

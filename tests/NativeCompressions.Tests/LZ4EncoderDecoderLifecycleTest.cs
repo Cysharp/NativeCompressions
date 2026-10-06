@@ -243,11 +243,11 @@ public class LZ4EncoderDecoderLifecycleTest
         Assert.False(dict.IsDisposed);
 
         var options = LZ4CompressionOptions.Default with { Dictionary = dict };
-        Assert.Equal(42u, options.DictionaryID);
+        Assert.Equal(42u, options.DictionaryId);
         var compressed = LZ4.Compress(Data, options);
 
         Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
-        Assert.Equal(42u, info.DictionaryID);
+        Assert.Equal(42u, info.DictionaryId);
 
         var decompressionOptions = LZ4DecompressionOptions.Default with { Dictionary = dict };
         Assert.Equal(Data, LZ4.Decompress(compressed, decompressionOptions));

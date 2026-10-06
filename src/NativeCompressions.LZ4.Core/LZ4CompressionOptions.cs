@@ -28,7 +28,7 @@ public readonly record struct LZ4CompressionOptions
     // other reference
     readonly LZ4Dictionary? compressionDictionary;
 
-    /// <summary>0: default (fast mode); values > LZ4HC_CLEVEL_MAX count as LZ4HC_CLEVEL_MAX; values < 0 trigger "fast acceleration"</summary>
+    /// <summary>0: default (fast mode); values &gt; LZ4HC_CLEVEL_MAX count as LZ4HC_CLEVEL_MAX; values &lt; 0 trigger "fast acceleration"</summary>
     public int CompressionLevel
     {
         get => compressionLevel;
@@ -38,15 +38,11 @@ public readonly record struct LZ4CompressionOptions
     /// <summary>true: always flush; reduces usage of internal buffers</summary>
     public bool AutoFlush { get => autoFlush == 1; init => autoFlush = (value) ? 1u : 0; }
 
-    /// <summary>parser favors decompression speed vs compression ratio. Only works for high compression modes (>= LZ4HC_CLEVEL_OPT_MIN)</summary>
-    public uint FavorDecompressionSpeed
-    {
-        get => favorDecompressionSpeed;
-        init => favorDecompressionSpeed = value;
-    }
+    /// <summary>true: parser favors decompression speed vs compression ratio. Only works for high compression modes (>= LZ4HC_CLEVEL_OPT_MIN)</summary>
+    public bool FavorDecompressionSpeed { get => favorDecompressionSpeed == 1; init => favorDecompressionSpeed = (value) ? 1u : 0; }
 
     /// <summary>max64KB, max256KB, max1MB, max4MB; 0 == default (LZ4F_max64KB)</summary>
-    public BlockSizeId BlockSizeID { get => blockSizeID; init => blockSizeID = value; }
+    public BlockSizeId BlockSizeId { get => blockSizeID; init => blockSizeID = value; }
 
     /// <summary>LZ4F_blockLinked, LZ4F_blockIndependent; 0 == default (LZ4F_blockLinked)</summary>
     public BlockMode BlockMode { get => blockMode; init => blockMode = value; }
@@ -64,12 +60,12 @@ public readonly record struct LZ4CompressionOptions
     public ulong ContentSize { get => contentSize; init => contentSize = value; }
 
     /// <summary>Dictionary ID, sent by compressor to help decoder select correct dictionary; 0 == no dictID provided. This property is automatically set with the Dictionary property.</summary>
-    public uint DictionaryID { get => dictionaryID; }
+    public uint DictionaryId { get => dictionaryID; }
 
     /// <summary>1: each block followed by a checksum of block's compressed data; 0 == default (disabled)</summary>
     public BlockChecksum BlockChecksumFlag { get => blockChecksumFlag; init => blockChecksumFlag = value; }
 
-    public LZ4Dictionary? Dictionary // automatically set DictionaryID
+    public LZ4Dictionary? Dictionary // automatically set DictionaryId
     {
         get
         {
@@ -131,7 +127,7 @@ public readonly record struct LZ4FrameInfo
     readonly BlockChecksum blockChecksumFlag;
 
     /// <summary>max64KB, max256KB, max1MB, max4MB; 0 == default (LZ4F_max64KB)</summary>
-    public BlockSizeId BlockSizeID { get => blockSizeID; init => blockSizeID = value; }
+    public BlockSizeId BlockSizeId { get => blockSizeID; init => blockSizeID = value; }
     /// <summary>LZ4F_blockLinked, LZ4F_blockIndependent; 0 == default (LZ4F_blockLinked)</summary>
     public BlockMode BlockMode { get => blockMode; init => blockMode = value; }
     /// <summary>1: add a 32-bit checksum of frame's decompressed data; 0 == default (disabled)</summary>
@@ -141,7 +137,7 @@ public readonly record struct LZ4FrameInfo
     /// <summary>Size of uncompressed content ; 0 == unknown</summary>
     public ulong ContentSize { get => contentSize; init => contentSize = value; }
     /// <summary>Dictionary ID, sent by compressor to help decoder select correct dictionary; 0 == no dictID provided</summary>
-    public uint DictionaryID { get => dictionaryID; init => dictionaryID = value; }
+    public uint DictionaryId { get => dictionaryID; init => dictionaryID = value; }
     /// <summary>1: each block followed by a checksum of block's compressed data; 0 == default (disabled)</summary>
     public BlockChecksum BlockChecksumFlag { get => blockChecksumFlag; init => blockChecksumFlag = value; }
 }

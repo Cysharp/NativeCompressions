@@ -182,9 +182,19 @@ public static partial class LZ4
                         continue;
                     }
 
-                    if (totalWritten == destination.Length) throw new LZ4Exception("Destination buffer is too small.");
-                    if (totalConsumed == source.Length) throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
-                    if (consumed == 0 && written == 0) throw new LZ4Exception("Invalid LZ4 frame: decoder made no progress.");
+                    // A full destination is not an error by itself. The rest of the frame may produce no output,
+                    // such as an empty block or the end mark, and lz4frame stops before reading it when there is no room.
+                    if (consumed == 0 && written == 0)
+                    {
+                        if (totalWritten == destination.Length) throw new LZ4Exception("Destination buffer is too small.");
+                        throw new LZ4Exception("Invalid LZ4 frame: decoder made no progress.");
+                    }
+
+                    if (totalConsumed == source.Length)
+                    {
+                        if (totalWritten == destination.Length && HoldsOutput(context, dictionary, &decompressOptions)) throw new LZ4Exception("Destination buffer is too small.");
+                        throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
+                    }
                 }
             }
         }
@@ -193,5 +203,19 @@ public static partial class LZ4
             LZ4F_freeDecompressionContext(context); // accepts null
             dictionary.Dispose();
         }
+    }
+
+    // Whether the decoder has decoded output it could not deliver, which tells a destination that is too small
+    // apart from input that ends inside a frame. The context is not used after this.
+    static unsafe bool HoldsOutput(LZ4F_dctx_s* context, in LZ4Dictionary.Lease dictionary, LZ4F_decompressOptions_t* decompressOptions)
+    {
+        byte probe;
+        byte noSource;
+        nuint written = 1;
+        nuint consumed = 0;
+        var code = dictionary.IsEmpty
+            ? LZ4F_decompress(context, &probe, &written, &noSource, &consumed, decompressOptions)
+            : LZ4F_decompress_usingDict(context, &probe, &written, &noSource, &consumed, dictionary.Data, (nuint)dictionary.DataLength, decompressOptions);
+        return !IsError(code) && written == 1;
     }
 }

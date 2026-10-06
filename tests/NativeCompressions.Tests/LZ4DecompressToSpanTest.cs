@@ -37,7 +37,7 @@ public class LZ4DecompressToSpanTest
     static readonly LZ4CompressionOptions[] OptionVariants =
     [
         LZ4CompressionOptions.Default,
-        LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockIndependent, BlockSizeID = BlockSizeId.Max256KB },
+        LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockIndependent, BlockSizeId = BlockSizeId.Max256KB },
         LZ4CompressionOptions.Default with { ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled, BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled },
         LZ4CompressionOptions.Default with { CompressionLevel = 9, AutoFlush = true },
     ];

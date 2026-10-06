@@ -36,7 +36,7 @@ public class ZstandardStaticApiTest
 
         var parts = Zstandard.Version.Split('.').Select(int.Parse).ToArray();
         Assert.Equal(3, parts.Length);
-        Assert.Equal((uint)(parts[0] * 10000 + parts[1] * 100 + parts[2]), Zstandard.VersionNumber);
+        Assert.Equal(parts[0] * 10000 + parts[1] * 100 + parts[2], Zstandard.VersionNumber);
     }
 
     [Fact]
@@ -270,8 +270,8 @@ public class ZstandardStaticApiTest
         Assert.Equal(data, Zstandard.Decompress(noSize));
         Assert.Equal(data, Zstandard.Decompress(noSize, trustedData: true)); // falls back to streaming
 
-        // garbage is an error, not "unknown"
-        Assert.Throws<ZstandardException>(() => Zstandard.TryGetFrameContentSize(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }, out _));
+        // garbage is not a frame, so there is no size to report
+        Assert.False(Zstandard.TryGetFrameContentSize(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }, out _));
     }
 
     [Fact]
@@ -296,7 +296,7 @@ public class ZstandardStaticApiTest
         var withId = Zstandard.Compress(data, ZstandardCompressionOptions.Default with { Dictionary = dict });
         Assert.Equal(dictionaryId, GetDictIdFromFrame(withId));
 
-        var withoutId = Zstandard.Compress(data, ZstandardCompressionOptions.Default with { Dictionary = dict, DictIDFlag = false });
+        var withoutId = Zstandard.Compress(data, ZstandardCompressionOptions.Default with { Dictionary = dict, DictIdFlag = false });
         Assert.Equal(0u, GetDictIdFromFrame(withoutId));
 
         var options = ZstandardDecompressionOptions.Default with { Dictionary = dict };

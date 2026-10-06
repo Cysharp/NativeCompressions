@@ -139,7 +139,7 @@ public class LZ4AsyncApiTest : IDisposable
     static readonly LZ4CompressionOptions IndependentBlocksWithChecksums = LZ4CompressionOptions.Default with
     {
         BlockMode = BlockMode.BlockIndependent,
-        BlockSizeID = BlockSizeId.Max64KB,
+        BlockSizeId = BlockSizeId.Max64KB,
         ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled,
         BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled,
     };
@@ -330,7 +330,7 @@ public class LZ4AsyncApiTest : IDisposable
             .Concat(skippable)
             .Concat(LZ4.Compress(b, LZ4CompressionOptions.Default with { ContentSize = (ulong)b.Length }))
             .Concat(LZ4.Compress(ReadOnlySpan<byte>.Empty))
-            .Concat(LZ4.Compress(c, IndependentBlocksWithChecksums with { BlockSizeID = BlockSizeId.Max256KB }))
+            .Concat(LZ4.Compress(c, IndependentBlocksWithChecksums with { BlockSizeId = BlockSizeId.Max256KB }))
             .ToArray();
     }
 
@@ -527,7 +527,7 @@ public class LZ4AsyncApiTest : IDisposable
 
         var compressed = await Collect(w => LZ4.CompressAsync((ReadOnlyMemory<byte>)data, w, options));
         Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
-        Assert.Equal(11u, info.DictionaryID);
+        Assert.Equal(11u, info.DictionaryId);
 
         var decompressionOptions = LZ4DecompressionOptions.Default with { Dictionary = dict };
         Assert.Equal(data, LZ4.Decompress(compressed, decompressionOptions));

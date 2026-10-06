@@ -51,7 +51,7 @@ public static partial class LZ4
     /// <remarks>
     /// This is the smallest amount of data needed to parse the frame's magic number
     /// and flags to determine the full header size. Use this value to ensure you have
-    /// enough data before calling <see cref="GetHeaderSize"/>.
+    /// enough data before calling <see cref="LZ4Decoder.GetHeaderSize"/>.
     /// </remarks>
     public const int MinSizeToKnowFrameHeaderLength = 5; // LZ4F_MIN_SIZE_TO_KNOW_HEADER_LENGTH
 
@@ -103,7 +103,7 @@ public static partial class LZ4
     /// </summary>
     public static unsafe nuint GetMaxCompressedLength(nuint inputSize, in LZ4CompressionOptions options)
     {
-        // compressFrameBound assumes the largest header, so ContentSize and DictionaryID do not matter here
+        // compressFrameBound assumes the largest header, so ContentSize and DictionaryId do not matter here
         var preferences = options.ToPreferences();
         return LZ4F_compressFrameBound(inputSize, &preferences);
     }

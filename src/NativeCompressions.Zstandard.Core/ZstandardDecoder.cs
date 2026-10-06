@@ -41,12 +41,12 @@ public sealed unsafe class ZstandardDecoder : IDisposable
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardDecoder"/> with specified options.
     /// </summary>
-    public ZstandardDecoder(in ZstandardDecompressionOptions decompressionOptions)
+    public ZstandardDecoder(in ZstandardDecompressionOptions options)
     {
         this.dctx = CreateContext();
         try
         {
-            this.dictionary = Configure(dctx, decompressionOptions);
+            this.dictionary = Configure(dctx, options);
         }
         catch
         {
@@ -197,6 +197,11 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         GC.KeepAlive(this);
     }
 
+    /// <summary>
+    /// Abandons the current frame, if one is in progress, and applies new options. The next Decompress starts a new frame with them.
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">Thrown when the decoder has been disposed.</exception>
+    /// <exception cref="ZstandardException">Thrown when the reset fails or the new options cannot be applied.</exception>
     public void Reset(in ZstandardDecompressionOptions options)
     {
         var context = GetContext();
@@ -274,7 +279,6 @@ public sealed unsafe class ZstandardDecoder : IDisposable
     /// </summary>
     public void Dispose()
     {
-        ReleasePrefix();
         // Interlocked has no pointer overload, so swap the field as an IntPtr while it is pinned.
         ZSTD_DCtx_s* context;
         fixed (ZSTD_DCtx_s** p = &dctx)
@@ -282,14 +286,16 @@ public sealed unsafe class ZstandardDecoder : IDisposable
             context = (ZSTD_DCtx_s*)Interlocked.Exchange(ref *(IntPtr*)p, IntPtr.Zero);
         }
 
+        // Only the call that took the context releases the rest, so concurrent Dispose calls never release the lease or the prefix twice.
         if (context != null)
         {
             ZSTD_freeDCtx(context);
-        }
 
-        // freeing the context ends everything that reads the dictionary
-        dictionary.Dispose();
-        dictionary = default;
+            // freeing the context ends everything that reads the prefix and the dictionary
+            ReleasePrefix();
+            dictionary.Dispose();
+            dictionary = default;
+        }
         GC.SuppressFinalize(this);
     }
 

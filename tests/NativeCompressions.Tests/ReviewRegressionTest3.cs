@@ -316,7 +316,7 @@ public class ReviewRegressionTest3
 
         if (size == 0 && operation.Contains("decompress")) return;
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await Run(operation, size, pipe.Writer).AsTask().WaitAsync(TimeSpan.FromSeconds(20)));
+        await Assert.ThrowsAsync<IOException>(async () => await Run(operation, size, pipe.Writer).AsTask().WaitAsync(TimeSpan.FromSeconds(20)));
     }
 
     // ---- 7. every public P/Invoke declaration must exist in the bundled library

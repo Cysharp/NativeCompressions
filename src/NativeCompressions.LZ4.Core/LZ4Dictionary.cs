@@ -33,8 +33,12 @@ public sealed unsafe class LZ4Dictionary : IDisposable
     }
 
     /// <summary>
-    /// Creates a dictionary from raw bytes. Any content works, typically the last 64KB of representative data.
+    /// Creates a dictionary from raw bytes. Any content works, but only the last 64KB are used.
     /// </summary>
+    /// <remarks>
+    /// LZ4 has no dictionary trainer of its own. Bytes trained from samples with <c>ZstandardDictionary.Train</c>
+    /// are recommended, the last 64KB of representative data also works.
+    /// </remarks>
     /// <param name="data">The dictionary bytes. A copy is kept in <see cref="Data"/>.</param>
     /// <param name="dictionaryId">An id written into frame headers so readers can pick the matching dictionary. 0 writes no id.</param>
     public static LZ4Dictionary Create(ReadOnlySpan<byte> data, uint dictionaryId = 0)

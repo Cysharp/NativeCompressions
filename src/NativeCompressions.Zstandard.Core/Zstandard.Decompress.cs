@@ -27,14 +27,14 @@ public static partial class Zstandard
     /// Decompresses one or more concatenated frames into a new array with specified options.
     /// </summary>
     /// <param name="source">Compressed data. Empty input returns an empty array.</param>
-    /// <param name="decompressionOptions">Decompression options such as a dictionary.</param>
+    /// <param name="options">Decompression options such as a dictionary.</param>
     /// <param name="trustedData">
     /// When true, the result array is allocated up front from the sizes recorded in the frame headers and the
     /// whole input is decoded in one call. Only use this for data you control, since the headers are not verified
     /// before the allocation. When false, the data is decoded in blocks into a growing buffer instead. Every frame
     /// in the input is decoded either way.
     /// </param>
-    public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, in ZstandardDecompressionOptions decompressionOptions, bool trustedData = false)
+    public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, in ZstandardDecompressionOptions options, bool trustedData = false)
     {
         if (source.IsEmpty)
         {
@@ -50,7 +50,7 @@ public static partial class Zstandard
 
             // zstd itself rejects a frame whose decoded size differs from the recorded content size,
             // so a short result only means some frame had no recorded size.
-            var bytesWritten = Decompress(source, destination, decompressionOptions);
+            var bytesWritten = Decompress(source, destination, options);
             if (bytesWritten == destination.Length)
             {
                 return destination;
@@ -62,7 +62,7 @@ public static partial class Zstandard
         }
         else
         {
-            using var decoder = new ZstandardDecoder(decompressionOptions);
+            using var decoder = new ZstandardDecoder(options);
 
             Span<byte> scratch = stackalloc byte[256];
             var arrayProvider = new SegmentedArrayProvider<byte>(scratch);
@@ -116,7 +116,7 @@ public static partial class Zstandard
         return Decompress(source, destination, ZstandardDecompressionOptions.Default);
     }
 
-    public static unsafe int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, in ZstandardDecompressionOptions decompressionOptions)
+    public static unsafe int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, in ZstandardDecompressionOptions options)
     {
         // Currently DecompressionOptions.WindowLogMax in only used in streaming mode.
         // So always use simple API when default options are used.
@@ -125,13 +125,13 @@ public static partial class Zstandard
         fixed (byte* dest = destination)
         {
             nuint bytesWritten;
-            if (decompressionOptions.Dictionary == null)
+            if (options.Dictionary == null)
             {
                 bytesWritten = ZSTD_decompress(dest, (nuint)destination.Length, src, (nuint)source.Length);
             }
             else
             {
-                using var lease = decompressionOptions.Dictionary.Acquire();
+                using var lease = options.Dictionary.Acquire();
                 var context = ZSTD_createDCtx();
                 if (context == null) throw new ZstandardException("Failed to create decompression context");
 

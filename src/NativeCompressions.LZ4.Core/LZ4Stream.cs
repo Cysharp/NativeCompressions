@@ -85,6 +85,18 @@ public sealed class LZ4Stream : Stream
         this.mode = CompressionMode.Decompress;
     }
 
+    /// <summary>
+    /// Gets the underlying stream.
+    /// </summary>
+    public Stream BaseStream
+    {
+        get
+        {
+            ValidateDisposed();
+            return stream;
+        }
+    }
+
     public override bool CanRead => !isDisposed && mode == CompressionMode.Decompress && stream.CanRead;
     public override bool CanWrite => !isDisposed && mode == CompressionMode.Compress && stream.CanWrite;
     public override bool CanSeek => false;
@@ -154,7 +166,7 @@ public sealed class LZ4Stream : Stream
         ValidateDisposed();
         if (mode != CompressionMode.Compress)
         {
-            throw new InvalidOperationException("Write operation must be Compress mode.");
+            return; // nothing to flush while decompressing, the same as the BCL streams
         }
 
         // An encoder handed in by the caller may hold data this stream never saw, so the buffer is rented here too.
@@ -173,7 +185,7 @@ public sealed class LZ4Stream : Stream
         ValidateDisposed();
         if (mode != CompressionMode.Compress)
         {
-            throw new InvalidOperationException("Write operation must be Compress mode.");
+            return; // nothing to flush while decompressing, the same as the BCL streams
         }
 
         // Checked before the encoder is touched. Output taken from the encoder cannot be put back,

@@ -88,7 +88,7 @@ public class ReviewRegressionTest6 : IDisposable
     public async Task LZ4_DecompressAsync_DeliversEverythingOfOpenFrame(int size)
     {
         var data = Compressible(size, 91);
-        using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { AutoFlush = true, BlockSizeID = BlockSizeId.Max64KB });
+        using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { AutoFlush = true, BlockSizeId = BlockSizeId.Max64KB });
         var buffer = new byte[encoder.GetMaxCompressedLength(size)];
 
         var input = new Pipe(new PipeOptions(pauseWriterThreshold: 0));
@@ -145,7 +145,7 @@ public class ReviewRegressionTest6 : IDisposable
         var options = LZ4DecompressionOptions.Default with { StableDst = true };
 
         // linked blocks refer to the output that came before them
-        var compressed = LZ4.Compress(data, LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockLinked, BlockSizeID = BlockSizeId.Max64KB });
+        var compressed = LZ4.Compress(data, LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockLinked, BlockSizeId = BlockSizeId.Max64KB });
 
         Assert.Equal(data, LZ4.Decompress(compressed, options));
         Assert.Equal(data, await Collect(w => LZ4.DecompressAsync((ReadOnlyMemory<byte>)compressed, w, options)));

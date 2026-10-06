@@ -34,10 +34,6 @@ public sealed unsafe class LZ4Encoder : IDisposable
     LZ4Dictionary.Lease dictionary;
     bool isWrittenHeader;
 
-    // Whether the frame header is written on the first Compress call. Parallel compression turns this off
-    // for the encoders that produce blocks of a frame whose header is written elsewhere.
-    internal bool IsWriteHeader { get; set; } = true;
-
     /// <summary>
     /// Initializes a new instance of the <see cref="LZ4Encoder"/> with default settings.
     /// </summary>
@@ -182,25 +178,17 @@ public sealed unsafe class LZ4Encoder : IDisposable
         // Write header block
         if (!isWrittenHeader)
         {
-            // LZ4F_cctx_s always need to call compressBegin but header can ignore(write for single frame from multiple context(multiple block))
-            // An ignored header goes to a scratch buffer, so the destination needs no room for it.
-            Span<byte> scratch = stackalloc byte[LZ4.MaxFrameHeaderLength];
-            var headerDestination = IsWriteHeader ? destination : scratch;
-
             fixed (LZ4F_preferences_t* preference = &preferences)
-            fixed (byte* dest = headerDestination)
+            fixed (byte* dest = destination)
             {
                 var writtenOrErrorCode = dictionary.IsEmpty
-                    ? LZ4F_compressBegin(context, dest, (nuint)headerDestination.Length, preference)
-                    : LZ4F_compressBegin_usingCDict(context, dest, (nuint)headerDestination.Length, dictionary.Compression, preference);
+                    ? LZ4F_compressBegin(context, dest, (nuint)destination.Length, preference)
+                    : LZ4F_compressBegin_usingCDict(context, dest, (nuint)destination.Length, dictionary.Compression, preference);
                 LZ4.ThrowIfError(writtenOrErrorCode);
                 isWrittenHeader = true;
 
-                if (IsWriteHeader)
-                {
-                    destination = destination.Slice((int)writtenOrErrorCode);
-                    totalWritten += (int)writtenOrErrorCode;
-                }
+                destination = destination.Slice((int)writtenOrErrorCode);
+                totalWritten += (int)writtenOrErrorCode;
             }
         }
 
@@ -299,6 +287,38 @@ public sealed unsafe class LZ4Encoder : IDisposable
         DiscardFrame();
     }
 
+    /// <summary>
+    /// Abandons the current frame, if one is in progress, and applies new options. The next <see cref="Compress"/> starts a new frame with them.
+    /// Data buffered for the abandoned frame is discarded.
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
+    /// <exception cref="LZ4Exception">Thrown when the context cannot begin a frame with the new options. The previous options stay in effect.</exception>
+    public void Reset(in LZ4CompressionOptions options)
+    {
+        ThrowIfDisposed();
+
+        var next = options.AcquireDictionary();
+        var previousDictionary = dictionary;
+        var previousPreferences = preferences;
+        preferences = options.ToPreferences();
+        dictionary = next;
+        try
+        {
+            DiscardFrame(); // begins a frame with the new preferences and dictionary, which also drops buffered input
+        }
+        catch
+        {
+            preferences = previousPreferences;
+            dictionary = previousDictionary;
+            next.Dispose();
+            isWrittenHeader = false; // the failed begin dropped the frame in progress, the next Compress begins again
+            throw;
+        }
+
+        // the context no longer references the previous dictionary
+        previousDictionary.Dispose();
+    }
+
     // LZ4F_compressBegin reinitializes the context, which drops any input still buffered for the frame in progress.
     // The header it writes goes to a scratch buffer; the next Compress begins the frame again and writes the real one.
     void DiscardFrame()
@@ -342,14 +362,15 @@ public sealed unsafe class LZ4Encoder : IDisposable
             context = (LZ4F_cctx_s*)Interlocked.Exchange(ref *(IntPtr*)p, IntPtr.Zero);
         }
 
+        // Only the call that took the context releases the rest, so concurrent Dispose calls never release the lease twice.
         if (context != null)
         {
             LZ4F_freeCompressionContext(context);
-        }
 
-        // freeing the context ends everything that reads the dictionary
-        dictionary.Dispose();
-        dictionary = default;
+            // freeing the context ends everything that reads the dictionary
+            dictionary.Dispose();
+            dictionary = default;
+        }
         GC.SuppressFinalize(this);
     }
 

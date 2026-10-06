@@ -255,7 +255,7 @@ public class ReviewRegressionTest5 : IDisposable
     {
         var data = Compressible(4 * 1024 * 1024, 78);
         var source = FailingSequence(data, segmentSize, failAtCall);
-        var options = LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB };
+        var options = LZ4CompressionOptions.Default with { BlockSizeId = BlockSizeId.Max64KB };
 
         var output = new Pipe(new PipeOptions(pauseWriterThreshold: 0));
         var compressing = LZ4.CompressAsync(source, output.Writer, options).AsTask();
@@ -271,7 +271,7 @@ public class ReviewRegressionTest5 : IDisposable
     {
         var data = Compressible(4 * 1024 * 1024, 79);
         var source = new FailingMemoryManager(data, 0, data.Length, new FailureCounter(failAtCall)).CreateMemory();
-        var options = LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB };
+        var options = LZ4CompressionOptions.Default with { BlockSizeId = BlockSizeId.Max64KB };
 
         var output = new Pipe(new PipeOptions(pauseWriterThreshold: 0));
         var compressing = LZ4.CompressAsync((ReadOnlyMemory<byte>)source, output.Writer, options).AsTask();
@@ -287,7 +287,7 @@ public class ReviewRegressionTest5 : IDisposable
     {
         var path = Path.Combine(tempDir, $"source-{failAtWrite}.bin");
         File.WriteAllBytes(path, Compressible(4 * 1024 * 1024, 80));
-        var options = LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB };
+        var options = LZ4CompressionOptions.Default with { BlockSizeId = BlockSizeId.Max64KB };
 
         using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1, FileOptions.Asynchronous);
         var writer = new FailingWritePipeWriter(failAtWrite);
@@ -325,7 +325,7 @@ public class ReviewRegressionTest5 : IDisposable
     public async Task LZ4_CompressAsync_SourceFailure_ReportsItsException(string source, int failAtCall)
     {
         var data = Compressible(4 * 1024 * 1024, 81);
-        var options = LZ4CompressionOptions.Default with { BlockSizeID = BlockSizeId.Max64KB };
+        var options = LZ4CompressionOptions.Default with { BlockSizeId = BlockSizeId.Max64KB };
         var writer = new StallingPipeWriter();
 
         var compressing = source == "sequence"
@@ -472,7 +472,7 @@ public class ReviewRegressionTest5 : IDisposable
         var compressed = LZ4.Compress(data, LZ4CompressionOptions.Default with
         {
             BlockMode = BlockMode.BlockIndependent,
-            BlockSizeID = BlockSizeId.Max64KB,
+            BlockSizeId = BlockSizeId.Max64KB,
             ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled,
         });
 

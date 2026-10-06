@@ -117,11 +117,11 @@ public static partial class LZ4
             options = options with
             {
                 ContentSize = givenOptions == null ? (ulong)knownLength.Value : options.ContentSize,
-                BlockSizeID = options.BlockSizeID == BlockSizeId.Default ? DetermineBlockSize(knownLength.Value) : options.BlockSizeID,
+                BlockSizeId = options.BlockSizeId == BlockSizeId.Default ? DetermineBlockSize(knownLength.Value) : options.BlockSizeId,
             };
         }
 
-        var blockSize = GetMaxBlockSize(options.BlockSizeID);
+        var blockSize = GetMaxBlockSize(options.BlockSizeId);
         using var encoder = new LZ4Encoder(options);
 
         ReadResult result = default;

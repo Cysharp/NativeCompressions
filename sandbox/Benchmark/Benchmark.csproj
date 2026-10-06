@@ -31,17 +31,17 @@
 
     <!-- For Benchmark Models -->
     <PackageReference Include="MemoryPack" Version="1.21.4" />
-    <PackageReference Include="MessagePack" Version="3.1.10" />
-    <PackageReference Include="MessagePackAnalyzer" Version="3.1.10">
+    <PackageReference Include="MessagePack" Version="3.1.11" />
+    <PackageReference Include="MessagePackAnalyzer" Version="3.1.11">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
-    <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="10.3.1">
+    <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="10.4.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Orleans.Serialization" Version="10.3.1" />
+    <PackageReference Include="Microsoft.Orleans.Serialization" Version="10.4.0" />
     <PackageReference Include="protobuf-net" Version="3.4.30" />
     <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
     <!-- TODO: add SharpZstd -->
