@@ -70,6 +70,8 @@ Install for Unity, see [Unity](#unity) section.
 
 For how to use each one, please refer to the [LZ4](#lz4) section, the [Zstandard](#zstandard) section, and the [OpenZL](#openzl) section.
 
+For a platform without a prebuilt native library, such as a game console or WebAssembly, see the [Other Platforms](#other-platforms) section and its [WebAssembly](#webassembly) part.
+
 LZ4
 ---
 LZ4 does not reach a very high compression ratio, but its decompression speed is outstanding. Raising the compression level improves the ratio, but Zstandard is the better choice for that kind of use. LZ4 has both [Block Format](https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md) and [Frame Format](https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md). We adopt **frame format** for all APIs from the perspective of compatibility, security, and performance flexibility. External dictionary loading is also supported.
