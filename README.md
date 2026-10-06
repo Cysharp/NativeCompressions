@@ -373,6 +373,33 @@ During an iOS player build it rewrites the library names to `__Internal` in the 
 
 The iOS Simulator on Apple Silicon is not supported in Unity. The packages ship an `iossimulator-arm64` library, but the runtime settings above do not register it, so NuGetForUnity does not import it. Unity links every iOS plugin into one build and cannot pick the simulator library over the device library of the same architecture. Use a device build, or the Intel simulator (`ios-x64`) on a Rosetta Editor.
 
+Other Platforms
+---
+The packages ship native libraries for the platforms listed in [Getting Started](#getting-started). On a platform without a prebuilt library, such as a game console (Switch, PlayStation, Xbox), build liblz4 and libzstd with the platform's toolchain and place them where the runtime loads native libraries from. The managed binding is the same on every platform, so take the `Core` packages (`NativeCompressions.LZ4.Core`, `NativeCompressions.Zstandard.Core`), which carry no native libraries, and add your own build.
+
+What to build:
+
+* LZ4: `lz4/lib` of the version the submodule points at (v1.10.0), from `lz4.c`, `lz4hc.c`, `lz4frame.c` and `xxhash.c`. The binding uses the frame API and the HC compressor.
+* Zstandard: `zstd/lib` (v1.5.7) including the dictionary builder (`ZDICT_*`). Multithreading is not used. The packages are built with `make lib-release-nomt`.
+
+The binding looks the libraries up as `lz4` and `libzstd`. .NET adds the `lib` prefix and the extension on Linux and macOS, but not on Windows, so a Windows-like platform needs `lz4.dll` and `libzstd.dll` (lz4's own build produces `liblz4.dll`, rename it). When the platform needs another name or location, register `NativeLibrary.SetDllImportResolver` on the Core assemblies (`typeof(LZ4).Assembly` and `typeof(Zstandard).Assembly`).
+
+When the platform links native code statically, the P/Invoke library name has to be `__Internal`, as on iOS. In Unity, the `NativeCompressions.Unity` package rewrites the names for iOS builds only. Build xxhash with `-DXXH_NAMESPACE=LZ4_`, as the iOS and Android libraries are, so its symbols do not collide with another copy of xxhash in the same executable.
+
+`LZ4.Version` and `Zstandard.Version` return the version string of the library that was loaded, which confirms the right file is picked up.
+
+### WebAssembly
+Blazor WebAssembly works the same way, with one difference: a browser app links native code into the runtime at build time instead of loading a file. Install the `wasm-tools` workload, compile the same sources with the Emscripten it ships, and reference the archives from the project:
+
+```xml
+<ItemGroup>
+  <NativeFileReference Include="lz4.a" />
+  <NativeFileReference Include="libzstd.a" />
+</ItemGroup>
+```
+
+The wasm build matches a `DllImport` to a native reference by the file name without extension, so `lz4.a` and `libzstd.a` line up with the names the binding uses and nothing needs rewriting. WebAssembly is 32-bit, which the binding handles since it uses `nuint` for every `size_t`. [sandbox/BlazorWasm](sandbox/BlazorWasm) is a working example. Its `native/build.sh` builds the two archives with the Emscripten of the workload, and the app runs every API, including dictionaries and the `PipeWriter` based ones, through the native code on page load.
+
 Performance Tips
 ---
 Compression ratio and performance vary a lot with the data. In some cases compression gains nothing and only adds overhead. Measure with representative data from your own application, across several algorithms and compression levels, before deciding.

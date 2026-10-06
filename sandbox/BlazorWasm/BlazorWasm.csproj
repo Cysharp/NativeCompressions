@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <StaticWebAssetSpaFallbackEnabled>true</StaticWebAssetSpaFallbackEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="11.0.0-rc.1.26425.128" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Gateway" Version="11.0.0-rc.1.26425.128" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- The managed binding only. The native code comes from the archives below, not from a Runtime package. -->
+  <ItemGroup>
+    <ProjectReference Include="../../src/NativeCompressions.LZ4.Core/NativeCompressions.LZ4.Core.csproj" />
+    <ProjectReference Include="../../src/NativeCompressions.Zstandard.Core/NativeCompressions.Zstandard.Core.csproj" />
+  </ItemGroup>
+
+  <!--
+    liblz4 and libzstd compiled to wasm with the Emscripten that the wasm-tools workload ships, see native/build.sh.
+    The file name without extension has to match the DllImport library name ("lz4" and "libzstd"),
+    that is how the wasm build maps a P/Invoke to a native reference.
+  -->
+  <ItemGroup>
+    <NativeFileReference Include="native/lz4.a" />
+    <NativeFileReference Include="native/libzstd.a" />
+  </ItemGroup>
+
+</Project>

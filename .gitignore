@@ -161,3 +161,6 @@ bindgen/target/flycheck0/stdout
 tests/NativeCompressions.Fuzz/corpus/
 tests/NativeCompressions.Fuzz/findings/
 tests/NativeCompressions.Fuzz/tools/
+
+# wasm archives of the Blazor sandbox, produced by sandbox/BlazorWasm/native/build.sh
+sandbox/BlazorWasm/native/*.a
