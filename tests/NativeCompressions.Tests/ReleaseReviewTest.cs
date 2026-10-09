@@ -301,7 +301,7 @@ public class ReleaseReviewTest
         Assert.Equal(4 + (checksum ? 4 : 0), footerLength);
         written += footerLength;
 
-        Assert.True(encoder.GetMaxFlushBufferLength(includingFooter: true) >= headerLength + footerLength);
+        Assert.True(encoder.GetMaxFlushBufferLength() >= headerLength + footerLength);
         Assert.Equal(data, LZ4.Decompress(buffer.AsSpan(0, written).ToArray(), LZ4DecompressionOptions.Default with { Dictionary = dict }));
     }
 

@@ -244,13 +244,13 @@ public class ReviewRegressionTest7
 
         // the same value is still enough inside a frame
         written = encoder.Compress(data, big);
-        var closing = new byte[encoder.GetMaxFlushBufferLength(includingFooter: true)];
+        var closing = new byte[encoder.GetMaxFlushBufferLength()];
         var closed = encoder.Close(closing);
         Assert.Equal(data, LZ4.Decompress(big.AsSpan(0, written).ToArray().Concat(closing.AsSpan(0, closed).ToArray()).ToArray()));
 
         static void CloseEmptyFrame(LZ4Encoder encoder)
         {
-            var buffer = new byte[encoder.GetMaxFlushBufferLength(includingFooter: true)];
+            var buffer = new byte[encoder.GetMaxFlushBufferLength()];
             var written = encoder.Close(buffer);
             Assert.Empty(LZ4.Decompress(buffer.AsSpan(0, written)));
         }
@@ -260,10 +260,11 @@ public class ReviewRegressionTest7
     public void LZ4_GetMaxFlushBufferLength_FlushNeedsNoHeaderRoom()
     {
         using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { AutoFlush = true });
-        var flush = encoder.GetMaxFlushBufferLength();
-        var close = encoder.GetMaxFlushBufferLength(includingFooter: true);
+        var flush = encoder.GetMaxFlushBufferLength(includingFooter: false);
+        var close = encoder.GetMaxFlushBufferLength();
         Assert.True(flush < close);
         Assert.Equal(encoder.GetMaxCompressedLength(0), close);
+        Assert.Equal(close, encoder.GetMaxFlushBufferLength(includingFooter: true));
 
         // flushing a fresh encoder writes nothing and needs no room
         Assert.Equal(0, encoder.Flush(new byte[flush]));

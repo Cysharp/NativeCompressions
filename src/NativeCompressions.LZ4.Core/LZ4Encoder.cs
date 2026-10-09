@@ -108,14 +108,18 @@ public sealed unsafe class LZ4Encoder : IDisposable
     }
 
     /// <summary>
-    /// Calculates the buffer size that is enough for <see cref="Flush"/>, or for <see cref="Close"/> when includingFooter is true.
+    /// Calculates the buffer size that is enough for <see cref="Flush"/> and <see cref="Close"/> in any state.
     /// </summary>
-    /// <param name="includingFooter">true to size the buffer for <see cref="Close"/>, false for <see cref="Flush"/>.</param>
+    /// <param name="includingFooter">
+    /// true (default) to size the buffer for <see cref="Close"/>, which is also enough for <see cref="Flush"/>.
+    /// false to size it for <see cref="Flush"/> only, saving the room for the frame header and footer.
+    /// </param>
     /// <remarks>
     /// The size for Close also has room for the frame header, because closing an encoder that has not
-    /// compressed anything writes the header of an empty frame. So the value is enough for Close in any state.
+    /// compressed anything writes the header of an empty frame. So the default value is the same as
+    /// <see cref="GetMaxCompressedLength"/> with an inputSize of 0 and is enough for Close in any state.
     /// </remarks>
-    public int GetMaxFlushBufferLength(bool includingFooter = false) => GetMaxCompressedLength(0, includingHeader: includingFooter, includingFooter: includingFooter);
+    public int GetMaxFlushBufferLength(bool includingFooter = true) => GetMaxCompressedLength(0, includingHeader: includingFooter, includingFooter: includingFooter);
 
     /// <summary>
     /// Gets the actual frame header size based on current options.
@@ -243,7 +247,7 @@ public sealed unsafe class LZ4Encoder : IDisposable
     /// <summary>
     /// Finalizes the current LZ4 frame by writing the ending marker and optional content checksum.
     /// </summary>
-    /// <param name="destination">The buffer to write the frame ending to. It is guaranteed to be successful when destination.Length &gt;= GetMaxFlushBufferLength(includingFooter: true), which is the same as GetMaxCompressedLength(0).</param>
+    /// <param name="destination">The buffer to write the frame ending to. It is guaranteed to be successful when destination.Length &gt;= GetMaxFlushBufferLength(), which is the same as GetMaxCompressedLength(0).</param>
     /// <returns>The number of bytes written to the destination buffer (at least 4 bytes for the end marker).</returns>
     /// <exception cref="LZ4Exception">Thrown when finalization fails.</exception>
     /// <remarks>

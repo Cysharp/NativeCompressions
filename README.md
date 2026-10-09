@@ -123,7 +123,7 @@ foreach (var chunk in dataChunks) // dataChunks = byte[][]
 }
 
 // Finalize frame. The size covers buffered data, the footer, and the header of an empty frame when nothing was compressed.
-var footerWithBufferedDataSize = encoder.GetMaxFlushBufferLength(includingFooter: true);
+var footerWithBufferedDataSize = encoder.GetMaxFlushBufferLength();
 var finalBytes = bufferWriter.GetSpan(footerWithBufferedDataSize);
 
 // need to call `Close` to write LZ4 frame footer
