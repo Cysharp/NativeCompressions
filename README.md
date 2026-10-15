@@ -212,6 +212,8 @@ int read = await lz4Stream.ReadAsync(buffer);
 
 Each `Write` and `Read` goes to the native codec once, the same as the streams in `System.IO.Compression`. The native codec keeps its own block buffers, so a small read or write costs one call of about 10 ns and no buffering is done in the stream itself. Code that processes many small pieces at once, a serializer for example, is better served by the `PipeWriter` based `CompressAsync` and `DecompressAsync`.
 
+A `Read` with an empty buffer waits until the inner stream delivers input and then returns 0, like the streams in `System.IO.Compression`. Code that reads from a connection can use it to delay renting a buffer until data is available.
+
 ### Options
 You can change `with` operator.
 

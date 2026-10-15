@@ -144,16 +144,128 @@ public class ZstandardStreamTest
     }
 
     [Fact]
-    public void Read_EmptyBuffer_ReturnsZero()
+    public void ZeroByteRead_ReadsInnerOnce_ThenServesBufferedInput()
     {
-        using var reader = new ZstandardStream(new MemoryStream(Zstandard.Compress(Data)), CompressionMode.Decompress);
-        Assert.Equal(0, reader.Read(Span<byte>.Empty));
-        Assert.Equal(0, reader.Read(new byte[0], 0, 0));
+        var inner = new TrickleStream(Zstandard.Compress(Data), maxRead: int.MaxValue);
+        using var reader = new ZstandardStream(inner, CompressionMode.Decompress);
 
-        // and the data is still all there afterwards
+        // the first zero-byte read waits for input, the second finds it buffered
+        Assert.Equal(0, reader.Read(Span<byte>.Empty));
+        Assert.Equal(1, inner.ReadCalls);
+        Assert.Equal(0, reader.Read(new byte[0], 0, 0));
+        Assert.Equal(1, inner.ReadCalls);
+
+        // the real read decodes the buffered input without going to the inner stream
+        var first = new byte[1024];
+        Assert.Equal(first.Length, reader.Read(first));
+        Assert.Equal(1, inner.ReadCalls);
+        Assert.Equal(Data.AsSpan(0, first.Length).ToArray(), first);
+
         var ms = new MemoryStream();
         reader.CopyTo(ms);
-        Assert.Equal(Data, ms.ToArray());
+        Assert.Equal(Data.AsSpan(first.Length).ToArray(), ms.ToArray());
+
+        // at the end a zero-byte read stays at 0 and so does the next real read
+        Assert.Equal(0, reader.Read(Span<byte>.Empty));
+        Assert.Equal(0, reader.Read(first));
+    }
+
+    [Fact]
+    public async Task ZeroByteReadAsync_ReadsInnerOnce_ThenServesBufferedInput()
+    {
+        var inner = new TrickleStream(Zstandard.Compress(Data), maxRead: int.MaxValue);
+        using var reader = new ZstandardStream(inner, CompressionMode.Decompress);
+
+        Assert.Equal(0, await reader.ReadAsync(Memory<byte>.Empty));
+        Assert.Equal(1, inner.ReadCalls);
+        Assert.Equal(0, await reader.ReadAsync(new byte[0], 0, 0));
+        Assert.Equal(1, inner.ReadCalls);
+
+        var first = new byte[1024];
+        Assert.Equal(first.Length, await reader.ReadAsync(first));
+        Assert.Equal(1, inner.ReadCalls);
+        Assert.Equal(Data.AsSpan(0, first.Length).ToArray(), first);
+
+        var ms = new MemoryStream();
+        await reader.CopyToAsync(ms);
+        Assert.Equal(Data.AsSpan(first.Length).ToArray(), ms.ToArray());
+    }
+
+    [Fact]
+    public void ZeroByteRead_AfterFilledDestination_DoesNotTouchInner()
+    {
+        var inner = new TrickleStream(Zstandard.Compress(Data), maxRead: int.MaxValue);
+        using var reader = new ZstandardStream(inner, CompressionMode.Decompress);
+
+        // a filled destination leaves output in the decoder, that counts as available input
+        var small = new byte[16];
+        Assert.Equal(small.Length, reader.Read(small));
+        var calls = inner.ReadCalls;
+        Assert.Equal(0, reader.Read(Span<byte>.Empty));
+        Assert.Equal(calls, inner.ReadCalls);
+
+        var ms = new MemoryStream();
+        reader.CopyTo(ms);
+        Assert.Equal(Data.AsSpan(small.Length).ToArray(), ms.ToArray());
+    }
+
+    [Fact]
+    public async Task ZeroByteReadAsync_WaitsUntilInnerDelivers()
+    {
+        var compressed = Zstandard.Compress(Utf8("zero-byte reads wait for the connection"));
+        var inner = new WaitingStream(compressed);
+        using var reader = new ZstandardStream(inner, CompressionMode.Decompress);
+
+        var pending = reader.ReadAsync(Memory<byte>.Empty).AsTask();
+        await Task.Delay(50);
+        Assert.False(pending.IsCompleted);
+
+        inner.Release();
+        Assert.Equal(0, await pending.WaitAsync(TimeSpan.FromSeconds(10)));
+
+        // the data that arrived is served by the next read
+        var buffer = new byte[256];
+        var read = await reader.ReadAsync(buffer);
+        Assert.Equal("zero-byte reads wait for the connection", Encoding.UTF8.GetString(buffer, 0, read));
+    }
+
+    [Fact]
+    public void ZeroByteRead_CompressMode_Throws()
+    {
+        using var compress = new ZstandardStream(new MemoryStream(), CompressionMode.Compress);
+        Assert.Throws<InvalidOperationException>(() => compress.Read(Span<byte>.Empty));
+    }
+
+    // Delivers nothing until released, then all of its data. Stands for a connection that is idle for a while.
+    sealed class WaitingStream(byte[] data) : Stream
+    {
+        readonly TaskCompletionSource<bool> gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int position;
+
+        public void Release() => gate.TrySetResult(true);
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await gate.Task.WaitAsync(cancellationToken);
+            var n = Math.Min(buffer.Length, data.Length - position);
+            data.AsMemory(position, n).CopyTo(buffer);
+            position += n;
+            return n;
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            => ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
     }
 
     [Fact]
