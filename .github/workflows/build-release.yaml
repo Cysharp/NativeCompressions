@@ -47,12 +47,17 @@ jobs:
       - run: dotnet workload install ios maccatalyst
       - run: dotnet build -c Release -p:Version="$VERSION"
       # runs the test project on net8.0, net9.0 and net11.0 against the matching library builds
+      # the project is given rather than the solution: dotnet test from SDK 11 rc.2 asks the Core projects,
+      # which carry iOS target frameworks, to pick a simulator before it checks whether they are test projects
       - run: dotnet test -c Release --no-build
+        working-directory: tests/NativeCompressions.Tests
       # symbol packages (snupkg) are configured in Directory.Build.targets, only for packages that contain an assembly
       - run: dotnet pack -c Release -p:Version="$VERSION" -o ./publish
       # the netstandard builds of the library have their own code paths (no RandomAccess, polyfills), run the tests against them too
       - run: dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.0 -p:Version="$VERSION"
+        working-directory: tests/NativeCompressions.Tests
       - run: dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.1 -p:Version="$VERSION"
+        working-directory: tests/NativeCompressions.Tests
       # Store artifacts.
       - uses: Cysharp/Actions/.github/actions/upload-artifact@main
         with:
