@@ -27,6 +27,7 @@ public sealed class LZ4Stream : Stream
     byte[]? buffer; // both compress and decompress
     int readBufferOffset; // for decompress
     int readBufferCount; // for decompress
+    bool decoderMayHoldOutput; // for decompress, the last call filled the destination so the decoder may still hold output
 
     public LZ4Stream(Stream stream, CompressionMode mode, bool leaveOpen = false)
     {
@@ -321,7 +322,6 @@ public sealed class LZ4Stream : Stream
 
     int ReadCore(Span<byte> destination)
     {
-        if (destination.IsEmpty) return 0;
         if (mode != CompressionMode.Decompress)
         {
             throw new InvalidOperationException("Read operation must be Decompress mode.");
@@ -329,6 +329,19 @@ public sealed class LZ4Stream : Stream
 
         buffer ??= ArrayPool<byte>.Shared.Rent(DecoderBufferSize);
         var totalRead = 0;
+
+        if (destination.IsEmpty)
+        {
+            // A zero-byte read waits until input is available, the way the System.IO.Compression streams do,
+            // so callers can delay renting a buffer. Buffered input or output held by the decoder counts as
+            // available, otherwise the inner stream is read once. End of input is reported by the next real read.
+            if (readBufferCount == 0 && !decoderMayHoldOutput)
+            {
+                readBufferOffset = 0;
+                readBufferCount = stream.Read(buffer, 0, buffer.Length);
+            }
+            return 0;
+        }
 
         while (destination.Length > 0)
         {
@@ -346,6 +359,7 @@ public sealed class LZ4Stream : Stream
             }
 
             var status = decoder!.Decompress(source, destination, out var consumed, out var written);
+            decoderMayHoldOutput = status == OperationStatus.DestinationTooSmall;
 
             // Update buffer state
             if (consumed > 0)
@@ -442,7 +456,6 @@ public sealed class LZ4Stream : Stream
 
     async ValueTask<int> ReadCoreAsync(Memory<byte> destination, CancellationToken cancellationToken)
     {
-        if (destination.IsEmpty) return 0;
         if (mode != CompressionMode.Decompress)
         {
             throw new InvalidOperationException("Read operation must be Decompress mode.");
@@ -453,6 +466,19 @@ public sealed class LZ4Stream : Stream
 
         buffer ??= ArrayPool<byte>.Shared.Rent(DecoderBufferSize);
         var totalRead = 0;
+
+        if (destination.IsEmpty)
+        {
+            // A zero-byte read waits until input is available, the way the System.IO.Compression streams do,
+            // so callers can delay renting a buffer. Buffered input or output held by the decoder counts as
+            // available, otherwise the inner stream is read once. End of input is reported by the next real read.
+            if (readBufferCount == 0 && !decoderMayHoldOutput)
+            {
+                readBufferOffset = 0;
+                readBufferCount = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
+            }
+            return 0;
+        }
 
         while (destination.Length > 0)
         {
@@ -470,6 +496,7 @@ public sealed class LZ4Stream : Stream
             }
 
             var status = decoder!.Decompress(source, destination.Span, out var consumed, out var written);
+            decoderMayHoldOutput = status == OperationStatus.DestinationTooSmall;
 
             // Update buffer state
             if (consumed > 0)

@@ -20,6 +20,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A Zstandard compression level outside `Zstandard.MinCompressionLevel` to `Zstandard.MaxCompressionLevel` throws `ArgumentOutOfRangeException`, the same as `System.IO.Compression`. Previously it was clamped.
 - `CompressAsync` and `DecompressAsync` throw `IOException` when the reader of the destination `PipeWriter` has completed. Previously it was `OperationCanceledException`, which a caller ignoring its own cancellation could swallow.
 - `LZ4Stream.Flush` and `ZstandardStream.Flush` do nothing in Decompress mode, like the streams of `System.IO.Compression`. Previously they threw `InvalidOperationException`.
+- A `Read` or `ReadAsync` with an empty buffer on `LZ4Stream` and `ZstandardStream` waits until the inner stream delivers input before returning 0, like the streams of `System.IO.Compression`, so a caller can delay renting a buffer until data is available. Previously it returned 0 at once, also in Compress mode, where it now throws `InvalidOperationException` like any other read.
 - The macOS native libraries are built with an explicit minimum of macOS 15.0.
 - The netstandard and net8.0 builds depend on the 10.0.x versions of `System.IO.Pipelines` and `Microsoft.Bcl.AsyncInterfaces`.
 
