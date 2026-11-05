@@ -112,31 +112,27 @@ using var encoder = new LZ4Encoder();
 // Compress chunks(invoke Compress multiple times)
 foreach (var chunk in dataChunks) // dataChunks = byte[][]
 {
-    ReadOnlySpan<byte> source = chunk;
-    OperationStatus status;
-    do
-    {
-        // GetMaxCompressedLength takes the whole chunk in one call, a smaller buffer takes it over several calls
-        var buffer = bufferWriter.GetSpan(encoder.GetMaxCompressedLength(source.Length));
-        status = encoder.Compress(source, buffer, out var bytesConsumed, out var bytesWritten, isFinalBlock: false);
-        if (status == OperationStatus.InvalidData) throw new InvalidOperationException("Compression failed.");
+    // GetMaxCompressedLength is enough to take the whole chunk in one call
+    var buffer = bufferWriter.GetSpan(encoder.GetMaxCompressedLength(chunk.Length));
 
-        source = source.Slice(bytesConsumed);
-        bufferWriter.Advance(bytesWritten); // can be zero, meaning input data was just buffered
-    } while (status == OperationStatus.DestinationTooSmall);
+    var status = encoder.Compress(chunk, buffer, out var bytesConsumed, out var bytesWritten, isFinalBlock: false);
+    if (status != OperationStatus.Done) throw new InvalidOperationException($"Compression failed: {status}");
+
+    // written size can be zero, meaning input data was just buffered.
+    bufferWriter.Advance(bytesWritten);
 }
 
-// Finalize frame. Close writes buffered data and the LZ4 frame footer, and the header of an empty frame when nothing was compressed.
-OperationStatus closing;
-do
-{
-    var buffer = bufferWriter.GetSpan(encoder.GetMaxFlushBufferLength());
-    closing = encoder.Close(buffer, out var bytesWritten);
-    bufferWriter.Advance(bytesWritten);
-} while (closing == OperationStatus.DestinationTooSmall);
+// Finalize frame. The size covers buffered data, the footer, and the header of an empty frame when nothing was compressed.
+var finalBytes = bufferWriter.GetSpan(encoder.GetMaxFlushBufferLength());
+
+// need to call `Close` to write LZ4 frame footer
+var closing = encoder.Close(finalBytes, out var finalWritten);
+if (closing != OperationStatus.Done) throw new InvalidOperationException($"Closing the frame failed: {closing}");
+
+bufferWriter.Advance(finalWritten);
 ```
 
-`LZ4Encoder` has the same API as `BrotliEncoder` and `ZstandardEncoder`. `Compress`, `Flush` and `Close` return an `OperationStatus` with `bytesConsumed` and `bytesWritten`, and `DestinationTooSmall` means calling again with more room. Every call makes progress with a destination of at least `LZ4.MaxFrameHeaderLength` (19) bytes, and `GetMaxCompressedLength` and `GetMaxFlushBufferLength` give sizes that finish in one call. `isFinalBlock: true` ends the frame after the source, the same as calling `Close`. After `OperationStatus.InvalidData` (for example a frame length that differs from `ContentSize`), call `Reset()` before reusing the encoder, or dispose it.
+`LZ4Encoder` has the same API as `BrotliEncoder` and `ZstandardEncoder`. `Compress`, `Flush` and `Close` return an `OperationStatus` with `bytesConsumed` and `bytesWritten`. With the sizes from `GetMaxCompressedLength` and `GetMaxFlushBufferLength` every call finishes at once, which is also the most efficient way for LZ4. A smaller destination works too, the same as `BrotliEncoder`: `DestinationTooSmall` means calling again with the rest of the source and more room, and every call makes progress with at least `LZ4.MaxFrameHeaderLength` (19) bytes. `isFinalBlock: true` ends the frame after the source, the same as calling `Close`. After `OperationStatus.InvalidData` (for example a frame length that differs from `ContentSize`), call `Reset()` before reusing the encoder, or dispose it.
 
 For decompression, use `LZ4Decoder`.
 
