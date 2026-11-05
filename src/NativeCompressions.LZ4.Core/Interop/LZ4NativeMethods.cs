@@ -1080,48 +1080,6 @@ namespace NativeCompressions.Interop
         [DllImport(__DllName, EntryPoint = "LZ4F_compressBegin_usingCDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern nuint LZ4F_compressBegin_usingCDict(LZ4F_cctx_s* cctx, void* dstBuffer, nuint dstCapacity, LZ4F_CDict_s* cdict, LZ4F_preferences_t* prefsPtr);
 
-        /// <summary>
-        ///  LZ4F_getMaxNbWorkers() : v1.11.0+ (experimental, see LZ4F_preferences_t.nbWorkers)
-        ///  @return : the maximum nb of worker threads a compression context can employ :
-        ///            0 when this library is compiled without multi-threading support (LZ4F_MULTITHREAD),
-        ///            otherwise the cap applied to LZ4F_preferences_t.nbWorkers (1024, or 128 on 32-bit systems).
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "LZ4F_getMaxNbWorkers", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern uint LZ4F_getMaxNbWorkers();
-
-        /// <summary>
-        ///  LZ4F_resumeFrame() : v1.11.0+
-        ///   Prepares @dctx to decode a frame starting from one of its blocks, instead of from its beginning.
-        ///   Typical use case is random access, using information recorded during a previous decoding pass.
-        ///   Block starts can be located by providing LZ4F_decompress() with exactly the hinted amount of input :
-        ///   decoding then stops right after a block header (the block starts at the beginning of this header).
-        ///  @frameInfo  : frame parameters, as provided by LZ4F_getFrameInfo().
-        ///  @decodedPos : position of the block within the frame's decoded content.
-        ///  @dict, @dictSize : data the block may refer to, which must be saved during the previous decoding pass :
-        ///      - linked blocks : a copy of the (up to) 64 KB decoded right before the block.
-        ///        When less than 64 KB were decoded, they must be preceded by the end of the frame's dictionary, if any.
-        ///        Saving 64 KB per resume point is the cost of random access within frames using linked blocks.
-        ///      - independent blocks : the frame's dictionary if any, or NULL. No history needed.
-        ///      @dict must remain accessible until the end of the frame.
-        ///   Then, provide LZ4F_decompress() with compressed data starting at the block header.
-        ///   Block checksums and content size remain verified,
-        ///   but the content checksum, which covers the whole frame, is skipped.
-        ///   Any decoding in progress within @dctx is abandoned.
-        ///  @return : 0, or an error code (can be tested using LZ4F_isError())
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "LZ4F_resumeFrame", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern nuint LZ4F_resumeFrame(LZ4F_dctx_s* dctx, LZ4F_frameInfo_t* frameInfo, ulong decodedPos, void* dict, nuint dictSize);
-
-        /// <summary>
-        ///  Context size inspection : v1.11.0+
-        ///   These functions return the total memory footprint of the provided context.
-        /// </summary>
-        [DllImport(__DllName, EntryPoint = "LZ4F_cctx_size", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern nuint LZ4F_cctx_size(LZ4F_cctx_s* cctx);
-
-        [DllImport(__DllName, EntryPoint = "LZ4F_dctx_size", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern nuint LZ4F_dctx_size(LZ4F_dctx_s* dctx);
-
 
     }
 
