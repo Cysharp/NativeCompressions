@@ -10,6 +10,9 @@ name: Build-Native-LZ4
 #     PR includes following changes.
 #     - Commit that updates the submodule
 #     - Commit that lz4 dynamic lib artifacts placed in src/NativeCompressions.LZ4.Runtime/runtimes/{platform_name}/native/{lib}
+#
+# Build jobs name the make target (liblz4 or liblz4.a), because since lz4 v1.11.0 the default goal needs both libraries.
+# MULTITHREAD=0 keeps every library single threaded, the C# API does not expose nbWorkers.
 on:
   workflow_dispatch:
   schedule:
@@ -65,9 +68,9 @@ jobs:
           LDFLAGS: -Wl,--no-insert-timestamp
         run: |
           cd lz4/lib
-          make BUILD_STATIC=no BUILD_SHARED=yes SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
+          make liblz4 MULTITHREAD=0 SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
           ls -la *.dll
-          file *.dll
+          file -L *.dll
       - name: Prepare artifacts
         shell: bash
         run: |
@@ -104,11 +107,11 @@ jobs:
           docker run --rm -v "$PWD:/work" -e LDFLAGS=-Wl,--no-insert-timestamp \
             mstorsjo/llvm-mingw:latest \
             bash -c "cd /work/lz4/lib && \
-              make BUILD_STATIC=no BUILD_SHARED=yes \
+              make liblz4 MULTITHREAD=0 \
               TARGET_OS=Windows_NT LIBLZ4_NAME=lz4 \
               CC=aarch64-w64-mingw32-gcc WINDRES=aarch64-w64-mingw32-windres \
               SRCFILES='lz4.c lz4hc.c lz4frame.c xxhash.c'"
-          file lz4/lib/lz4.dll
+          file -L lz4/lib/lz4.dll
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/win-arm64
@@ -179,9 +182,9 @@ jobs:
       - name: Build shared library
         run: |
           cd lz4/lib
-          make BUILD_STATIC=no BUILD_SHARED=yes CC="${CC}" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
+          make liblz4 MULTITHREAD=0 CC="${CC}" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
           ls -la ./*.so*
-          file liblz4.so*
+          file -L liblz4.so*
       - name: Verify glibc requirement
         run: |
           max_glibc="$(objdump -T lz4/lib/liblz4.so | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)"
@@ -234,7 +237,7 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: "15.0"
         run: |
           cd lz4/lib
-          make BUILD_STATIC=no BUILD_SHARED=yes CFLAGS="${{ matrix.flags }} -O3" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(sysctl -n hw.ncpu)"
+          make liblz4 MULTITHREAD=0 CFLAGS="${{ matrix.flags }} -O3" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(sysctl -n hw.ncpu)"
           ls -la
           lipo -info liblz4.dylib
           file -L liblz4.dylib
@@ -297,10 +300,10 @@ jobs:
 
           # Build static library (iOS App Store requires static linking)
           cd lz4/lib
-          make BUILD_STATIC=yes BUILD_SHARED=no CC="clang" CFLAGS="${{ matrix.cflags }} -O3 -isysroot $SDK_PATH -DXXH_NAMESPACE=LZ4_" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(sysctl -n hw.ncpu)"
+          make liblz4.a MULTITHREAD=0 CC="clang" CFLAGS="${{ matrix.cflags }} -O3 -isysroot $SDK_PATH -DXXH_NAMESPACE=LZ4_" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(sysctl -n hw.ncpu)"
 
           ls -la liblz4.a
-          file liblz4.a
+          file -L liblz4.a
           lipo -info liblz4.a
       # device and simulator archives are both arm64, only the platform in the load commands tells them apart
       - name: Verify simulator platform
@@ -427,9 +430,9 @@ jobs:
           cd lz4/lib
           # 16 KB page size support, required for 64-bit devices running Android 15 or later.
           # LDFLAGS comes from the environment so the Makefile can still add to it.
-          LDFLAGS="-Wl,-z,max-page-size=16384" make BUILD_STATIC=no BUILD_SHARED=yes CC="${{ matrix.cc }}" CFLAGS="-O3 -fPIC -DXXH_NAMESPACE=LZ4_" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
+          LDFLAGS="-Wl,-z,max-page-size=16384" make liblz4 MULTITHREAD=0 CC="${{ matrix.cc }}" CFLAGS="-O3 -fPIC -DXXH_NAMESPACE=LZ4_" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
           ls -la liblz4.so*
-          file liblz4.so*
+          file -L liblz4.so*
           llvm-readelf -lW liblz4.so | grep LOAD
           if llvm-readelf -lW liblz4.so | grep LOAD | grep -v -E "0x4000[[:space:]]*$"; then echo "LOAD segment is not aligned to 16 KB"; exit 1; fi
       - name: Prepare artifacts
