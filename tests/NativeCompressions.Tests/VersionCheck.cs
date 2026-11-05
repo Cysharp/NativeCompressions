@@ -13,7 +13,7 @@ public class VersionCheck
             version = new string((sbyte*)LZ4NativeMethods.LZ4_versionString());
         }
 
-        Assert.Equal("1.10.0", version);
+        Assert.Equal("1.11.0", version);
     }
 
     //[Fact]

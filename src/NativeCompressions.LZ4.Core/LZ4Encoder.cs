@@ -223,22 +223,42 @@ public sealed unsafe class LZ4Encoder : IDisposable
     /// </summary>
     /// <param name="destination">The buffer to write flushed data to.</param>
     /// <returns>The number of bytes written to the destination buffer. Returns 0 if no data was buffered.</returns>
-    /// <exception cref="LZ4Exception">Thrown when flush operation fails.</exception>
+    /// <exception cref="LZ4Exception">
+    /// Thrown when flush operation fails, for example when the destination is too small for the buffered data.
+    /// If part of the output was already written, the frame is abandoned and the next <see cref="Compress"/> starts a new frame.
+    /// </exception>
     /// <remarks>
     /// Forces compression of any data buffered internally and writes it to the destination.
     /// This is useful when you need to ensure all input data has been processed and output,
     /// for example when streaming over a network.
+    /// It is guaranteed to be successful when destination.Length &gt;= GetMaxFlushBufferLength(includingFooter: false).
     /// </remarks>
     public int Flush(Span<byte> destination)
     {
         var context = GetContext();
 
+        // Nothing is buffered before the header is written, and lz4 rejects a flush outside a frame.
+        if (!isWrittenHeader) return 0;
+
         fixed (byte* dest = destination)
         {
             // LZ4F_compressOptions_t(stableSrc) is currently not used in LZ4 source so always pass null.
             var writtenOrErrorCode = LZ4F_flush(context, dest, (nuint)destination.Length, cOptPtr: null);
+
+            // A destination that is too small is filled and the rest stays in the context.
+            // Flushing into no room fails only while output remains.
+            var remainsOrZero = !LZ4.IsError(writtenOrErrorCode) && writtenOrErrorCode != 0 && writtenOrErrorCode == (nuint)destination.Length
+                ? LZ4F_flush(context, null, 0, cOptPtr: null)
+                : 0;
             GC.KeepAlive(this);
             LZ4.ThrowIfError(writtenOrErrorCode);
+
+            if (LZ4.IsError(remainsOrZero))
+            {
+                // the caller never gets what was written, so the frame cannot go on
+                isWrittenHeader = false;
+                LZ4.ThrowIfError(remainsOrZero);
+            }
 
             return (int)writtenOrErrorCode;
         }
@@ -249,7 +269,10 @@ public sealed unsafe class LZ4Encoder : IDisposable
     /// </summary>
     /// <param name="destination">The buffer to write the frame ending to. It is guaranteed to be successful when destination.Length &gt;= GetMaxFlushBufferLength(), which is the same as GetMaxCompressedLength(0).</param>
     /// <returns>The number of bytes written to the destination buffer (at least 4 bytes for the end marker).</returns>
-    /// <exception cref="LZ4Exception">Thrown when finalization fails.</exception>
+    /// <exception cref="LZ4Exception">
+    /// Thrown when finalization fails, for example when the destination is too small.
+    /// If part of the frame ending was already written, the frame is abandoned and the next <see cref="Compress"/> starts a new frame.
+    /// </exception>
     /// <remarks>
     /// After calling this method, the encoder can be reused to compress another frame
     /// by calling Compress again (which will write a new header).
@@ -271,12 +294,28 @@ public sealed unsafe class LZ4Encoder : IDisposable
         {
             // LZ4F_compressOptions_t(stableSrc) is currently not used in LZ4 source so always pass null.
             var writtenOrErrorCode = LZ4F_compressEnd(context, dest, (nuint)destination.Length, cOptPtr: null);
+
+            // A destination that is too small is filled and the rest of the frame stays in the context.
+            // When it is full, one more byte tells them apart, a complete frame writes nothing more.
+            nuint remainsOrZero = 0;
+            if (!LZ4.IsError(writtenOrErrorCode) && writtenOrErrorCode == (nuint)destination.Length)
+            {
+                byte probe;
+                remainsOrZero = LZ4F_compressEnd(context, &probe, 1, cOptPtr: null);
+            }
             GC.KeepAlive(this);
             LZ4.ThrowIfError(writtenOrErrorCode);
-            totalWritten += (int)writtenOrErrorCode;
 
-            // A successful call to LZ4F_compressEnd() makes `cctx` available again for another compression task.
+            // A completed LZ4F_compressEnd() makes `cctx` available again for another compression task.
+            // An unfinished frame is abandoned as well, the caller never gets the rest of it.
             isWrittenHeader = false;
+            if (remainsOrZero != 0)
+            {
+                LZ4.ThrowIfError(remainsOrZero);
+                throw new LZ4Exception("ERROR_dstCapacity_tooSmall");
+            }
+
+            totalWritten += (int)writtenOrErrorCode;
         }
 
         return totalWritten;
@@ -315,7 +354,7 @@ public sealed unsafe class LZ4Encoder : IDisposable
             preferences = previousPreferences;
             dictionary = previousDictionary;
             next.Dispose();
-            isWrittenHeader = false; // the failed begin dropped the frame in progress, the next Compress begins again
+            isWrittenHeader = false; // the next Compress begins a new frame, whether or not the failed begin dropped the one in progress
             throw;
         }
 

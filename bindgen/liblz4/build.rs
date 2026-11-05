@@ -19,6 +19,10 @@ const NOT_EXPORTED: &[&str] = &[
     "LZ4F_createCompressionContext_advanced",
     "LZ4F_createDecompressionContext_advanced",
     "LZ4F_createCDict_advanced",
+    "LZ4F_getMaxNbWorkers",
+    "LZ4F_resumeFrame",
+    "LZ4F_cctx_size",
+    "LZ4F_dctx_size",
     "LZ4F_compressBegin_internal",
     "LZ4F_compressBegin_usingDictOnce",
 ];
