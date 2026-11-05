@@ -25,8 +25,10 @@ namespace NativeCompressions;
 /// Instances are not thread-safe.
 /// After Compress, Flush or Close returns <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset()"/> before reusing the encoder, or dispose it.
 /// Every call makes progress when the destination has at least <see cref="LZ4.MaxFrameHeaderLength"/> bytes.
-/// After Close, or Compress with isFinalBlock, returns <see cref="OperationStatus.DestinationTooSmall"/>, only the rest of the frame can follow:
-/// Close, or Compress with an empty source and isFinalBlock. New input or a Flush returns <see cref="OperationStatus.InvalidData"/>.
+/// While a Compress with isFinalBlock has not taken the whole source, call it again with the rest of the source as usual.
+/// Once the frame is being ended, that is Close returned <see cref="OperationStatus.DestinationTooSmall"/>, or Compress with isFinalBlock did after
+/// taking the whole source, only the rest of the frame can follow: Close, or Compress with an empty source and isFinalBlock.
+/// New input or a Flush then returns <see cref="OperationStatus.InvalidData"/>.
 /// </remarks>
 public sealed unsafe class LZ4Encoder : IDisposable
 {
@@ -45,7 +47,8 @@ public sealed unsafe class LZ4Encoder : IDisposable
     // (held + input) % blockSize, and nothing after a frame begins or a flush completes. Always 0 with autoFlush.
     int buffered;
 
-    // set by Close until the frame is completely written, only the rest of the frame can follow
+    // Set when the frame starts to end, by Close or by a final Compress that took its whole source, until the frame is completely written.
+    // Only the rest of the frame can follow meanwhile.
     bool closing;
 
     // what is left of the frame ending while the state is Ending
@@ -251,7 +254,7 @@ public sealed unsafe class LZ4Encoder : IDisposable
 
         if (closing)
         {
-            // only the rest of the frame can follow an unfinished Close
+            // only the rest of the frame can follow while it is being ended
             return source.IsEmpty && isFinalBlock ? CloseCore(context, destination, ref bytesWritten) : Fault();
         }
 
