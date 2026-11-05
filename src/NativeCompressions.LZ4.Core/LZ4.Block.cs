@@ -62,7 +62,13 @@ public static partial class LZ4
 
                 if (nb < 0)
                 {
-                    throw new LZ4Exception("Invalid LZ4 block, or the destination buffer is too small.");
+                    // lz4 tells these apart since v1.11.0, any other negative value is an error as well
+                    throw new LZ4Exception(nb switch
+                    {
+                        -2 => "The destination buffer is too small for the LZ4 block, or the block is corrupted.",
+                        -3 => "The LZ4 block refers to data before the start of its output. The dictionary is missing or wrong, or the block is corrupted.",
+                        _ => "Invalid LZ4 block.",
+                    });
                 }
                 return nb;
             }

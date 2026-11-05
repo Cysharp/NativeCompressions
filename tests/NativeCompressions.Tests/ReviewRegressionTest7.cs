@@ -232,26 +232,26 @@ public class ReviewRegressionTest7
         CloseEmptyFrame(encoder);
 
         // after a frame was abandoned
-        encoder.Compress(data, big);
+        encoder.CompressDone(data, big);
         encoder.Reset();
         CloseEmptyFrame(encoder);
 
         // after a frame was closed
-        var written = encoder.Compress(data, big);
-        written += encoder.Close(big.AsSpan(written));
+        var written = encoder.CompressDone(data, big);
+        written += encoder.CloseDone(big.AsSpan(written));
         Assert.Equal(data, LZ4.Decompress(big.AsSpan(0, written)));
         CloseEmptyFrame(encoder);
 
         // the same value is still enough inside a frame
-        written = encoder.Compress(data, big);
+        written = encoder.CompressDone(data, big);
         var closing = new byte[encoder.GetMaxFlushBufferLength()];
-        var closed = encoder.Close(closing);
+        var closed = encoder.CloseDone(closing);
         Assert.Equal(data, LZ4.Decompress(big.AsSpan(0, written).ToArray().Concat(closing.AsSpan(0, closed).ToArray()).ToArray()));
 
         static void CloseEmptyFrame(LZ4Encoder encoder)
         {
             var buffer = new byte[encoder.GetMaxFlushBufferLength()];
-            var written = encoder.Close(buffer);
+            var written = encoder.CloseDone(buffer);
             Assert.Empty(LZ4.Decompress(buffer.AsSpan(0, written)));
         }
     }
@@ -267,7 +267,7 @@ public class ReviewRegressionTest7
         Assert.Equal(close, encoder.GetMaxFlushBufferLength(includingFooter: true));
 
         // flushing a fresh encoder writes nothing and needs no room
-        Assert.Equal(0, encoder.Flush(new byte[flush]));
+        Assert.Equal(0, encoder.FlushDone(new byte[flush]));
     }
 
     // ---- R4. FrameType is read from frames, not an option for writing them

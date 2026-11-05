@@ -263,7 +263,7 @@ public class ReviewRegressionTest2 : IDisposable
         using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { AutoFlush = autoFlush });
         var buffer = new byte[encoder.GetMaxCompressedLength(0)];
 
-        var written = encoder.Close(buffer);
+        var written = encoder.CloseDone(buffer);
         Assert.Empty(LZ4.Decompress(buffer.AsSpan(0, written)));
     }
 

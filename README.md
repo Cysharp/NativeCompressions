@@ -102,6 +102,7 @@ APIs similar to [BrotliEncoder](https://learn.microsoft.com/en-us/dotnet/api/sys
 
 ```csharp
 using NativeCompressions;
+using System.Buffers;
 
 // for example, use for IBufferWriter<byte>
 IBufferWriter<byte> bufferWriter;
@@ -111,28 +112,27 @@ using var encoder = new LZ4Encoder();
 // Compress chunks(invoke Compress multiple times)
 foreach (var chunk in dataChunks) // dataChunks = byte[][]
 {
-    // get max size per streaming compress
-    var size = encoder.GetMaxCompressedLength(chunk.Length);
+    // GetMaxCompressedLength is enough to take the whole chunk in one call, without room to end the frame as this call does not
+    var buffer = bufferWriter.GetSpan(encoder.GetMaxCompressedLength(chunk.Length, includingFooter: false));
 
-    var buffer = bufferWriter.GetSpan(size);
+    var status = encoder.Compress(chunk, buffer, out var bytesConsumed, out var bytesWritten, isFinalBlock: false);
+    if (status != OperationStatus.Done) throw new InvalidOperationException($"Compression failed: {status}");
 
     // written size can be zero, meaning input data was just buffered.
-    var written = encoder.Compress(chunk, buffer);
-
-    bufferWriter.Advance(written);
+    bufferWriter.Advance(bytesWritten);
 }
 
 // Finalize frame. The size covers buffered data, the footer, and the header of an empty frame when nothing was compressed.
-var footerWithBufferedDataSize = encoder.GetMaxFlushBufferLength();
-var finalBytes = bufferWriter.GetSpan(footerWithBufferedDataSize);
+var finalBytes = bufferWriter.GetSpan(encoder.GetMaxFlushBufferLength());
 
 // need to call `Close` to write LZ4 frame footer
-var finalWritten = encoder.Close(finalBytes);
+var closing = encoder.Close(finalBytes, out var finalWritten);
+if (closing != OperationStatus.Done) throw new InvalidOperationException($"Closing the frame failed: {closing}");
 
 bufferWriter.Advance(finalWritten);
 ```
 
-Method name is `Compress` not `TryCompress`, and returns size not `OperationStatus` because LZ4's native API differs from Brotli. The source is fully consumed, requiring destination to be at least MaxCompressedLength relative to source. On failure, the internal context state is corrupted, so it cannot be a Try... API and throws `LZ4Exception` on failure.
+`LZ4Encoder` has the same API as `BrotliEncoder` and `ZstandardEncoder`. `Compress`, `Flush` and `Close` return an `OperationStatus` with `bytesConsumed` and `bytesWritten`. With the sizes from `GetMaxCompressedLength` and `GetMaxFlushBufferLength` every call finishes at once, which is also the most efficient way for LZ4. A smaller destination works too, the same as `BrotliEncoder`: `DestinationTooSmall` means calling again with the rest of the source and more room, and every call makes progress with at least `LZ4.MaxFrameHeaderLength` (19) bytes. `isFinalBlock: true` ends the frame after the source, the same as calling `Close`, and `GetMaxCompressedLength` with `includingFooter: true` (the default) is enough for that call too, including what the encoder still holds from earlier chunks. After `OperationStatus.InvalidData` (for example a frame length that differs from `ContentSize`), call `Reset()` before reusing the encoder, or dispose it.
 
 For decompression, use `LZ4Decoder`.
 
@@ -288,7 +288,7 @@ Zstandard balances compression ratio and performance well. .NET 11 ships it in t
 
 It is generally similar to the LZ4 API. The `Zstandard` class has static methods, and there are `ZstandardEncoder` and `ZstandardDecoder` as Streamless-streaming APIs. `CompressAsync`/`DecompressAsync` with `PipeReader`/`PipeWriter` are provided as well.
 
-`ZstandardEncoder` and `ZstandardDecoder` API is completely same as `BrotliEncoder`/`BrotliDecoder` unlike `LZ4Encoder/Decoder`. In other words, Compress returns an `OperationStatus`, which contains `int bytesConsumed`, `int bytesWritten`, and `bool isFinalBlock`. After `OperationStatus.InvalidData`, call `Reset()` before reusing the encoder or decoder, or dispose it.
+`ZstandardEncoder` and `ZstandardDecoder` API is completely same as `BrotliEncoder`/`BrotliDecoder`, the same as `LZ4Encoder`/`LZ4Decoder`. In other words, Compress returns an `OperationStatus`, which contains `int bytesConsumed`, `int bytesWritten`, and `bool isFinalBlock`. After `OperationStatus.InvalidData`, call `Reset()` before reusing the encoder or decoder, or dispose it.
 
 Unlike `BrotliEncoder`/`BrotliDecoder` (which are structs), `ZstandardEncoder` and `ZstandardDecoder` are sealed classes that own a single native context (`ZSTD_CCtx`/`ZSTD_DCtx`). This matches the design of `System.IO.Compression.ZstandardEncoder`/`ZstandardDecoder` in .NET 11, and makes it safe to cache and share a single instance by reference (for example in a serializer) without the copy-then-dispose pitfalls of a struct.
 

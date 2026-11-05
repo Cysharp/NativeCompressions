@@ -33,11 +33,11 @@ public class LZ4EncoderDecoderLifecycleTest
         while (remaining.Length > 0)
         {
             var piece = remaining.Slice(0, Math.Min(chunk, remaining.Length));
-            var written = encoder.Compress(piece, buffer);
+            var written = encoder.CompressDone(piece, buffer);
             ms.Write(buffer, 0, written);
             remaining = remaining.Slice(piece.Length);
         }
-        var closed = encoder.Close(buffer);
+        var closed = encoder.CloseDone(buffer);
         ms.Write(buffer, 0, closed);
         return ms.ToArray();
     }
@@ -99,7 +99,7 @@ public class LZ4EncoderDecoderLifecycleTest
         var buffer = new byte[encoder.GetMaxCompressedLength(1024)];
 
         // start a frame and buffer some data, then abandon it
-        encoder.Compress(Utf8("abandoned data"), buffer);
+        encoder.CompressDone(Utf8("abandoned data"), buffer);
         encoder.Reset();
 
         // the next frame starts with a fresh header and does not contain the abandoned bytes
@@ -132,31 +132,211 @@ public class LZ4EncoderDecoderLifecycleTest
         Assert.Equal(Utf8("second frame"), LZ4.Decompress(b));
     }
 
-    // lz4 rejects a flush outside a frame, the encoder writes nothing then
+    // Drives the encoder with destinations of pieceSize, the way a caller with a small buffer does.
+    static byte[] EncodeInPieces(LZ4Encoder encoder, ReadOnlySpan<byte> data, int inputChunk, int pieceSize)
+    {
+        var ms = new MemoryStream();
+        var piece = new byte[pieceSize];
+        var remaining = data;
+        while (true)
+        {
+            var isFinal = remaining.Length <= inputChunk;
+            var input = isFinal ? remaining : remaining.Slice(0, inputChunk);
+            OperationStatus status;
+            do
+            {
+                status = encoder.Compress(input, piece, out var consumed, out var written, isFinal);
+                Assert.NotEqual(OperationStatus.InvalidData, status);
+                Assert.True(status == OperationStatus.Done || consumed > 0 || written > 0, "no progress");
+                ms.Write(piece, 0, written);
+                input = input.Slice(consumed);
+            } while (status == OperationStatus.DestinationTooSmall || input.Length > 0);
+
+            if (isFinal) break;
+            remaining = remaining.Slice(inputChunk);
+        }
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void Encoder_FinalBlock_EndsTheFrame()
+    {
+        using var encoder = new LZ4Encoder();
+        var buffer = new byte[encoder.GetMaxCompressedLength(Data.Length)];
+        var written = encoder.CompressDone(Data, buffer, isFinalBlock: true);
+        Assert.Equal(Data, LZ4.Decompress(buffer.AsSpan(0, written)));
+
+        // the next call starts another frame
+        written = encoder.CompressDone(Utf8("next"), buffer, isFinalBlock: true);
+        Assert.Equal(Utf8("next"), LZ4.Decompress(buffer.AsSpan(0, written)));
+    }
+
     [Fact]
     public void Encoder_Flush_OutsideAFrame_WritesNothing()
     {
         using var encoder = new LZ4Encoder();
         var buffer = new byte[encoder.GetMaxCompressedLength(100)];
-        Assert.Equal(0, encoder.Flush(buffer)); // fresh
+        Assert.Equal(0, encoder.FlushDone(buffer)); // fresh
+        Assert.Equal(0, encoder.FlushDone(Span<byte>.Empty));
 
-        encoder.Close(buffer.AsSpan(encoder.Compress(Utf8("data"), buffer)));
-        Assert.Equal(0, encoder.Flush(buffer)); // closed
+        encoder.CloseDone(buffer.AsSpan(encoder.CompressDone(Utf8("data"), buffer)));
+        Assert.Equal(0, encoder.FlushDone(buffer)); // closed
 
-        encoder.Compress(Utf8("abandoned"), buffer);
+        encoder.CompressDone(Utf8("abandoned"), buffer);
         encoder.Reset();
-        Assert.Equal(0, encoder.Flush(buffer)); // reset
+        Assert.Equal(0, encoder.FlushDone(buffer)); // reset
 
         Assert.Equal(Utf8("next"), LZ4.Decompress(EncodeStreaming(encoder, Utf8("next"), 4096)));
     }
 
-    // A destination of exactly the right size is filled completely, which must not be taken for a partial write.
+    // A destination smaller than a block gets blocks a byte short of full, so the frame is about as large.
+    // With room for a block, the blocks do not depend on how the input and the output are cut.
+    [Theory]
+    [InlineData(19, false)]
+    [InlineData(64, false)]
+    [InlineData(1000, false)]
+    [InlineData(19, true)]
+    [InlineData(70_000, true)]
+    public void Encoder_Compress_DestinationSmallerThanABlock_MakesProgress(int pieceSize, bool blockChecksum)
+    {
+        var options = LZ4CompressionOptions.Default with
+        {
+            ContentSize = (ulong)Data.Length, // a 15 byte header
+            ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled,
+            BlockChecksumFlag = blockChecksum ? BlockChecksum.BlockChecksumEnabled : BlockChecksum.NoBlockChecksum,
+        };
+        using var encoder = new LZ4Encoder(options);
+        var pieced = EncodeInPieces(encoder, Data, inputChunk: 50_000, pieceSize);
+        Assert.Equal(Data, LZ4.Decompress(pieced));
+
+        using var whole = new LZ4Encoder(options);
+        var expected = EncodeStreaming(whole, Data, 50_000);
+        if (pieceSize >= 64 * 1024 + 8)
+        {
+            Assert.Equal(expected, pieced);
+        }
+        else
+        {
+            Assert.InRange(pieced.Length, expected.Length - expected.Length / 100, expected.Length + expected.Length / 100);
+        }
+    }
+
+    [Fact]
+    public void Encoder_Compress_DestinationSmallerThanTheHeader_TakesNothing()
+    {
+        using var encoder = new LZ4Encoder();
+        Assert.Equal(OperationStatus.DestinationTooSmall, encoder.Compress(Utf8("data"), new byte[6], out var consumed, out var written, isFinalBlock: false));
+        Assert.Equal(0, consumed);
+        Assert.Equal(0, written);
+
+        // with room for the header the frame begins
+        Assert.Equal(Utf8("data"), LZ4.Decompress(EncodeInPieces(encoder, Utf8("data"), inputChunk: 4096, LZ4.MaxFrameHeaderLength)));
+    }
+
+    [Theory]
+    [InlineData(19, false)]
+    [InlineData(20, false)]
+    [InlineData(1000, true)]
+    public void Encoder_Compress_AutoFlush_SmallDestination_RoundTrips(int pieceSize, bool independent)
+    {
+        using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with
+        {
+            AutoFlush = true,
+            BlockMode = independent ? BlockMode.BlockIndependent : BlockMode.BlockLinked,
+            BlockChecksumFlag = BlockChecksum.BlockChecksumEnabled,
+        });
+        Assert.Equal(Data, LZ4.Decompress(EncodeInPieces(encoder, Data, inputChunk: 30_000, pieceSize)));
+        Assert.Equal(Utf8("next"), LZ4.Decompress(EncodeInPieces(encoder, Utf8("next"), inputChunk: 2, pieceSize)));
+    }
+
+    // with autoFlush every call ends a block, so a source that does not fit is taken in whole blocks, not with a small block at the end
+    [Fact]
+    public void Encoder_AutoFlush_TakesPartOfTheSourceInWholeBlocks()
+    {
+        const int blockSize = 64 * 1024;
+        using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { AutoFlush = true });
+        var buffer = new byte[encoder.GetMaxCompressedLength(blockSize * 5 / 2)]; // room for two and a half blocks
+        var output = new MemoryStream();
+        ReadOnlySpan<byte> source = Data;
+        var calls = 0;
+        OperationStatus status;
+        do
+        {
+            status = encoder.Compress(source, buffer, out var consumed, out var written, isFinalBlock: false);
+            Assert.NotEqual(OperationStatus.InvalidData, status);
+            if (status == OperationStatus.DestinationTooSmall) Assert.Equal(0, consumed % blockSize);
+            output.Write(buffer, 0, written);
+            source = source.Slice(consumed);
+            calls++;
+        } while (status == OperationStatus.DestinationTooSmall);
+        output.Write(buffer, 0, encoder.CloseDone(buffer));
+
+        Assert.True(calls > 1);
+        Assert.Equal(Data, LZ4.Decompress(output.ToArray()));
+    }
+
+    // Flush and Close keep what does not fit and continue on the next call, the output is the same as with room for all of it.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(7)]
+    [InlineData(100)]
+    public void Encoder_FlushAndClose_SmallDestination_ContinueOnTheNextCall(int pieceSize)
+    {
+        var options = LZ4CompressionOptions.Default with { ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled };
+        var first = Data.AsSpan(0, 10_000).ToArray();
+        var second = Data.AsSpan(10_000, 10_000).ToArray();
+
+        byte[] expected;
+        using (var twin = new LZ4Encoder(options))
+        {
+            var big = new byte[twin.GetMaxCompressedLength(first.Length + second.Length)];
+            var ms = new MemoryStream();
+            ms.Write(big, 0, twin.CompressDone(first, big));
+            ms.Write(big, 0, twin.FlushDone(big));
+            ms.Write(big, 0, twin.CompressDone(second, big));
+            ms.Write(big, 0, twin.CloseDone(big));
+            expected = ms.ToArray();
+        }
+
+        using var encoder = new LZ4Encoder(options);
+        var output = new MemoryStream();
+        var buffer = new byte[encoder.GetMaxCompressedLength(first.Length)];
+        var piece = new byte[pieceSize];
+
+        output.Write(buffer, 0, encoder.CompressDone(first, buffer));
+        var calls = 0;
+        OperationStatus status;
+        do
+        {
+            status = encoder.Flush(piece, out var written);
+            output.Write(piece, 0, written);
+            calls++;
+        } while (status == OperationStatus.DestinationTooSmall);
+        Assert.Equal(OperationStatus.Done, status);
+        Assert.True(calls > 1);
+
+        output.Write(buffer, 0, encoder.CompressDone(second, buffer));
+        calls = 0;
+        do
+        {
+            status = encoder.Close(piece, out var written);
+            output.Write(piece, 0, written);
+            calls++;
+        } while (status == OperationStatus.DestinationTooSmall);
+        Assert.Equal(OperationStatus.Done, status);
+        Assert.True(calls > 1);
+
+        Assert.Equal(expected, output.ToArray());
+        Assert.Equal(Utf8("next"), LZ4.Decompress(EncodeStreaming(encoder, Utf8("next"), 4096)));
+    }
+
+    // A destination of exactly the right size is filled completely, which must not be taken for unfinished output.
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public void Encoder_FlushAndClose_ExactDestination_Completes(bool checksum, bool flushBeforeClose)
+    public void Encoder_FlushAndClose_ExactDestination_FinishInOneCall(bool checksum, bool flushBeforeClose)
     {
         var options = LZ4CompressionOptions.Default with { ContentChecksumFlag = checksum ? ContentChecksum.ContentChecksumEnabled : ContentChecksum.NoContentChecksum };
         var first = Compressible(10_000, seed: 52);
@@ -167,81 +347,221 @@ public class LZ4EncoderDecoderLifecycleTest
         using (var twin = new LZ4Encoder(options))
         {
             var scratch = new byte[twin.GetMaxCompressedLength(first.Length + second.Length)];
-            twin.Compress(first, scratch);
-            flushed = twin.Flush(scratch);
-            twin.Compress(second, scratch);
-            if (flushBeforeClose) lastFlushed = twin.Flush(scratch);
-            closed = twin.Close(scratch);
+            twin.CompressDone(first, scratch);
+            flushed = twin.FlushDone(scratch);
+            twin.CompressDone(second, scratch);
+            if (flushBeforeClose) lastFlushed = twin.FlushDone(scratch);
+            closed = twin.CloseDone(scratch);
         }
 
         using var encoder = new LZ4Encoder(options);
         var output = new MemoryStream();
         var buffer = new byte[encoder.GetMaxCompressedLength(first.Length)];
-        output.Write(buffer, 0, encoder.Compress(first, buffer));
+        output.Write(buffer, 0, encoder.CompressDone(first, buffer));
 
         var flushBuffer = new byte[flushed];
-        Assert.Equal(flushed, encoder.Flush(flushBuffer));
+        Assert.Equal(flushed, encoder.FlushDone(flushBuffer));
         output.Write(flushBuffer);
 
-        output.Write(buffer, 0, encoder.Compress(second, buffer));
+        output.Write(buffer, 0, encoder.CompressDone(second, buffer));
         if (flushBeforeClose)
         {
             var lastFlushBuffer = new byte[lastFlushed];
-            Assert.Equal(lastFlushed, encoder.Flush(lastFlushBuffer));
+            Assert.Equal(lastFlushed, encoder.FlushDone(lastFlushBuffer));
             output.Write(lastFlushBuffer);
         }
 
         var closeBuffer = new byte[closed]; // only the footer when flushed before
-        Assert.Equal(closed, encoder.Close(closeBuffer));
+        Assert.Equal(closed, encoder.CloseDone(closeBuffer));
         output.Write(closeBuffer);
 
         Assert.Equal(first.Concat(second).ToArray(), LZ4.Decompress(output.ToArray()));
         Assert.Equal(Utf8("next"), LZ4.Decompress(EncodeStreaming(encoder, Utf8("next"), 4096)));
     }
 
-    // lz4 fills a destination that is too small and keeps the rest, which the caller would never get.
-    [Theory]
-    [InlineData("flush", 1)]
-    [InlineData("flush", 100)]
-    [InlineData("close", 1)]
-    [InlineData("close", 100)]
-    public void Encoder_FlushAndClose_TooSmallDestination_ThrowAndAbandonFrame(string operation, int size)
-    {
-        using var encoder = new LZ4Encoder();
-        var buffer = new byte[encoder.GetMaxCompressedLength(10_000)];
-        encoder.Compress(Data.AsSpan(0, 10_000), buffer); // buffered within the context
-
-        Assert.Throws<LZ4Exception>(() => operation == "flush" ? encoder.Flush(new byte[size]) : encoder.Close(new byte[size]));
-
-        // nothing of the abandoned frame comes out later
-        Assert.Equal(0, encoder.Flush(buffer));
-        Assert.Equal(Utf8("next"), LZ4.Decompress(EncodeStreaming(encoder, Utf8("next"), 4096)));
-    }
-
-    [Fact]
-    public void Encoder_Close_FooterDoesNotFit_ThrowsAndAbandonsFrame()
-    {
-        using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled });
-        var buffer = new byte[encoder.GetMaxCompressedLength(100)];
-        encoder.Flush(buffer.AsSpan(encoder.Compress(Utf8("data"), buffer))); // only the 8 byte footer is left
-
-        Assert.Throws<LZ4Exception>(() => encoder.Close(new byte[5]));
-        Assert.Equal(Utf8("next"), LZ4.Decompress(EncodeStreaming(encoder, Utf8("next"), 4096)));
-    }
-
     // nothing is written when there is no room at all, so the frame goes on
     [Fact]
-    public void Encoder_Flush_EmptyDestination_ThrowsAndKeepsFrame()
+    public void Encoder_Flush_EmptyDestination_KeepsFrame()
     {
         using var encoder = new LZ4Encoder();
         var data = Data.AsSpan(0, 10_000).ToArray();
         var buffer = new byte[encoder.GetMaxCompressedLength(data.Length)];
-        var written = encoder.Compress(data, buffer);
+        var written = encoder.CompressDone(data, buffer);
 
-        Assert.Throws<LZ4Exception>(() => encoder.Flush(Span<byte>.Empty));
-        written += encoder.Flush(buffer.AsSpan(written));
-        written += encoder.Close(buffer.AsSpan(written));
+        Assert.Equal(OperationStatus.DestinationTooSmall, encoder.Flush(Span<byte>.Empty, out var none));
+        Assert.Equal(0, none);
+        written += encoder.FlushDone(buffer.AsSpan(written));
+        written += encoder.CloseDone(buffer.AsSpan(written));
         Assert.Equal(data, LZ4.Decompress(buffer.AsSpan(0, written)));
+    }
+
+    [Fact]
+    public void Encoder_UnfinishedClose_ContinuesWithFinalBlock()
+    {
+        using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled });
+        var data = Data.AsSpan(0, 10_000).ToArray();
+        var buffer = new byte[encoder.GetMaxCompressedLength(data.Length)];
+        var small = new byte[2];
+        var output = new MemoryStream();
+
+        output.Write(buffer, 0, encoder.CompressDone(data, buffer));
+        Assert.Equal(OperationStatus.DestinationTooSmall, encoder.Close(small, out var written));
+        output.Write(small, 0, written);
+        Assert.Equal(OperationStatus.DestinationTooSmall, encoder.Compress(ReadOnlySpan<byte>.Empty, small, out _, out written, isFinalBlock: true));
+        output.Write(small, 0, written);
+        output.Write(buffer, 0, encoder.CompressDone(ReadOnlySpan<byte>.Empty, buffer, isFinalBlock: true));
+
+        Assert.Equal(data, LZ4.Decompress(output.ToArray()));
+    }
+
+    // once the frame ending has started, new input or a flush would break the frame
+    [Fact]
+    public void Encoder_UnfinishedClose_RejectsInputUntilReset()
+    {
+        using var encoder = new LZ4Encoder();
+        var data = Data.AsSpan(0, 10_000).ToArray();
+        var buffer = new byte[encoder.GetMaxCompressedLength(data.Length)];
+
+        encoder.CompressDone(data, buffer);
+        Assert.Equal(OperationStatus.DestinationTooSmall, encoder.Close(new byte[2], out _));
+        Assert.Equal(OperationStatus.InvalidData, encoder.Compress(data, buffer, out var consumed, out _, isFinalBlock: false));
+        Assert.Equal(0, consumed);
+        Assert.Equal(OperationStatus.InvalidData, encoder.Flush(buffer, out _));
+        Assert.Equal(OperationStatus.InvalidData, encoder.Close(buffer, out _));
+
+        encoder.Reset();
+        Assert.Equal(Utf8("next"), LZ4.Decompress(EncodeStreaming(encoder, Utf8("next"), 4096)));
+    }
+
+    // A final call after earlier input also writes out the block lz4 still holds. The size for the call has to cover it,
+    // so the call finishes in one go, also when the earlier input left a block less a byte behind.
+    [Theory]
+    [InlineData(65_535, 65_535, false, false, false)]
+    [InlineData(65_535, 65_535, true, false, false)]
+    [InlineData(65_535, 65_535, false, true, false)]
+    [InlineData(65_535, 65_535, true, true, false)]
+    [InlineData(65_535, 65_535, true, true, true)]
+    [InlineData(1, 65_536, false, false, false)]
+    [InlineData(65_535, 1, true, true, false)]
+    [InlineData(100_000, 200_001, true, false, false)]
+    [InlineData(65_535, 65_535, false, false, true)]
+    public void Encoder_FinalBlock_AfterEarlierInput_FinishesWithGetMaxCompressedLength(int first, int last, bool blockChecksum, bool contentChecksum, bool autoFlush)
+    {
+        var data = new byte[first + last];
+        new Random(17).NextBytes(data);
+        using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with
+        {
+            AutoFlush = autoFlush,
+            BlockChecksumFlag = blockChecksum ? BlockChecksum.BlockChecksumEnabled : BlockChecksum.NoBlockChecksum,
+            ContentChecksumFlag = contentChecksum ? ContentChecksum.ContentChecksumEnabled : ContentChecksum.NoContentChecksum,
+        });
+        var output = new MemoryStream();
+
+        var firstBuffer = new byte[encoder.GetMaxCompressedLength(first, includingFooter: false)];
+        output.Write(firstBuffer, 0, encoder.CompressDone(data.AsSpan(0, first), firstBuffer));
+
+        var lastBuffer = new byte[encoder.GetMaxCompressedLength(last)];
+        Assert.Equal(OperationStatus.Done, encoder.Compress(data.AsSpan(first), lastBuffer, out var consumed, out var written, isFinalBlock: true));
+        Assert.Equal(last, consumed);
+        output.Write(lastBuffer, 0, written);
+
+        Assert.Equal(data, LZ4.Decompress(output.ToArray()));
+    }
+
+    // an empty source has nothing to do until the first input, so it needs no room and writes no header
+    [Fact]
+    public void Encoder_EmptySource_BeforeFirstInput_WritesNothing()
+    {
+        using var encoder = new LZ4Encoder();
+        Assert.Equal(OperationStatus.Done, encoder.Compress(ReadOnlySpan<byte>.Empty, Span<byte>.Empty, out var consumed, out var written, isFinalBlock: false));
+        Assert.Equal(0, consumed);
+        Assert.Equal(0, written);
+        Assert.Equal(OperationStatus.Done, encoder.Compress(ReadOnlySpan<byte>.Empty, new byte[3], out _, out written, isFinalBlock: false));
+        Assert.Equal(0, written);
+
+        Assert.Equal(Utf8("data"), LZ4.Decompress(EncodeStreaming(encoder, Utf8("data"), 4096)));
+
+        // an empty final source still ends the frame, so an empty frame is written
+        var buffer = new byte[encoder.GetMaxFlushBufferLength()];
+        Assert.Empty(LZ4.Decompress(buffer.AsSpan(0, encoder.CompressDone(ReadOnlySpan<byte>.Empty, buffer, isFinalBlock: true))));
+    }
+
+    [Fact]
+    public void Encoder_Constructor_RejectsOptionsLz4CannotUse()
+    {
+        var options = LZ4CompressionOptions.Default with { BlockSizeId = (BlockSizeId)3 };
+        Assert.Throws<LZ4Exception>(() => new LZ4Encoder(options));
+
+        using var encoder = new LZ4Encoder();
+        Assert.Throws<LZ4Exception>(() => encoder.Reset(options));
+        Assert.Equal(Utf8("still default"), LZ4.Decompress(EncodeStreaming(encoder, Utf8("still default"), 4096)));
+    }
+
+    // InvalidData counts nothing of the broken frame, the same as ZstandardEncoder
+    [Fact]
+    public void Encoder_InvalidData_CountsNothing()
+    {
+        using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { ContentSize = 10_001 });
+        var data = Data.AsSpan(0, 10_000).ToArray();
+        var buffer = new byte[encoder.GetMaxCompressedLength(data.Length)];
+
+        Assert.Equal(OperationStatus.InvalidData, encoder.Compress(data, buffer, out var consumed, out var written, isFinalBlock: true));
+        Assert.Equal(0, consumed);
+        Assert.Equal(0, written);
+
+        encoder.Reset();
+        encoder.CompressDone(data, buffer);
+        Assert.Equal(OperationStatus.InvalidData, encoder.Close(buffer, out written));
+        Assert.Equal(0, written);
+    }
+
+    // Reset does not call lz4, the next frame begins anew and drops what lz4 still holds of the abandoned one
+    [Theory]
+    [InlineData("flushing")]
+    [InlineData("closing")]
+    [InlineData("ending")]
+    [InlineData("idle-closing")]
+    [InlineData("flushing-options")]
+    public void Encoder_Reset_InTheMiddleOfAFrame_StartsCleanly(string where)
+    {
+        using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled });
+        var data = Data.AsSpan(0, 10_000).ToArray();
+        var buffer = new byte[encoder.GetMaxCompressedLength(data.Length)];
+
+        switch (where)
+        {
+            case "flushing":
+            case "flushing-options":
+                encoder.CompressDone(data, buffer);
+                Assert.Equal(OperationStatus.DestinationTooSmall, encoder.Flush(new byte[100], out _)); // lz4 holds the rest of the flush
+                break;
+            case "closing":
+                encoder.CompressDone(data, buffer);
+                Assert.Equal(OperationStatus.DestinationTooSmall, encoder.Close(new byte[100], out _)); // still flushing the last block
+                break;
+            case "ending":
+                encoder.CompressDone(data, buffer);
+                encoder.FlushDone(buffer);
+                Assert.Equal(OperationStatus.DestinationTooSmall, encoder.Close(new byte[3], out _)); // in the middle of the footer
+                break;
+            case "idle-closing":
+                Assert.Equal(OperationStatus.DestinationTooSmall, encoder.Close(new byte[3], out _)); // no room for the header
+                break;
+        }
+
+        if (where == "flushing-options")
+        {
+            encoder.Reset(LZ4CompressionOptions.Default with { BlockSizeId = BlockSizeId.Max256KB });
+        }
+        else
+        {
+            encoder.Reset();
+        }
+
+        var next = EncodeStreaming(encoder, Utf8("next frame"), 4096);
+        Assert.Equal(Utf8("next frame"), LZ4.Decompress(next));
+        Assert.True(LZ4.TryGetFrameInfo(next, out var info));
+        Assert.Equal(where == "flushing-options" ? BlockSizeId.Max256KB : BlockSizeId.Max64KB, info.BlockSizeId);
     }
 
     [Fact]
@@ -300,9 +620,10 @@ public class LZ4EncoderDecoderLifecycleTest
         Assert.True(decoder.IsDisposed);
 
         var buffer = new byte[128];
-        Assert.Throws<ObjectDisposedException>(() => encoder.Compress(Utf8("x"), buffer));
-        Assert.Throws<ObjectDisposedException>(() => encoder.Flush(buffer));
-        Assert.Throws<ObjectDisposedException>(() => encoder.Close(buffer));
+        Assert.Throws<ObjectDisposedException>(() => encoder.Compress(Utf8("x"), buffer, out _, out _, isFinalBlock: false));
+        Assert.Throws<ObjectDisposedException>(() => encoder.Flush(buffer, out _));
+        Assert.Throws<ObjectDisposedException>(() => encoder.Close(buffer, out _));
+        Assert.Throws<ObjectDisposedException>(() => encoder.Reset());
         Assert.Throws<ObjectDisposedException>(() => encoder.GetMaxCompressedLength(1));
         Assert.Throws<ObjectDisposedException>(() => encoder.Reset());
         Assert.Throws<ObjectDisposedException>(() => decoder.Decompress(buffer, buffer, out _, out _));
@@ -324,7 +645,7 @@ public class LZ4EncoderDecoderLifecycleTest
             var decoder = new LZ4Decoder();
             var dict = LZ4Dictionary.Create(Utf8("dictionary"));
             var buffer = new byte[256];
-            encoder.Compress(Utf8("abc"), buffer);
+            encoder.CompressDone(Utf8("abc"), buffer);
             decoder.Decompress(buffer, new byte[16], out _, out _);
         }
     }
@@ -418,7 +739,7 @@ public class LZ4EncoderDecoderLifecycleTest
         using var encoder = new LZ4Encoder(options);
         var buffer = new byte[encoder.GetMaxCompressedLength(8192)];
         var ms = new MemoryStream();
-        var written = encoder.Compress(Data.AsSpan(0, 8192), buffer);
+        var written = encoder.CompressDone(Data.AsSpan(0, 8192), buffer);
         ms.Write(buffer, 0, written);
 
         dict.Dispose();
@@ -430,11 +751,11 @@ public class LZ4EncoderDecoderLifecycleTest
         while (remaining.Length > 0)
         {
             var piece = remaining.Slice(0, Math.Min(8192, remaining.Length));
-            written = encoder.Compress(piece, buffer);
+            written = encoder.CompressDone(piece, buffer);
             ms.Write(buffer, 0, written);
             remaining = remaining.Slice(piece.Length);
         }
-        written = encoder.Close(buffer);
+        written = encoder.CloseDone(buffer);
         ms.Write(buffer, 0, written);
 
         // the frames that follow keep using it as well
@@ -487,7 +808,7 @@ public class LZ4EncoderDecoderLifecycleTest
         second.Dispose();
         encoder.Dispose(); // the last reference, the native dictionary goes with it
         encoder.Dispose();
-        Assert.Throws<ObjectDisposedException>(() => encoder.Compress(Data, new byte[Data.Length * 2]));
+        Assert.Throws<ObjectDisposedException>(() => encoder.Compress(Data, new byte[Data.Length * 2], out _, out _, isFinalBlock: false));
     }
 
     [Fact]

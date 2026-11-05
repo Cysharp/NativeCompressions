@@ -209,12 +209,14 @@ public static class FuzzTargets
         var contentChecksum = (data[1] & 8) != 0;
         var blockChecksum = (data[1] & 16) != 0;
         var contentSize = (data[1] & 32) != 0;
+        var autoFlush = (data[1] & 64) != 0;
         var inputChunk = 1 + data[2] * 8;
         var payload = data.Slice(4);
 
         var options = LZ4CompressionOptions.Default with
         {
             CompressionLevel = level,
+            AutoFlush = autoFlush,
             BlockSizeId = blockSize,
             BlockMode = independent ? BlockMode.BlockIndependent : BlockMode.BlockLinked,
             ContentChecksumFlag = contentChecksum ? ContentChecksum.ContentChecksumEnabled : ContentChecksum.NoContentChecksum,
@@ -230,7 +232,7 @@ public static class FuzzTargets
         Check(LZ4.TryGetFrameInfo(compressed, out var info), "own frame not recognized");
         Check(info.ContentSize == (contentSize ? (ulong)payload.Length : 0ul), "content size not as requested");
 
-        // streaming encoder, chunked
+        // streaming encoder, chunked, with the room GetMaxCompressedLength promises
         using var encoder = new LZ4Encoder(options with { ContentSize = contentSize ? (ulong)payload.Length : 0ul });
         var ms = new MemoryStream();
         var buffer = new byte[encoder.GetMaxCompressedLength(inputChunk)];
@@ -238,14 +240,35 @@ public static class FuzzTargets
         while (remaining.Length > 0)
         {
             var piece = remaining.Slice(0, Math.Min(inputChunk, remaining.Length));
-            var written = encoder.Compress(piece, buffer);
-            Check(written <= buffer.Length, "encoder wrote past the bound");
+            var status = encoder.Compress(piece, buffer, out var consumed, out var written, isFinalBlock: false);
+            Check(status == OperationStatus.Done && consumed == piece.Length, "encoder did not take a chunk in one call");
             ms.Write(buffer, 0, written);
             remaining = remaining.Slice(piece.Length);
         }
-        ms.Write(buffer, 0, encoder.Close(buffer));
+        Check(encoder.Close(buffer, out var closed) == OperationStatus.Done, "encoder did not close in one call");
+        ms.Write(buffer, 0, closed);
         var streamed = ms.ToArray();
         Check(LZ4.Decompress(streamed).AsSpan().SequenceEqual(payload), "streamed round trip differs");
+
+        // the same encoder again, with output pieces too small for a block
+        var outputChunk = LZ4.MaxFrameHeaderLength + data[3] % 64;
+        var pieced = CompressStreaming(encoder, payload, inputChunk, outputChunk);
+        Check(LZ4.Decompress(pieced).AsSpan().SequenceEqual(payload), "streamed round trip into small pieces differs");
+
+        // and once more, the last chunk ending the frame in its own call, with the size GetMaxCompressedLength gives for it
+        var ended = new MemoryStream();
+        remaining = payload;
+        while (true)
+        {
+            var isFinal = remaining.Length <= inputChunk;
+            var piece = isFinal ? remaining : remaining.Slice(0, inputChunk);
+            var status = encoder.Compress(piece, buffer, out var consumed, out var written, isFinal);
+            Check(status == OperationStatus.Done && consumed == piece.Length, "encoder did not take a chunk, or end the frame, in one call");
+            ended.Write(buffer, 0, written);
+            if (isFinal) break;
+            remaining = remaining.Slice(inputChunk);
+        }
+        Check(LZ4.Decompress(ended.ToArray()).AsSpan().SequenceEqual(payload), "round trip ended by the last chunk differs");
 
         // LZ4Stream both ways
         var stream = new MemoryStream();
@@ -746,6 +769,32 @@ public static class FuzzTargets
                 Check(status != OperationStatus.InvalidData, "encoder returned InvalidData");
                 Check(consumed <= piece.Length && written <= output.Length, "encoder counts out of range");
                 Check(++guard < 10_000_000, "encoder does not terminate");
+                ms.Write(output, 0, written);
+                piece = piece.Slice(consumed);
+            } while (status == OperationStatus.DestinationTooSmall || piece.Length > 0);
+
+            if (isFinal) break;
+            remaining = remaining.Slice(inputChunk);
+        }
+        return ms.ToArray();
+    }
+
+    static byte[] CompressStreaming(LZ4Encoder encoder, ReadOnlySpan<byte> data, int inputChunk, int outputChunk)
+    {
+        var ms = new MemoryStream();
+        var output = new byte[outputChunk];
+        var remaining = data;
+        while (true)
+        {
+            var isFinal = remaining.Length <= inputChunk;
+            var piece = isFinal ? remaining : remaining.Slice(0, inputChunk);
+            OperationStatus status;
+            do
+            {
+                status = encoder.Compress(piece, output, out var consumed, out var written, isFinal);
+                Check(status != OperationStatus.InvalidData, "encoder returned InvalidData");
+                Check(consumed <= piece.Length && written <= output.Length, "encoder counts out of range");
+                Check(status == OperationStatus.Done || consumed > 0 || written > 0, "encoder made no progress");
                 ms.Write(output, 0, written);
                 piece = piece.Slice(consumed);
             } while (status == OperationStatus.DestinationTooSmall || piece.Length > 0);

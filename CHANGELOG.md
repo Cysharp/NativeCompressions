@@ -11,6 +11,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `CHANGELOG.md`.
 
 ### Changed
+- `LZ4Encoder.Compress`, `Flush` and `Close` return an `OperationStatus` with `bytesConsumed` and `bytesWritten`, and `Compress` takes `isFinalBlock`, the same as `ZstandardEncoder` and `BrotliEncoder`. A call that runs out of room returns `DestinationTooSmall`, and the next call continues. Every call makes progress with a destination of at least `LZ4.MaxFrameHeaderLength` bytes. A failure, such as a frame length that differs from `ContentSize`, returns `InvalidData` with nothing counted, instead of throwing `LZ4Exception`, and the encoder needs `Reset()` afterwards. An empty source before the first input writes nothing, the header comes with the first input.
+- The `LZ4Encoder` constructor throws `LZ4Exception` for options lz4 cannot begin a frame with, the same as `Reset(in LZ4CompressionOptions)`. Previously they failed at the first `Compress`.
+- `LZ4Encoder.GetMaxCompressedLength` counts the frame header the options produce instead of the largest possible one. With `includingFooter` (the default) it also covers ending the frame in the same call with `isFinalBlock`, including the block the encoder still holds from earlier calls. `includingFooter: false` gives the smaller size for a call that does not end the frame.
+- `LZ4Stream` passes a write larger than 1MB to the encoder in pieces, so its buffer stays within 2MB with 64KB and 256KB blocks, and within 4MB and 8MB with 1MB and 4MB blocks, which need room for a whole block. Previously it rented a buffer as large as the largest write.
+- `LZ4.Block.Decompress` reports a destination that is too small and a missing or wrong dictionary with their own messages.
+- The bundled LZ4 is v1.11.0.
 - `LZ4CompressionOptions.BlockSizeID`, `LZ4CompressionOptions.DictionaryID`, `LZ4FrameInfo.BlockSizeID`, `LZ4FrameInfo.DictionaryID` and `ZstandardCompressionOptions.DictIDFlag` are renamed to `BlockSizeId`, `DictionaryId` and `DictIdFlag`.
 - `LZ4CompressionOptions.FavorDecompressionSpeed` is a `bool`.
 - `Zstandard.VersionNumber` is an `int`, like `LZ4.VersionNumber`.
