@@ -284,16 +284,18 @@ public class ReleaseReviewTest
 
         var buffer = new byte[encoder.GetMaxCompressedLength(data.Length)];
 
-        var headerLength = encoder.CompressDone([], buffer); // only the header
-        Assert.Equal(encoder.GetActualFrameHeaderLength(), headerLength);
-        Assert.Equal(7 + (contentSize ? 8 : 0) + (dictionary ? 4 : 0), headerLength);
+        // an empty source writes nothing, the header comes with the first input
+        Assert.Equal(0, encoder.CompressDone([], buffer));
+
+        var written = encoder.CompressDone(data, buffer);
+        int headerLength;
         using (var decoder = new LZ4Decoder())
         {
-            Assert.Equal(headerLength, decoder.GetHeaderSize(buffer.AsSpan(0, headerLength)));
+            headerLength = decoder.GetHeaderSize(buffer.AsSpan(0, written));
         }
+        Assert.Equal(encoder.GetActualFrameHeaderLength(), headerLength);
+        Assert.Equal(7 + (contentSize ? 8 : 0) + (dictionary ? 4 : 0), headerLength);
 
-        var written = headerLength;
-        written += encoder.CompressDone(data, buffer.AsSpan(written));
         written += encoder.FlushDone(buffer.AsSpan(written)); // only the footer is left
 
         var footerLength = encoder.CloseDone(buffer.AsSpan(written));

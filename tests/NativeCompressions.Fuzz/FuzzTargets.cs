@@ -255,6 +255,21 @@ public static class FuzzTargets
         var pieced = CompressStreaming(encoder, payload, inputChunk, outputChunk);
         Check(LZ4.Decompress(pieced).AsSpan().SequenceEqual(payload), "streamed round trip into small pieces differs");
 
+        // and once more, the last chunk ending the frame in its own call, with the size GetMaxCompressedLength gives for it
+        var ended = new MemoryStream();
+        remaining = payload;
+        while (true)
+        {
+            var isFinal = remaining.Length <= inputChunk;
+            var piece = isFinal ? remaining : remaining.Slice(0, inputChunk);
+            var status = encoder.Compress(piece, buffer, out var consumed, out var written, isFinal);
+            Check(status == OperationStatus.Done && consumed == piece.Length, "encoder did not take a chunk, or end the frame, in one call");
+            ended.Write(buffer, 0, written);
+            if (isFinal) break;
+            remaining = remaining.Slice(inputChunk);
+        }
+        Check(LZ4.Decompress(ended.ToArray()).AsSpan().SequenceEqual(payload), "round trip ended by the last chunk differs");
+
         // LZ4Stream both ways
         var stream = new MemoryStream();
         using (var zs = new LZ4Stream(stream, options with { ContentSize = 0 }, leaveOpen: true))

@@ -448,6 +448,27 @@ public class LZ4StreamTest
         Assert.InRange(compressed.Length, wholeLength - wholeLength / 1000, wholeLength + wholeLength / 1000);
     }
 
+    // The stream buffer grows with the writes, and with the block size of an encoder the caller resets to larger blocks.
+    [Fact]
+    public void Write_GrowingSizes_AndEncoderResetToLargerBlocks()
+    {
+        using var encoder = new LZ4Encoder();
+        var ms = new MemoryStream();
+        using (var zs = new LZ4Stream(ms, encoder, leaveOpen: true))
+        {
+            zs.Flush(); // rents a buffer for 64KB blocks before anything is written
+            encoder.Reset(LZ4CompressionOptions.Default with { BlockSizeId = BlockSizeId.Max4MB });
+            zs.Write(Data.AsSpan(0, 100));
+            zs.Write(Data.AsSpan(100, 2 * 1024 * 1024));
+            zs.Write(Data.AsSpan(100 + 2 * 1024 * 1024));
+        }
+
+        var compressed = ms.ToArray();
+        Assert.Equal(Data, LZ4.Decompress(compressed));
+        Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
+        Assert.Equal(BlockSizeId.Max4MB, info.BlockSizeId);
+    }
+
     [Fact]
     public async Task WriteAsync_CancelledToken()
     {

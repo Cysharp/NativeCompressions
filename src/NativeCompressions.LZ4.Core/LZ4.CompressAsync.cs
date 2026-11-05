@@ -179,7 +179,7 @@ public static partial class LZ4
         }
     }
 
-    static int GetMaxBlockSize(BlockSizeId id)
+    internal static int GetMaxBlockSize(BlockSizeId id)
     {
         switch (id)
         {

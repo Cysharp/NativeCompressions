@@ -112,8 +112,8 @@ using var encoder = new LZ4Encoder();
 // Compress chunks(invoke Compress multiple times)
 foreach (var chunk in dataChunks) // dataChunks = byte[][]
 {
-    // GetMaxCompressedLength is enough to take the whole chunk in one call
-    var buffer = bufferWriter.GetSpan(encoder.GetMaxCompressedLength(chunk.Length));
+    // GetMaxCompressedLength is enough to take the whole chunk in one call, without room to end the frame as this call does not
+    var buffer = bufferWriter.GetSpan(encoder.GetMaxCompressedLength(chunk.Length, includingFooter: false));
 
     var status = encoder.Compress(chunk, buffer, out var bytesConsumed, out var bytesWritten, isFinalBlock: false);
     if (status != OperationStatus.Done) throw new InvalidOperationException($"Compression failed: {status}");
@@ -132,7 +132,7 @@ if (closing != OperationStatus.Done) throw new InvalidOperationException($"Closi
 bufferWriter.Advance(finalWritten);
 ```
 
-`LZ4Encoder` has the same API as `BrotliEncoder` and `ZstandardEncoder`. `Compress`, `Flush` and `Close` return an `OperationStatus` with `bytesConsumed` and `bytesWritten`. With the sizes from `GetMaxCompressedLength` and `GetMaxFlushBufferLength` every call finishes at once, which is also the most efficient way for LZ4. A smaller destination works too, the same as `BrotliEncoder`: `DestinationTooSmall` means calling again with the rest of the source and more room, and every call makes progress with at least `LZ4.MaxFrameHeaderLength` (19) bytes. `isFinalBlock: true` ends the frame after the source, the same as calling `Close`. After `OperationStatus.InvalidData` (for example a frame length that differs from `ContentSize`), call `Reset()` before reusing the encoder, or dispose it.
+`LZ4Encoder` has the same API as `BrotliEncoder` and `ZstandardEncoder`. `Compress`, `Flush` and `Close` return an `OperationStatus` with `bytesConsumed` and `bytesWritten`. With the sizes from `GetMaxCompressedLength` and `GetMaxFlushBufferLength` every call finishes at once, which is also the most efficient way for LZ4. A smaller destination works too, the same as `BrotliEncoder`: `DestinationTooSmall` means calling again with the rest of the source and more room, and every call makes progress with at least `LZ4.MaxFrameHeaderLength` (19) bytes. `isFinalBlock: true` ends the frame after the source, the same as calling `Close`, and `GetMaxCompressedLength` with `includingFooter: true` (the default) is enough for that call too, including what the encoder still holds from earlier chunks. After `OperationStatus.InvalidData` (for example a frame length that differs from `ContentSize`), call `Reset()` before reusing the encoder, or dispose it.
 
 For decompression, use `LZ4Decoder`.
 
