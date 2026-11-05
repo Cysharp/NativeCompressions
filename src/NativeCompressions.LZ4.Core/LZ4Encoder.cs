@@ -1,5 +1,6 @@
 using NativeCompressions.Internal;
 using NativeCompressions.Interop;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using static NativeCompressions.Interop.LZ4NativeMethods;
 
@@ -9,18 +10,19 @@ namespace NativeCompressions;
 // dctx = Decompression Context
 // CDict = Compression Dictionary
 
-// BrotliEncoder interface is `public unsafe OperationStatus Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)`
-// But LZ4F_compressUpdate() `When successful, the function always entirely consumes @srcBuffer.` so `out int bytesConsumed` is meaningless.
-// When LZ4F_compressUpdate() has been failed, context state is broken so we need to throw error(can't impl Try... API).
+// LZ4F_compressUpdate always consumes its whole input and fails when its output does not fit, which also breaks the frame.
+// So Compress passes only as much input as is sure to fit, assuming every block is stored uncompressed.
+// LZ4F_flush and LZ4F_compressEnd keep what does not fit and continue on the next call, so Flush and Close pass any room.
 
 /// <summary>
 /// Provides streaming compression functionality for LZ4 Frame format.
 /// This encoder supports incremental compression with automatic frame header generation.
 /// </summary>
 /// <remarks>
-/// The encoder can be reused after calling <see cref="Close"/> to compress multiple frames sequentially.
+/// The encoder can be reused after <see cref="Close"/> returns <see cref="OperationStatus.Done"/> to compress multiple frames sequentially.
 /// Call <see cref="Dispose"/> to release the native context. A finalizer releases it if Dispose is never called.
 /// Instances are not thread-safe.
+/// After Compress, Flush or Close returns <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset()"/> before reusing the encoder, or dispose it.
 /// </remarks>
 public sealed unsafe class LZ4Encoder : IDisposable
 {
@@ -32,7 +34,33 @@ public sealed unsafe class LZ4Encoder : IDisposable
     // The native context reads the dictionary whenever a frame begins. The encoder holds a lease on it
     // from the moment it is chosen until the context is freed.
     LZ4Dictionary.Lease dictionary;
-    bool isWrittenHeader;
+
+    FrameState state;
+
+    // Output made for a destination that had no room for a whole block, written out before anything else.
+    // Rented only while it holds something.
+    byte[]? staging;
+    int stagingOffset;
+    int stagingLength;
+
+    // At least as much input as lz4 holds back for an unfinished block. lz4 buffers less than a block,
+    // and nothing after a frame begins or a flush completes.
+    int bufferedAtMost;
+
+    // set by Close until the frame is completely written, only the rest of the frame can follow
+    bool closing;
+
+    // what is left of the frame ending while the state is Ending
+    int footerLeft;
+
+    enum FrameState : byte
+    {
+        Idle,     // no frame, the next call begins one
+        Open,     // the header is written and input is taken
+        Flushing, // lz4 holds output of a flush that did not fit
+        Ending,   // everything buffered is out and the frame ending is being written
+        Faulted,  // lz4 failed, the frame cannot go on until Reset
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LZ4Encoder"/> with default settings.
@@ -82,9 +110,9 @@ public sealed unsafe class LZ4Encoder : IDisposable
     /// <remarks>
     /// This method returns the worst-case size assuming no compression.
     /// The actual compressed size is typically much smaller.
-    /// Use this to allocate output buffers that are guaranteed to be large enough.
+    /// A destination of this size lets <see cref="Compress"/> take the whole input in one call.
     /// When includingHeader or/and includingFooter is true (default), the returned size includes:
-    /// - Frame header (up to 19 bytes)
+    /// - Frame header (7 to 19 bytes, depending on the options)
     /// - Compressed data with block headers
     /// - Frame footer (4-8 bytes: end mark and optional content checksum)
     /// </remarks>
@@ -101,14 +129,13 @@ public sealed unsafe class LZ4Encoder : IDisposable
             bound = LZ4F_compressBound((nuint)inputSize, prefs);
         }
 
-        // LZ4F_compressBegin requires room for the largest header, whatever size the header actually takes
-        if (includingHeader) bound += (nuint)LZ4.MaxFrameHeaderLength;
+        if (includingHeader) bound += (nuint)GetActualFrameHeaderLength();
         if (includingFooter) bound += (nuint)GetActualFrameFooterLength();
         return checked((int)bound);
     }
 
     /// <summary>
-    /// Calculates the buffer size that is enough for <see cref="Flush"/> and <see cref="Close"/> in any state.
+    /// Calculates the buffer size that lets <see cref="Flush"/> and <see cref="Close"/> finish in one call.
     /// </summary>
     /// <param name="includingFooter">
     /// true (default) to size the buffer for <see cref="Close"/>, which is also enough for <see cref="Flush"/>.
@@ -117,7 +144,8 @@ public sealed unsafe class LZ4Encoder : IDisposable
     /// <remarks>
     /// The size for Close also has room for the frame header, because closing an encoder that has not
     /// compressed anything writes the header of an empty frame. So the default value is the same as
-    /// <see cref="GetMaxCompressedLength"/> with an inputSize of 0 and is enough for Close in any state.
+    /// <see cref="GetMaxCompressedLength"/> with an inputSize of 0.
+    /// Output that an earlier call could not write out comes first and may need another call.
     /// </remarks>
     public int GetMaxFlushBufferLength(bool includingFooter = true) => GetMaxCompressedLength(0, includingHeader: includingFooter, includingFooter: includingFooter);
 
@@ -165,169 +193,137 @@ public sealed unsafe class LZ4Encoder : IDisposable
     /// <summary>
     /// Compresses source data and writes the result to the destination buffer.
     /// </summary>
-    /// <param name="source">The data to compress. The entire source buffer will be consumed.</param>
-    /// <param name="destination">The buffer to write compressed data to. Must be at least <see cref="GetMaxCompressedLength"/> in size.</param>
-    /// <returns>The total number of bytes written to the destination buffer, including header (if first call).</returns>
-    /// <exception cref="LZ4Exception">Thrown when compression fails (e.g., destination buffer too small).</exception>
+    /// <param name="source">The data to compress. May be empty.</param>
+    /// <param name="destination">The buffer to write compressed data to.</param>
+    /// <param name="bytesConsumed">When this method returns, contains the number of bytes read from source.</param>
+    /// <param name="bytesWritten">When this method returns, contains the number of bytes written to destination.</param>
+    /// <param name="isFinalBlock">true to end the frame after the source; false to continue streaming.</param>
+    /// <returns>
+    /// <see cref="OperationStatus.Done"/>: All input was consumed. If isFinalBlock is true, the frame is also completely written and the encoder can start another frame.
+    /// <see cref="OperationStatus.DestinationTooSmall"/>: The destination is full. Call again with the rest of the source and more room.
+    /// <see cref="OperationStatus.InvalidData"/>: The compression failed, for example the frame length differs from ContentSize.
+    /// </returns>
+    /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
     /// <remarks>
-    /// On first call, automatically writes the LZ4 frame header.
-    /// The source data is always entirely consumed - either compressed to destination or buffered internally.
+    /// This method follows the same pattern as System.IO.Compression.BrotliEncoder.
+    /// The first call of a frame writes the frame header. Input can stay buffered in the encoder until a block is full,
+    /// <see cref="Flush"/> writes it out. A destination of <see cref="GetMaxCompressedLength"/> for the source length takes the whole source in one call.
+    /// After <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset()"/> before reusing the encoder, or dispose it.
     /// </remarks>
-    public int Compress(ReadOnlySpan<byte> source, Span<byte> destination)
+    public OperationStatus Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
     {
         var context = GetContext();
+        bytesConsumed = 0;
+        bytesWritten = 0;
 
-        var totalWritten = 0;
-
-        // Write header block
-        if (!isWrittenHeader)
+        if (closing)
         {
-            fixed (LZ4F_preferences_t* preference = &preferences)
-            fixed (byte* dest = destination)
-            {
-                var writtenOrErrorCode = dictionary.IsEmpty
-                    ? LZ4F_compressBegin(context, dest, (nuint)destination.Length, preference)
-                    : LZ4F_compressBegin_usingCDict(context, dest, (nuint)destination.Length, dictionary.Compression, preference);
-                LZ4.ThrowIfError(writtenOrErrorCode);
-                isWrittenHeader = true;
+            // only the rest of the frame can follow an unfinished Close
+            return source.IsEmpty && isFinalBlock ? CloseCore(context, destination, ref bytesWritten) : Fault();
+        }
 
-                destination = destination.Slice((int)writtenOrErrorCode);
-                totalWritten += (int)writtenOrErrorCode;
+        var status = Prepare(context, destination, ref bytesWritten);
+        if (status != OperationStatus.Done) return status;
+
+        while (bytesConsumed < source.Length)
+        {
+            var room = destination.Length - bytesWritten;
+            var remaining = source.Length - bytesConsumed;
+            var fits = GetMaxSourceLength(room);
+            if (fits > 0)
+            {
+                var count = Math.Min(remaining, fits);
+                if (!Update(context, source.Slice(bytesConsumed, count), destination.Slice(bytesWritten), out var written)) return Fault();
+                bytesConsumed += count;
+                bytesWritten += written;
+            }
+            else if (bytesWritten > 0 || room == 0)
+            {
+                return OperationStatus.DestinationTooSmall;
+            }
+            else
+            {
+                // The destination has no room for a whole block, so a block of input is compressed aside and copied out as room allows.
+                // This happens only while nothing was written, so every call makes progress.
+                var count = Math.Min(remaining, BlockSize);
+                if (!Update(context, source.Slice(bytesConsumed, count), RentStaging(), out var written)) return Fault();
+                bytesConsumed += count;
+                stagingLength = written;
+                bytesWritten += DrainStaging(destination.Slice(bytesWritten));
+                if (stagingLength > 0) return OperationStatus.DestinationTooSmall;
             }
         }
 
-        // No input data, LZ4F_compressUpdate returns 0 so early return in C#.
-        if (source.Length == 0)
-        {
-            GC.KeepAlive(this);
-            return totalWritten;
-        }
-
-        // Write body
-        fixed (byte* src = source)
-        fixed (byte* dest = destination)
-        {
-            // consume sources.
-            var writtenOrErrorCode = LZ4F_compressUpdate(context, dest, (nuint)destination.Length, src, (nuint)source.Length, null);
-            GC.KeepAlive(this);
-            LZ4.ThrowIfError(writtenOrErrorCode);
-
-            totalWritten += (int)writtenOrErrorCode; // written size can be zero, meaning input data was just buffered.
-        }
-
-        return totalWritten;
+        return isFinalBlock ? CloseCore(context, destination, ref bytesWritten) : OperationStatus.Done;
     }
 
     /// <summary>
-    /// Flushes any buffered data to the destination buffer.
+    /// Writes out everything the encoder holds so far, without ending the frame.
     /// </summary>
     /// <param name="destination">The buffer to write flushed data to.</param>
-    /// <returns>The number of bytes written to the destination buffer. Returns 0 if no data was buffered.</returns>
-    /// <exception cref="LZ4Exception">
-    /// Thrown when flush operation fails, for example when the destination is too small for the buffered data.
-    /// If part of the output was already written, the frame is abandoned and the next <see cref="Compress"/> starts a new frame.
-    /// </exception>
+    /// <param name="bytesWritten">When this method returns, contains the number of bytes written to destination.</param>
+    /// <returns>
+    /// <see cref="OperationStatus.Done"/> when everything is written;
+    /// <see cref="OperationStatus.DestinationTooSmall"/> when more is left, call again with more room;
+    /// <see cref="OperationStatus.InvalidData"/> on failure. Then call <see cref="Reset()"/> before reusing the encoder, or dispose it.
+    /// </returns>
+    /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
     /// <remarks>
-    /// Forces compression of any data buffered internally and writes it to the destination.
-    /// This is useful when you need to ensure all input data has been processed and output,
-    /// for example when streaming over a network.
-    /// It is guaranteed to be successful when destination.Length &gt;= GetMaxFlushBufferLength(includingFooter: false).
+    /// This is useful when you need to ensure all input data has been processed and output, for example when streaming over a network.
+    /// Nothing is written before the first Compress of a frame. A destination of <see cref="GetMaxFlushBufferLength"/> finishes in one call.
     /// </remarks>
-    public int Flush(Span<byte> destination)
+    public OperationStatus Flush(Span<byte> destination, out int bytesWritten)
     {
         var context = GetContext();
+        bytesWritten = 0;
 
-        // Nothing is buffered before the header is written, and lz4 rejects a flush outside a frame.
-        if (!isWrittenHeader) return 0;
+        if (state == FrameState.Faulted) return OperationStatus.InvalidData;
+        if (closing) return Fault(); // the frame is being closed, only Close can follow
 
-        fixed (byte* dest = destination)
-        {
-            // LZ4F_compressOptions_t(stableSrc) is currently not used in LZ4 source so always pass null.
-            var writtenOrErrorCode = LZ4F_flush(context, dest, (nuint)destination.Length, cOptPtr: null);
+        bytesWritten += DrainStaging(destination);
+        if (stagingLength > 0) return OperationStatus.DestinationTooSmall;
 
-            // A destination that is too small is filled and the rest stays in the context.
-            // Flushing into no room fails only while output remains.
-            var remainsOrZero = !LZ4.IsError(writtenOrErrorCode) && writtenOrErrorCode != 0 && writtenOrErrorCode == (nuint)destination.Length
-                ? LZ4F_flush(context, null, 0, cOptPtr: null)
-                : 0;
-            GC.KeepAlive(this);
-            LZ4.ThrowIfError(writtenOrErrorCode);
+        // nothing is buffered before a frame begins
+        if (state == FrameState.Idle) return OperationStatus.Done;
 
-            if (LZ4.IsError(remainsOrZero))
-            {
-                // the caller never gets what was written, so the frame cannot go on
-                isWrittenHeader = false;
-                LZ4.ThrowIfError(remainsOrZero);
-            }
-
-            return (int)writtenOrErrorCode;
-        }
+        return FlushCore(context, destination, ref bytesWritten);
     }
 
     /// <summary>
-    /// Finalizes the current LZ4 frame by writing the ending marker and optional content checksum.
+    /// Ends the current frame and writes out everything the encoder holds. The encoder can then compress another frame.
     /// </summary>
-    /// <param name="destination">The buffer to write the frame ending to. It is guaranteed to be successful when destination.Length &gt;= GetMaxFlushBufferLength(), which is the same as GetMaxCompressedLength(0).</param>
-    /// <returns>The number of bytes written to the destination buffer (at least 4 bytes for the end marker).</returns>
-    /// <exception cref="LZ4Exception">
-    /// Thrown when finalization fails, for example when the destination is too small.
-    /// If part of the frame ending was already written, the frame is abandoned and the next <see cref="Compress"/> starts a new frame.
-    /// </exception>
+    /// <param name="destination">The buffer to write the rest of the frame to.</param>
+    /// <param name="bytesWritten">When this method returns, contains the number of bytes written to destination.</param>
+    /// <returns>
+    /// <see cref="OperationStatus.Done"/> when the frame is completely written;
+    /// <see cref="OperationStatus.DestinationTooSmall"/> when more is left, call again with more room;
+    /// <see cref="OperationStatus.InvalidData"/> on failure, for example the frame length differs from ContentSize. Then call <see cref="Reset()"/> before reusing the encoder, or dispose it.
+    /// </returns>
+    /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
     /// <remarks>
-    /// After calling this method, the encoder can be reused to compress another frame
-    /// by calling Compress again (which will write a new header).
+    /// Closing an encoder that has not compressed anything writes an empty frame.
+    /// A destination of <see cref="GetMaxFlushBufferLength"/> finishes in one call.
     /// </remarks>
-    public int Close(Span<byte> destination)
+    public OperationStatus Close(Span<byte> destination, out int bytesWritten)
     {
         var context = GetContext();
-
-        var totalWritten = 0;
-        if (!isWrittenHeader)
-        {
-            // This will write header, empty body.
-            var written = Compress([], destination);
-            destination = destination.Slice(written);
-            totalWritten += written;
-        }
-
-        fixed (byte* dest = destination)
-        {
-            // LZ4F_compressOptions_t(stableSrc) is currently not used in LZ4 source so always pass null.
-            var writtenOrErrorCode = LZ4F_compressEnd(context, dest, (nuint)destination.Length, cOptPtr: null);
-
-            // A destination that is too small is filled and the rest of the frame stays in the context.
-            // When it is full, one more byte tells them apart, a complete frame writes nothing more.
-            nuint remainsOrZero = 0;
-            if (!LZ4.IsError(writtenOrErrorCode) && writtenOrErrorCode == (nuint)destination.Length)
-            {
-                byte probe;
-                remainsOrZero = LZ4F_compressEnd(context, &probe, 1, cOptPtr: null);
-            }
-            GC.KeepAlive(this);
-            LZ4.ThrowIfError(writtenOrErrorCode);
-
-            // A completed LZ4F_compressEnd() makes `cctx` available again for another compression task.
-            // An unfinished frame is abandoned as well, the caller never gets the rest of it.
-            isWrittenHeader = false;
-            if (remainsOrZero != 0)
-            {
-                LZ4.ThrowIfError(remainsOrZero);
-                throw new LZ4Exception("ERROR_dstCapacity_tooSmall");
-            }
-
-            totalWritten += (int)writtenOrErrorCode;
-        }
-
-        return totalWritten;
+        bytesWritten = 0;
+        return CloseCore(context, destination, ref bytesWritten);
     }
 
     /// <summary>
     /// Abandons the current frame, if one is in progress, so the next <see cref="Compress"/> starts a new frame with the same options.
     /// Data buffered for the abandoned frame is discarded.
     /// </summary>
+    /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
     public void Reset()
     {
-        DiscardFrame();
+        ThrowIfDisposed();
+
+        // the next call begins a frame, which drops whatever lz4 still holds of this one
+        state = FrameState.Idle;
+        closing = false;
+        ReturnStaging();
     }
 
     /// <summary>
@@ -347,26 +343,25 @@ public sealed unsafe class LZ4Encoder : IDisposable
         dictionary = next;
         try
         {
-            DiscardFrame(); // begins a frame with the new preferences and dictionary, which also drops buffered input
+            ValidateFrame(); // also stops the context from referencing the previous dictionary
         }
         catch
         {
             preferences = previousPreferences;
             dictionary = previousDictionary;
             next.Dispose();
-            isWrittenHeader = false; // the next Compress begins a new frame, whether or not the failed begin dropped the one in progress
+            Reset(); // the next call begins a new frame, whether or not the failed begin dropped the one in progress
             throw;
         }
 
-        // the context no longer references the previous dictionary
         previousDictionary.Dispose();
+        Reset();
     }
 
-    // LZ4F_compressBegin reinitializes the context, which drops any input still buffered for the frame in progress.
-    // The header it writes goes to a scratch buffer; the next Compress begins the frame again and writes the real one.
-    void DiscardFrame()
+    // Begins a frame with the current options and dictionary, so they are checked right away. The frame itself is not used,
+    // the next call begins another one.
+    void ValidateFrame()
     {
-        // LZ4F compressionContext has no reset context(LZ4F_resetDecompressionContext is for decompressionContext) so we need to call LZ4F_compressBegin() to reset context.
         var context = GetContext();
         Span<byte> scratch = stackalloc byte[LZ4.MaxFrameHeaderLength];
         fixed (LZ4F_preferences_t* preference = &preferences)
@@ -378,7 +373,219 @@ public sealed unsafe class LZ4Encoder : IDisposable
             GC.KeepAlive(this);
             LZ4.ThrowIfError(result);
         }
-        isWrittenHeader = false;
+    }
+
+    // Writes what has to come before new input: output an earlier call could not write out, the header of a new frame,
+    // and the rest of a flush that did not fit.
+    OperationStatus Prepare(LZ4F_cctx_s* context, Span<byte> destination, ref int written)
+    {
+        if (state == FrameState.Faulted) return OperationStatus.InvalidData;
+
+        written += DrainStaging(destination.Slice(written));
+        if (stagingLength > 0) return OperationStatus.DestinationTooSmall;
+
+        if (state == FrameState.Idle)
+        {
+            var status = Begin(context, destination, ref written);
+            if (status != OperationStatus.Done) return status;
+        }
+
+        return state == FrameState.Flushing ? FlushCore(context, destination, ref written) : OperationStatus.Done;
+    }
+
+    OperationStatus Begin(LZ4F_cctx_s* context, Span<byte> destination, ref int written)
+    {
+        var room = destination.Length - written;
+        if (room == 0) return OperationStatus.DestinationTooSmall;
+
+        // lz4 writes the header only into a destination that holds all of it
+        var direct = room >= GetActualFrameHeaderLength();
+        var target = direct ? destination.Slice(written) : RentStaging().AsSpan();
+
+        nuint result;
+        fixed (LZ4F_preferences_t* prefs = &preferences)
+        fixed (byte* dest = target)
+        {
+            result = dictionary.IsEmpty
+                ? LZ4F_compressBegin(context, dest, (nuint)target.Length, prefs)
+                : LZ4F_compressBegin_usingCDict(context, dest, (nuint)target.Length, dictionary.Compression, prefs);
+            GC.KeepAlive(this);
+        }
+
+        if (LZ4.IsError(result))
+        {
+            ReturnStaging();
+            return OperationStatus.InvalidData; // no frame began, so the encoder stays idle
+        }
+
+        state = FrameState.Open;
+        bufferedAtMost = 0;
+        if (direct)
+        {
+            written += (int)result;
+            return OperationStatus.Done;
+        }
+
+        stagingLength = (int)result;
+        written += DrainStaging(destination.Slice(written));
+        return OperationStatus.DestinationTooSmall; // the header filled the destination
+    }
+
+    bool Update(LZ4F_cctx_s* context, ReadOnlySpan<byte> source, Span<byte> destination, out int written)
+    {
+        fixed (byte* src = source)
+        fixed (byte* dest = destination)
+        {
+            // LZ4F_compressOptions_t(stableSrc) would ask lz4 to read the source again later, so null is passed.
+            var result = LZ4F_compressUpdate(context, dest, (nuint)destination.Length, src, (nuint)source.Length, null);
+            GC.KeepAlive(this);
+
+            var failed = LZ4.IsError(result);
+            written = failed ? 0 : (int)result;
+            if (preferences.autoFlush == 0)
+            {
+                bufferedAtMost = (int)Math.Min(BlockSize - 1L, (long)bufferedAtMost + source.Length);
+            }
+            return !failed;
+        }
+    }
+
+    // Called in Open or Flushing with nothing staged.
+    OperationStatus FlushCore(LZ4F_cctx_s* context, Span<byte> destination, ref int written)
+    {
+        var room = destination.Slice(written);
+
+        nuint result;
+        nuint remains = 0;
+        fixed (byte* dest = room)
+        {
+            result = room.Length == 0 ? 0 : LZ4F_flush(context, dest, (nuint)room.Length, null);
+
+            // A full destination may leave output in lz4. Flushing into no room fails only while output remains, without changing the frame.
+            if (!LZ4.IsError(result) && result == (nuint)room.Length)
+            {
+                remains = LZ4F_flush(context, null, 0, null);
+            }
+            GC.KeepAlive(this);
+        }
+
+        if (LZ4.IsError(result)) return Fault();
+        written += (int)result;
+
+        if (LZ4.IsError(remains))
+        {
+            state = FrameState.Flushing;
+            return OperationStatus.DestinationTooSmall;
+        }
+
+        state = FrameState.Open;
+        bufferedAtMost = 0;
+        return OperationStatus.Done;
+    }
+
+    OperationStatus CloseCore(LZ4F_cctx_s* context, Span<byte> destination, ref int written)
+    {
+        if (state == FrameState.Faulted) return OperationStatus.InvalidData;
+        closing = true;
+
+        if (state != FrameState.Ending)
+        {
+            // also begins an empty frame when nothing was compressed
+            var status = Prepare(context, destination, ref written);
+            if (status != OperationStatus.Done) return status;
+
+            // Everything buffered goes out first, so what LZ4F_compressEnd writes is the frame ending alone.
+            status = FlushCore(context, destination, ref written);
+            if (status != OperationStatus.Done) return status;
+
+            state = FrameState.Ending;
+            footerLeft = GetActualFrameFooterLength();
+        }
+
+        var room = destination.Slice(written);
+        if (room.Length == 0) return OperationStatus.DestinationTooSmall;
+
+        nuint result;
+        fixed (byte* dest = room)
+        {
+            result = LZ4F_compressEnd(context, dest, (nuint)room.Length, null);
+            GC.KeepAlive(this);
+        }
+
+        if (LZ4.IsError(result)) return Fault(); // for example the frame length differs from ContentSize
+        written += (int)result;
+        footerLeft -= (int)result;
+        if (footerLeft > 0) return OperationStatus.DestinationTooSmall;
+
+        state = FrameState.Idle;
+        closing = false;
+        return OperationStatus.Done;
+    }
+
+    // How much input is sure to fit the room, assuming every block is stored uncompressed.
+    int GetMaxSourceLength(int room)
+    {
+        long blockSize = BlockSize;
+        long unit = blockSize + BlockOverhead;
+        long blocks = room / unit;
+        long length;
+        if (preferences.autoFlush != 0)
+        {
+            // nothing is buffered with autoFlush, the rest of the input becomes one more, smaller block
+            length = blocks * blockSize + Math.Max(0, room - blocks * unit - BlockOverhead);
+        }
+        else
+        {
+            // input completes a block only together with what lz4 already holds, the rest stays buffered
+            length = (blocks + 1) * blockSize - 1 - bufferedAtMost;
+        }
+        return (int)Math.Min(length, int.MaxValue);
+    }
+
+    int BlockSize => preferences.frameInfo.blockSizeID switch
+    {
+        LZ4F_blockSizeID_t.LZ4F_max256KB => 256 * 1024,
+        LZ4F_blockSizeID_t.LZ4F_max1MB => 1024 * 1024,
+        LZ4F_blockSizeID_t.LZ4F_max4MB => 4 * 1024 * 1024,
+        _ => 64 * 1024, // default and max64KB, lz4 rejects anything else when the frame begins
+    };
+
+    // block header, and the block checksum when enabled
+    int BlockOverhead => preferences.frameInfo.blockChecksumFlag == LZ4F_blockChecksum_t.LZ4F_blockChecksumEnabled ? 8 : 4;
+
+    byte[] RentStaging()
+    {
+        stagingOffset = 0;
+        stagingLength = 0;
+        return staging ??= ArrayPool<byte>.Shared.Rent(Math.Max(BlockSize + BlockOverhead, LZ4.MaxFrameHeaderLength));
+    }
+
+    int DrainStaging(Span<byte> destination)
+    {
+        if (staging == null) return 0;
+
+        var count = Math.Min(stagingLength, destination.Length);
+        staging.AsSpan(stagingOffset, count).CopyTo(destination);
+        stagingOffset += count;
+        stagingLength -= count;
+        if (stagingLength == 0) ReturnStaging();
+        return count;
+    }
+
+    void ReturnStaging()
+    {
+        var array = staging;
+        staging = null;
+        stagingOffset = 0;
+        stagingLength = 0;
+        if (array != null) ArrayPool<byte>.Shared.Return(array);
+    }
+
+    OperationStatus Fault()
+    {
+        state = FrameState.Faulted;
+        ReturnStaging();
+        return OperationStatus.InvalidData;
     }
 
     ~LZ4Encoder()
@@ -413,6 +620,7 @@ public sealed unsafe class LZ4Encoder : IDisposable
             // freeing the context ends everything that reads the dictionary
             dictionary.Dispose();
             dictionary = default;
+            ReturnStaging();
         }
         GC.SuppressFinalize(this);
     }

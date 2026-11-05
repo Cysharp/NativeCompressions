@@ -145,14 +145,16 @@ public static partial class LZ4
                         var count = Math.Min(src.Length, blockSize);
                         var buffer = destination.GetSpan(encoder.GetMaxCompressedLength(count, includingHeader: true, includingFooter: false));
 
-                        var written = encoder.Compress(src.Span.Slice(0, count), buffer);
-                        consumed += count;
+                        // the buffer takes the whole count in one call, a smaller part is taken again on the next turn
+                        var status = encoder.Compress(src.Span.Slice(0, count), buffer, out var taken, out var written, isFinalBlock: false);
+                        if (status == OperationStatus.InvalidData) throw new LZ4Exception("LZ4 compression failed.");
+                        consumed += taken;
                         if (written > 0) // nothing is written while the encoder buffers a block
                         {
                             destination.Advance(written);
                             await destination.FlushAndCheckAsync(cancellationToken);
                         }
-                        src = src.Slice(count);
+                        src = src.Slice(taken);
                     }
                 }
             }
@@ -163,10 +165,18 @@ public static partial class LZ4
         }
 
         // what the encoder still buffers, the footer, and the header when nothing was written at all
-        var lastBuffer = destination.GetSpan(encoder.GetMaxCompressedLength(0));
-        var lastWritten = encoder.Close(lastBuffer);
-        destination.Advance(lastWritten);
-        await destination.FlushAndCheckAsync(cancellationToken);
+        var closing = OperationStatus.DestinationTooSmall;
+        while (closing == OperationStatus.DestinationTooSmall)
+        {
+            var lastBuffer = destination.GetSpan(encoder.GetMaxFlushBufferLength());
+            closing = encoder.Close(lastBuffer, out var lastWritten);
+            destination.Advance(lastWritten);
+            await destination.FlushAndCheckAsync(cancellationToken);
+        }
+        if (closing != OperationStatus.Done)
+        {
+            throw new LZ4Exception("The LZ4 frame could not be closed, for example the source length differs from ContentSize.");
+        }
     }
 
     static int GetMaxBlockSize(BlockSizeId id)

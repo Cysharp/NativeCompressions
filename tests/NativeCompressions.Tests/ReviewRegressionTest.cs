@@ -311,7 +311,7 @@ public class ReviewRegressionTest
         });
         var buffer = new byte[encoder.GetMaxCompressedLength(body.Length)];
         var ms = new MemoryStream();
-        ms.Write(buffer, 0, encoder.Compress(body, buffer)); // header plus flushed blocks
+        ms.Write(buffer, 0, encoder.CompressDone(body, buffer)); // header plus flushed blocks
         ms.Write(new byte[4]); // end mark without going through Close, which would refuse the size mismatch
         return ms.ToArray();
     }
@@ -356,13 +356,13 @@ public class ReviewRegressionTest
         using var encoder = new LZ4Encoder();
         var buffer = new byte[encoder.GetMaxCompressedLength(1024)];
 
-        encoder.Compress(Utf8("abandoned-data"), buffer);
+        encoder.CompressDone(Utf8("abandoned-data"), buffer);
         encoder.Reset();
-        Assert.Equal(0, encoder.Flush(buffer));
+        Assert.Equal(0, encoder.FlushDone(buffer));
 
         var ms = new MemoryStream();
-        ms.Write(buffer, 0, encoder.Compress(Utf8("kept"), buffer));
-        ms.Write(buffer, 0, encoder.Close(buffer));
+        ms.Write(buffer, 0, encoder.CompressDone(Utf8("kept"), buffer));
+        ms.Write(buffer, 0, encoder.CloseDone(buffer));
         Assert.Equal(Utf8("kept"), LZ4.Decompress(ms.ToArray()));
     }
 

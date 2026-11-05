@@ -174,9 +174,13 @@ public sealed class LZ4Stream : Stream
         // Sized for Close as well, which may follow without any Write.
         buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxCompressedLength(0));
 
-        // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
-        var written = encoder!.Flush(buffer);
-        stream.Write(buffer, 0, written);
+        var status = OperationStatus.DestinationTooSmall;
+        while (status == OperationStatus.DestinationTooSmall)
+        {
+            status = encoder!.Flush(buffer, out var written);
+            stream.Write(buffer, 0, written);
+        }
+        ThrowIfFailed(status);
 
         stream.Flush();
     }
@@ -197,9 +201,13 @@ public sealed class LZ4Stream : Stream
         // Sized for Close as well, which may follow without any Write.
         buffer ??= ArrayPool<byte>.Shared.Rent(encoder!.GetMaxCompressedLength(0));
 
-        // Write acquire max GetMaxCompressedLength per source so buffer size is safe to call Flush
-        var written = encoder!.Flush(buffer);
-        await stream.WriteAsync(buffer.AsMemory(0, written), cancellationToken); // use ValueTask overload.
+        var status = OperationStatus.DestinationTooSmall;
+        while (status == OperationStatus.DestinationTooSmall)
+        {
+            status = encoder!.Flush(buffer, out var written);
+            await stream.WriteAsync(buffer.AsMemory(0, written), cancellationToken); // use ValueTask overload.
+        }
+        ThrowIfFailed(status);
 
         await stream.FlushAsync(cancellationToken);
     }
@@ -226,12 +234,15 @@ public sealed class LZ4Stream : Stream
             dest = buffer = ArrayPool<byte>.Shared.Rent(maxDest);
         }
 
-        var written = encoder!.Compress(source, dest);
-
-        if (written > 0)
+        // A destination of GetMaxCompressedLength takes everything in one call, the loop is for an encoder that still holds output.
+        var status = OperationStatus.DestinationTooSmall;
+        while (status == OperationStatus.DestinationTooSmall)
         {
-            stream.Write(dest, 0, written);
+            status = encoder!.Compress(source, dest, out var consumed, out var written, isFinalBlock: false);
+            source = source.Slice(consumed);
+            if (written > 0) stream.Write(dest, 0, written);
         }
+        ThrowIfFailed(status);
     }
 
     async ValueTask WriteCoreAsync(ReadOnlyMemory<byte> source, CancellationToken cancellationToken)
@@ -256,12 +267,15 @@ public sealed class LZ4Stream : Stream
             dest = buffer = ArrayPool<byte>.Shared.Rent(maxDest);
         }
 
-        var written = encoder!.Compress(source.Span, dest);
-
-        if (written > 0)
+        // A destination of GetMaxCompressedLength takes everything in one call, the loop is for an encoder that still holds output.
+        var status = OperationStatus.DestinationTooSmall;
+        while (status == OperationStatus.DestinationTooSmall)
         {
-            await stream.WriteAsync(dest.AsMemory(0, written), cancellationToken);
+            status = encoder!.Compress(source.Span, dest, out var consumed, out var written, isFinalBlock: false);
+            source = source.Slice(consumed);
+            if (written > 0) await stream.WriteAsync(dest.AsMemory(0, written), cancellationToken);
         }
+        ThrowIfFailed(status);
     }
 
     #endregion
@@ -596,7 +610,16 @@ public sealed class LZ4Stream : Stream
 
     #endregion
 
-    // Close writes the header of an empty frame, buffered data and the footer, so the buffer must have room for all of it.
+    // The encoder reports InvalidData when lz4 fails, the stream throws so a broken frame is never taken for a written one.
+    static void ThrowIfFailed(OperationStatus status)
+    {
+        if (status != OperationStatus.Done)
+        {
+            throw new LZ4Exception($"LZ4 compression failed: {status}");
+        }
+    }
+
+    // Close writes the header of an empty frame, buffered data and the footer, so one call finishes with this size.
     void EnsureCloseBuffer()
     {
         var closeLength = encoder!.GetMaxCompressedLength(0);
@@ -623,8 +646,13 @@ public sealed class LZ4Stream : Stream
                 try
                 {
                     EnsureCloseBuffer();
-                    var written = encoder!.Close(buffer!);
-                    stream.Write(buffer!, 0, written);
+                    var status = OperationStatus.DestinationTooSmall;
+                    while (status == OperationStatus.DestinationTooSmall)
+                    {
+                        status = encoder!.Close(buffer!, out var written);
+                        stream.Write(buffer!, 0, written);
+                    }
+                    ThrowIfFailed(status); // for example a ContentSize the written data did not match, dropping the frame silently would lose data
                 }
                 catch (Exception ex)
                 {
@@ -677,8 +705,13 @@ public sealed class LZ4Stream : Stream
                 try
                 {
                     EnsureCloseBuffer();
-                    var written = encoder!.Close(buffer!);
-                    await stream.WriteAsync(buffer.AsMemory(0, written));
+                    var status = OperationStatus.DestinationTooSmall;
+                    while (status == OperationStatus.DestinationTooSmall)
+                    {
+                        status = encoder!.Close(buffer!, out var written);
+                        await stream.WriteAsync(buffer.AsMemory(0, written));
+                    }
+                    ThrowIfFailed(status);
                 }
                 catch (Exception ex)
                 {

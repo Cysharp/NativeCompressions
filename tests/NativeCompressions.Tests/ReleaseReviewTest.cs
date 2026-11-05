@@ -175,7 +175,7 @@ public class ReleaseReviewTest
         var buffer = new byte[encoder.GetMaxCompressedLength(data.Length)];
 
         // a frame in progress is abandoned
-        encoder.Compress(data.AsSpan(0, 100), buffer);
+        encoder.CompressDone(data.AsSpan(0, 100), buffer);
 
         var dict = LZ4Dictionary.Create(Utf8("lz4 reset dictionary"), 77);
         encoder.Reset(LZ4CompressionOptions.Default with
@@ -185,8 +185,8 @@ public class ReleaseReviewTest
             ContentSize = (ulong)data.Length,
         });
 
-        var written = encoder.Compress(data, buffer);
-        written += encoder.Close(buffer.AsSpan(written));
+        var written = encoder.CompressDone(data, buffer);
+        written += encoder.CloseDone(buffer.AsSpan(written));
         var compressed = buffer.AsSpan(0, written).ToArray();
 
         Assert.True(LZ4.TryGetFrameInfo(compressed, out var info));
@@ -199,8 +199,8 @@ public class ReleaseReviewTest
         encoder.Reset(LZ4CompressionOptions.Default);
         dict.Dispose();
 
-        written = encoder.Compress(data, buffer);
-        written += encoder.Close(buffer.AsSpan(written));
+        written = encoder.CompressDone(data, buffer);
+        written += encoder.CloseDone(buffer.AsSpan(written));
         compressed = buffer.AsSpan(0, written).ToArray();
         Assert.True(LZ4.TryGetFrameInfo(compressed, out info));
         Assert.Equal(0u, info.DictionaryId);
@@ -284,7 +284,7 @@ public class ReleaseReviewTest
 
         var buffer = new byte[encoder.GetMaxCompressedLength(data.Length)];
 
-        var headerLength = encoder.Compress([], buffer); // only the header
+        var headerLength = encoder.CompressDone([], buffer); // only the header
         Assert.Equal(encoder.GetActualFrameHeaderLength(), headerLength);
         Assert.Equal(7 + (contentSize ? 8 : 0) + (dictionary ? 4 : 0), headerLength);
         using (var decoder = new LZ4Decoder())
@@ -293,10 +293,10 @@ public class ReleaseReviewTest
         }
 
         var written = headerLength;
-        written += encoder.Compress(data, buffer.AsSpan(written));
-        written += encoder.Flush(buffer.AsSpan(written)); // only the footer is left
+        written += encoder.CompressDone(data, buffer.AsSpan(written));
+        written += encoder.FlushDone(buffer.AsSpan(written)); // only the footer is left
 
-        var footerLength = encoder.Close(buffer.AsSpan(written));
+        var footerLength = encoder.CloseDone(buffer.AsSpan(written));
         Assert.Equal(encoder.GetActualFrameFooterLength(), footerLength);
         Assert.Equal(4 + (checksum ? 4 : 0), footerLength);
         written += footerLength;

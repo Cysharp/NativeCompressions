@@ -420,7 +420,7 @@ public class ReviewRegressionTest5 : IDisposable
 
         var input = new Pipe();
         var output = new Pipe();
-        var written = encoder.Compress(text, buffer); // header and one block, the frame stays open
+        var written = encoder.CompressDone(text, buffer); // header and one block, the frame stays open
         await input.Writer.WriteAsync(buffer.AsMemory(0, written));
 
         var decompressing = LZ4.DecompressAsync(input.Reader, output.Writer).AsTask();
@@ -436,7 +436,7 @@ public class ReviewRegressionTest5 : IDisposable
         }
         Assert.Equal(text, received.ToArray());
 
-        written = encoder.Close(buffer);
+        written = encoder.CloseDone(buffer);
         await input.Writer.WriteAsync(buffer.AsMemory(0, written));
         await input.Writer.CompleteAsync();
         await decompressing.WaitAsync(TimeSpan.FromSeconds(10));

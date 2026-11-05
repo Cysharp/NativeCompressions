@@ -11,6 +11,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `CHANGELOG.md`.
 
 ### Changed
+- `LZ4Encoder.Compress`, `Flush` and `Close` return an `OperationStatus` with `bytesConsumed` and `bytesWritten`, and `Compress` takes `isFinalBlock`, the same as `ZstandardEncoder` and `BrotliEncoder`. Any destination size works. A call that runs out of room returns `DestinationTooSmall`, and the next call continues. A failure, such as a frame length that differs from `ContentSize`, returns `InvalidData` instead of throwing `LZ4Exception`, and the encoder needs `Reset()` afterwards.
+- `LZ4Encoder.GetMaxCompressedLength` counts the frame header the options produce instead of the largest possible one.
+- `LZ4.Block.Decompress` reports a destination that is too small and a missing or wrong dictionary with their own messages.
+- The bundled LZ4 is v1.11.0.
 - `LZ4CompressionOptions.BlockSizeID`, `LZ4CompressionOptions.DictionaryID`, `LZ4FrameInfo.BlockSizeID`, `LZ4FrameInfo.DictionaryID` and `ZstandardCompressionOptions.DictIDFlag` are renamed to `BlockSizeId`, `DictionaryId` and `DictIdFlag`.
 - `LZ4CompressionOptions.FavorDecompressionSpeed` is a `bool`.
 - `Zstandard.VersionNumber` is an `int`, like `LZ4.VersionNumber`.

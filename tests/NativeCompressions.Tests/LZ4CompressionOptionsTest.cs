@@ -48,10 +48,10 @@ public class LZ4CompressionOptionsTest
         while (remaining.Length > 0)
         {
             var piece = remaining.Slice(0, Math.Min(chunk, remaining.Length));
-            ms.Write(buffer, 0, encoder.Compress(piece, buffer));
+            ms.Write(buffer, 0, encoder.CompressDone(piece, buffer));
             remaining = remaining.Slice(piece.Length);
         }
-        ms.Write(buffer, 0, encoder.Close(buffer));
+        ms.Write(buffer, 0, encoder.CloseDone(buffer));
         return ms.ToArray();
     }
 
@@ -130,8 +130,13 @@ public class LZ4CompressionOptionsTest
     {
         using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { ContentSize = (ulong)Data.Length + 1 });
         var buffer = new byte[encoder.GetMaxCompressedLength(Data.Length)];
-        var written = encoder.Compress(Data, buffer);
-        Assert.Throws<LZ4Exception>(() => encoder.Close(buffer.AsSpan(written)));
+        var written = encoder.CompressDone(Data, buffer);
+        Assert.Equal(System.Buffers.OperationStatus.InvalidData, encoder.Close(buffer.AsSpan(written), out _));
+
+        // the frame cannot go on until Reset
+        Assert.Equal(System.Buffers.OperationStatus.InvalidData, encoder.Close(buffer, out _));
+        encoder.Reset(LZ4CompressionOptions.Default);
+        Assert.Equal(Data, LZ4.Decompress(buffer.AsSpan(0, encoder.CompressDone(Data, buffer, isFinalBlock: true))));
     }
 
     [Fact]

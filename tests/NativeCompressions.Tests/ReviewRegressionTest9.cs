@@ -217,7 +217,7 @@ public class ReviewRegressionTest9
 
         // the caller fed the encoder before the stream existed, the block is still buffered inside
         var scratch = new byte[encoder.GetMaxCompressedLength(data.Length)];
-        var written = encoder.Compress(data, scratch);
+        var written = encoder.CompressDone(data, scratch);
         destination.Write(scratch, 0, written);
         var before = destination.Length;
 

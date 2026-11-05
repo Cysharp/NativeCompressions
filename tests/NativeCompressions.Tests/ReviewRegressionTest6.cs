@@ -93,13 +93,13 @@ public class ReviewRegressionTest6 : IDisposable
 
         var input = new Pipe(new PipeOptions(pauseWriterThreshold: 0));
         var output = new Pipe(new PipeOptions(pauseWriterThreshold: 0));
-        var written = encoder.Compress(data, buffer); // the frame stays open
+        var written = encoder.CompressDone(data, buffer); // the frame stays open
         await input.Writer.WriteAsync(buffer.AsMemory(0, written));
 
         var decompressing = LZ4.DecompressAsync(input.Reader, output.Writer).AsTask();
         Assert.Equal(data, await ReceiveAsync(output.Reader, size));
 
-        written = encoder.Close(buffer);
+        written = encoder.CloseDone(buffer);
         await input.Writer.WriteAsync(buffer.AsMemory(0, written));
         await input.Writer.CompleteAsync();
         await decompressing.WaitAsync(TimeSpan.FromSeconds(10));
