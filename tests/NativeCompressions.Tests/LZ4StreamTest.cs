@@ -413,6 +413,41 @@ public class LZ4StreamTest
         Assert.Equal(Data, LZ4.Decompress(ms.ToArray()));
     }
 
+    // A write larger than 1MB reaches the encoder in pieces, the buffer stays bounded and the frame is about as large as from one call.
+    [Theory]
+    [InlineData(BlockSizeId.Max64KB, false, false)]
+    [InlineData(BlockSizeId.Max4MB, false, true)]
+    [InlineData(BlockSizeId.Max64KB, true, false)]
+    [InlineData(BlockSizeId.Max256KB, true, true)]
+    public async Task LargeWrite_GoesToTheEncoderInPieces(BlockSizeId blockSize, bool autoFlush, bool async)
+    {
+        var options = LZ4CompressionOptions.Default with
+        {
+            BlockSizeId = blockSize,
+            AutoFlush = autoFlush,
+            ContentChecksumFlag = ContentChecksum.ContentChecksumEnabled,
+        };
+        var ms = new MemoryStream();
+        if (async)
+        {
+            await using var zs = new LZ4Stream(ms, options, leaveOpen: true);
+            await zs.WriteAsync(Data, TestContext.Current.CancellationToken);
+        }
+        else
+        {
+            using var zs = new LZ4Stream(ms, options, leaveOpen: true);
+            zs.Write(Data);
+        }
+
+        var compressed = ms.ToArray();
+        Assert.Equal(Data, LZ4.Decompress(compressed));
+
+        using var encoder = new LZ4Encoder(options);
+        var whole = new byte[encoder.GetMaxCompressedLength(Data.Length)];
+        var wholeLength = encoder.CompressDone(Data, whole, isFinalBlock: true);
+        Assert.InRange(compressed.Length, wholeLength - wholeLength / 1000, wholeLength + wholeLength / 1000);
+    }
+
     [Fact]
     public async Task WriteAsync_CancelledToken()
     {

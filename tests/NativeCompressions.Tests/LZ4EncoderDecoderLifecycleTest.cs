@@ -249,6 +249,32 @@ public class LZ4EncoderDecoderLifecycleTest
         Assert.Equal(Utf8("next"), LZ4.Decompress(EncodeInPieces(encoder, Utf8("next"), inputChunk: 2, pieceSize)));
     }
 
+    // with autoFlush every call ends a block, so a source that does not fit is taken in whole blocks, not with a small block at the end
+    [Fact]
+    public void Encoder_AutoFlush_TakesPartOfTheSourceInWholeBlocks()
+    {
+        const int blockSize = 64 * 1024;
+        using var encoder = new LZ4Encoder(LZ4CompressionOptions.Default with { AutoFlush = true });
+        var buffer = new byte[encoder.GetMaxCompressedLength(blockSize * 5 / 2)]; // room for two and a half blocks
+        var output = new MemoryStream();
+        ReadOnlySpan<byte> source = Data;
+        var calls = 0;
+        OperationStatus status;
+        do
+        {
+            status = encoder.Compress(source, buffer, out var consumed, out var written, isFinalBlock: false);
+            Assert.NotEqual(OperationStatus.InvalidData, status);
+            if (status == OperationStatus.DestinationTooSmall) Assert.Equal(0, consumed % blockSize);
+            output.Write(buffer, 0, written);
+            source = source.Slice(consumed);
+            calls++;
+        } while (status == OperationStatus.DestinationTooSmall);
+        output.Write(buffer, 0, encoder.CloseDone(buffer));
+
+        Assert.True(calls > 1);
+        Assert.Equal(Data, LZ4.Decompress(output.ToArray()));
+    }
+
     // Flush and Close keep what does not fit and continue on the next call, the output is the same as with room for all of it.
     [Theory]
     [InlineData(1)]

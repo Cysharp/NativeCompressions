@@ -145,6 +145,10 @@ public sealed unsafe class LZ4Encoder : IDisposable
     /// </remarks>
     public int GetMaxFlushBufferLength(bool includingFooter = true) => GetMaxCompressedLength(0, includingHeader: includingFooter, includingFooter: includingFooter);
 
+    // Room for a whole block with the frame header and ending. Compress then makes full blocks,
+    // and Flush and Close finish in one call.
+    internal int GetBlockBufferLength() => Math.Max(GetMaxFlushBufferLength(), BlockSize + BlockOverhead + GetActualFrameHeaderLength() + GetActualFrameFooterLength());
+
     /// <summary>
     /// Gets the actual frame header size based on current options.
     /// </summary>
@@ -230,6 +234,14 @@ public sealed unsafe class LZ4Encoder : IDisposable
             if (fits > 0)
             {
                 var count = Math.Min(remaining, fits);
+                if (count < remaining && preferences.autoFlush != 0)
+                {
+                    // With autoFlush every call ends a block, so a part of the source is cut at whole blocks, the same blocks one call makes.
+                    // Less than a block goes only into a destination that has taken nothing else, so a small one still makes progress.
+                    var whole = count - count % BlockSize;
+                    if (whole > 0) count = whole;
+                    else if (bytesWritten > 0) return OperationStatus.DestinationTooSmall;
+                }
                 if (!Update(context, source.Slice(bytesConsumed, count), destination.Slice(bytesWritten), out var written)) return Fault();
                 bytesConsumed += count;
                 bytesWritten += written;
