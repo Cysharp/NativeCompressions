@@ -189,13 +189,13 @@ public class LZ4EncoderDecoderLifecycleTest
         Assert.Equal(Utf8("next"), LZ4.Decompress(EncodeStreaming(encoder, Utf8("next"), 4096)));
     }
 
-    // Without autoFlush the blocks do not depend on how the input and the output are cut,
-    // so a destination smaller than a block, or than the header, gives the same frame.
+    // A destination smaller than a block gets blocks a byte short of full, so the frame is about as large.
+    // With room for a block, the blocks do not depend on how the input and the output are cut.
     [Theory]
-    [InlineData(1, false)]
-    [InlineData(13, false)]
+    [InlineData(19, false)]
+    [InlineData(64, false)]
     [InlineData(1000, false)]
-    [InlineData(1, true)]
+    [InlineData(19, true)]
     [InlineData(70_000, true)]
     public void Encoder_Compress_DestinationSmallerThanABlock_MakesProgress(int pieceSize, bool blockChecksum)
     {
@@ -207,15 +207,35 @@ public class LZ4EncoderDecoderLifecycleTest
         };
         using var encoder = new LZ4Encoder(options);
         var pieced = EncodeInPieces(encoder, Data, inputChunk: 50_000, pieceSize);
+        Assert.Equal(Data, LZ4.Decompress(pieced));
 
         using var whole = new LZ4Encoder(options);
-        Assert.Equal(EncodeStreaming(whole, Data, 50_000), pieced);
-        Assert.Equal(Data, LZ4.Decompress(pieced));
+        var expected = EncodeStreaming(whole, Data, 50_000);
+        if (pieceSize >= 64 * 1024 + 8)
+        {
+            Assert.Equal(expected, pieced);
+        }
+        else
+        {
+            Assert.InRange(pieced.Length, expected.Length - expected.Length / 100, expected.Length + expected.Length / 100);
+        }
+    }
+
+    [Fact]
+    public void Encoder_Compress_DestinationSmallerThanTheHeader_TakesNothing()
+    {
+        using var encoder = new LZ4Encoder();
+        Assert.Equal(OperationStatus.DestinationTooSmall, encoder.Compress(Utf8("data"), new byte[6], out var consumed, out var written, isFinalBlock: false));
+        Assert.Equal(0, consumed);
+        Assert.Equal(0, written);
+
+        // with room for the header the frame begins
+        Assert.Equal(Utf8("data"), LZ4.Decompress(EncodeInPieces(encoder, Utf8("data"), inputChunk: 4096, LZ4.MaxFrameHeaderLength)));
     }
 
     [Theory]
-    [InlineData(1, false)]
-    [InlineData(9, false)]
+    [InlineData(19, false)]
+    [InlineData(20, false)]
     [InlineData(1000, true)]
     public void Encoder_Compress_AutoFlush_SmallDestination_RoundTrips(int pieceSize, bool independent)
     {

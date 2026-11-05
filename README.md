@@ -136,7 +136,7 @@ do
 } while (closing == OperationStatus.DestinationTooSmall);
 ```
 
-`LZ4Encoder` has the same API as `BrotliEncoder` and `ZstandardEncoder`. `Compress`, `Flush` and `Close` return an `OperationStatus` with `bytesConsumed` and `bytesWritten`, and `DestinationTooSmall` means calling again with more room. Any destination size works, and `GetMaxCompressedLength` and `GetMaxFlushBufferLength` give sizes that finish in one call. `isFinalBlock: true` ends the frame after the source, the same as calling `Close`. After `OperationStatus.InvalidData` (for example a frame length that differs from `ContentSize`), call `Reset()` before reusing the encoder, or dispose it.
+`LZ4Encoder` has the same API as `BrotliEncoder` and `ZstandardEncoder`. `Compress`, `Flush` and `Close` return an `OperationStatus` with `bytesConsumed` and `bytesWritten`, and `DestinationTooSmall` means calling again with more room. Every call makes progress with a destination of at least `LZ4.MaxFrameHeaderLength` (19) bytes, and `GetMaxCompressedLength` and `GetMaxFlushBufferLength` give sizes that finish in one call. `isFinalBlock: true` ends the frame after the source, the same as calling `Close`. After `OperationStatus.InvalidData` (for example a frame length that differs from `ContentSize`), call `Reset()` before reusing the encoder, or dispose it.
 
 For decompression, use `LZ4Decoder`.
 

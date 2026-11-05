@@ -13,6 +13,7 @@ namespace NativeCompressions;
 // LZ4F_compressUpdate always consumes its whole input and fails when its output does not fit, which also breaks the frame.
 // So Compress passes only as much input as is sure to fit, assuming every block is stored uncompressed.
 // LZ4F_flush and LZ4F_compressEnd keep what does not fit and continue on the next call, so Flush and Close pass any room.
+// A destination smaller than a block gets the buffered block through LZ4F_flush, which keeps the rest the same way.
 
 /// <summary>
 /// Provides streaming compression functionality for LZ4 Frame format.
@@ -23,6 +24,7 @@ namespace NativeCompressions;
 /// Call <see cref="Dispose"/> to release the native context. A finalizer releases it if Dispose is never called.
 /// Instances are not thread-safe.
 /// After Compress, Flush or Close returns <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset()"/> before reusing the encoder, or dispose it.
+/// Every call makes progress when the destination has at least <see cref="LZ4.MaxFrameHeaderLength"/> bytes.
 /// </remarks>
 public sealed unsafe class LZ4Encoder : IDisposable
 {
@@ -36,12 +38,6 @@ public sealed unsafe class LZ4Encoder : IDisposable
     LZ4Dictionary.Lease dictionary;
 
     FrameState state;
-
-    // Output made for a destination that had no room for a whole block, written out before anything else.
-    // Rented only while it holds something.
-    byte[]? staging;
-    int stagingOffset;
-    int stagingLength;
 
     // At least as much input as lz4 holds back for an unfinished block. lz4 buffers less than a block,
     // and nothing after a frame begins or a flush completes.
@@ -208,6 +204,7 @@ public sealed unsafe class LZ4Encoder : IDisposable
     /// This method follows the same pattern as System.IO.Compression.BrotliEncoder.
     /// The first call of a frame writes the frame header. Input can stay buffered in the encoder until a block is full,
     /// <see cref="Flush"/> writes it out. A destination of <see cref="GetMaxCompressedLength"/> for the source length takes the whole source in one call.
+    /// A destination smaller than <see cref="LZ4.MaxFrameHeaderLength"/> may get nothing, then call again with more room.
     /// After <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset()"/> before reusing the encoder, or dispose it.
     /// </remarks>
     public OperationStatus Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
@@ -237,20 +234,17 @@ public sealed unsafe class LZ4Encoder : IDisposable
                 bytesConsumed += count;
                 bytesWritten += written;
             }
-            else if (bytesWritten > 0 || room == 0)
+            else if (bytesWritten > 0 || room == 0 || preferences.autoFlush != 0)
             {
+                // the rest needs a fresh destination, with autoFlush one that holds more than a block header
                 return OperationStatus.DestinationTooSmall;
             }
             else
             {
-                // The destination has no room for a whole block, so a block of input is compressed aside and copied out as room allows.
-                // This happens only while nothing was written, so every call makes progress.
-                var count = Math.Min(remaining, BlockSize);
-                if (!Update(context, source.Slice(bytesConsumed, count), RentStaging(), out var written)) return Fault();
-                bytesConsumed += count;
-                stagingLength = written;
-                bytesWritten += DrainStaging(destination.Slice(bytesWritten));
-                if (stagingLength > 0) return OperationStatus.DestinationTooSmall;
+                // A whole destination smaller than a block, while lz4 may hold nearly a block. The flush writes that block,
+                // and lz4 keeps what does not fit for the next call. A larger destination never comes here, so its blocks stay full.
+                status = FlushCore(context, destination, ref bytesWritten);
+                if (status != OperationStatus.Done) return status;
             }
         }
 
@@ -279,9 +273,6 @@ public sealed unsafe class LZ4Encoder : IDisposable
 
         if (state == FrameState.Faulted) return OperationStatus.InvalidData;
         if (closing) return Fault(); // the frame is being closed, only Close can follow
-
-        bytesWritten += DrainStaging(destination);
-        if (stagingLength > 0) return OperationStatus.DestinationTooSmall;
 
         // nothing is buffered before a frame begins
         if (state == FrameState.Idle) return OperationStatus.Done;
@@ -323,7 +314,6 @@ public sealed unsafe class LZ4Encoder : IDisposable
         // the next call begins a frame, which drops whatever lz4 still holds of this one
         state = FrameState.Idle;
         closing = false;
-        ReturnStaging();
     }
 
     /// <summary>
@@ -375,14 +365,10 @@ public sealed unsafe class LZ4Encoder : IDisposable
         }
     }
 
-    // Writes what has to come before new input: output an earlier call could not write out, the header of a new frame,
-    // and the rest of a flush that did not fit.
+    // Writes what has to come before new input, the header of a new frame or the rest of a flush that did not fit.
     OperationStatus Prepare(LZ4F_cctx_s* context, Span<byte> destination, ref int written)
     {
         if (state == FrameState.Faulted) return OperationStatus.InvalidData;
-
-        written += DrainStaging(destination.Slice(written));
-        if (stagingLength > 0) return OperationStatus.DestinationTooSmall;
 
         if (state == FrameState.Idle)
         {
@@ -395,12 +381,9 @@ public sealed unsafe class LZ4Encoder : IDisposable
 
     OperationStatus Begin(LZ4F_cctx_s* context, Span<byte> destination, ref int written)
     {
-        var room = destination.Length - written;
-        if (room == 0) return OperationStatus.DestinationTooSmall;
-
         // lz4 writes the header only into a destination that holds all of it
-        var direct = room >= GetActualFrameHeaderLength();
-        var target = direct ? destination.Slice(written) : RentStaging().AsSpan();
+        var target = destination.Slice(written);
+        if (target.Length < GetActualFrameHeaderLength()) return OperationStatus.DestinationTooSmall;
 
         nuint result;
         fixed (LZ4F_preferences_t* prefs = &preferences)
@@ -412,23 +395,12 @@ public sealed unsafe class LZ4Encoder : IDisposable
             GC.KeepAlive(this);
         }
 
-        if (LZ4.IsError(result))
-        {
-            ReturnStaging();
-            return OperationStatus.InvalidData; // no frame began, so the encoder stays idle
-        }
+        if (LZ4.IsError(result)) return OperationStatus.InvalidData; // no frame began, so the encoder stays idle
 
         state = FrameState.Open;
         bufferedAtMost = 0;
-        if (direct)
-        {
-            written += (int)result;
-            return OperationStatus.Done;
-        }
-
-        stagingLength = (int)result;
-        written += DrainStaging(destination.Slice(written));
-        return OperationStatus.DestinationTooSmall; // the header filled the destination
+        written += (int)result;
+        return OperationStatus.Done;
     }
 
     bool Update(LZ4F_cctx_s* context, ReadOnlySpan<byte> source, Span<byte> destination, out int written)
@@ -450,7 +422,7 @@ public sealed unsafe class LZ4Encoder : IDisposable
         }
     }
 
-    // Called in Open or Flushing with nothing staged.
+    // Called in Open or Flushing.
     OperationStatus FlushCore(LZ4F_cctx_s* context, Span<byte> destination, ref int written)
     {
         var room = destination.Slice(written);
@@ -553,38 +525,9 @@ public sealed unsafe class LZ4Encoder : IDisposable
     // block header, and the block checksum when enabled
     int BlockOverhead => preferences.frameInfo.blockChecksumFlag == LZ4F_blockChecksum_t.LZ4F_blockChecksumEnabled ? 8 : 4;
 
-    byte[] RentStaging()
-    {
-        stagingOffset = 0;
-        stagingLength = 0;
-        return staging ??= ArrayPool<byte>.Shared.Rent(Math.Max(BlockSize + BlockOverhead, LZ4.MaxFrameHeaderLength));
-    }
-
-    int DrainStaging(Span<byte> destination)
-    {
-        if (staging == null) return 0;
-
-        var count = Math.Min(stagingLength, destination.Length);
-        staging.AsSpan(stagingOffset, count).CopyTo(destination);
-        stagingOffset += count;
-        stagingLength -= count;
-        if (stagingLength == 0) ReturnStaging();
-        return count;
-    }
-
-    void ReturnStaging()
-    {
-        var array = staging;
-        staging = null;
-        stagingOffset = 0;
-        stagingLength = 0;
-        if (array != null) ArrayPool<byte>.Shared.Return(array);
-    }
-
     OperationStatus Fault()
     {
         state = FrameState.Faulted;
-        ReturnStaging();
         return OperationStatus.InvalidData;
     }
 
@@ -620,7 +563,6 @@ public sealed unsafe class LZ4Encoder : IDisposable
             // freeing the context ends everything that reads the dictionary
             dictionary.Dispose();
             dictionary = default;
-            ReturnStaging();
         }
         GC.SuppressFinalize(this);
     }

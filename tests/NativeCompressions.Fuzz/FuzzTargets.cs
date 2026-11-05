@@ -251,7 +251,7 @@ public static class FuzzTargets
         Check(LZ4.Decompress(streamed).AsSpan().SequenceEqual(payload), "streamed round trip differs");
 
         // the same encoder again, with output pieces too small for a block
-        var outputChunk = 1 + data[3] % 64;
+        var outputChunk = LZ4.MaxFrameHeaderLength + data[3] % 64;
         var pieced = CompressStreaming(encoder, payload, inputChunk, outputChunk);
         Check(LZ4.Decompress(pieced).AsSpan().SequenceEqual(payload), "streamed round trip into small pieces differs");
 
