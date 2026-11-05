@@ -104,10 +104,12 @@ jobs:
           echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
       - name: Build using Docker
         run: |
+          # lld rejects the -Wl,--force-exe-suffix that lz4 v1.11.0 adds for Windows targets.
+          # MCM_LDFLAGS= drops it, and with it only the import library, which is not shipped.
           docker run --rm -v "$PWD:/work" -e LDFLAGS=-Wl,--no-insert-timestamp \
             mstorsjo/llvm-mingw:latest \
             bash -c "cd /work/lz4/lib && \
-              make liblz4 MULTITHREAD=0 \
+              make liblz4 MULTITHREAD=0 MCM_LDFLAGS= \
               TARGET_OS=Windows_NT LIBLZ4_NAME=lz4 \
               CC=aarch64-w64-mingw32-gcc WINDRES=aarch64-w64-mingw32-windres \
               SRCFILES='lz4.c lz4hc.c lz4frame.c xxhash.c'"
