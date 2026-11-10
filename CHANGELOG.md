@@ -16,7 +16,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `LZ4Encoder.GetMaxCompressedLength` counts the frame header the options produce instead of the largest possible one. With `includingFooter` (the default) it also covers ending the frame in the same call with `isFinalBlock`, including the block the encoder still holds from earlier calls. `includingFooter: false` gives the smaller size for a call that does not end the frame.
 - `LZ4Stream` passes a write larger than 1MB to the encoder in pieces, so its buffer stays within 2MB with 64KB and 256KB blocks, and within 4MB and 8MB with 1MB and 4MB blocks, which need room for a whole block. Previously it rented a buffer as large as the largest write.
 - `LZ4.Block.Decompress` reports a destination that is too small and a missing or wrong dictionary with their own messages.
-- The bundled LZ4 is v1.11.0.
+- The bundled LZ4 is v1.11.1.
 - `LZ4CompressionOptions.BlockSizeID`, `LZ4CompressionOptions.DictionaryID`, `LZ4FrameInfo.BlockSizeID`, `LZ4FrameInfo.DictionaryID` and `ZstandardCompressionOptions.DictIDFlag` are renamed to `BlockSizeId`, `DictionaryId` and `DictIdFlag`.
 - `LZ4CompressionOptions.FavorDecompressionSpeed` is a `bool`.
 - `Zstandard.VersionNumber` is an `int`, like `LZ4.VersionNumber`.

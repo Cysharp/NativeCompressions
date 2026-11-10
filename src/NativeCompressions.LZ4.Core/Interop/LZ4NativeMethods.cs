@@ -459,8 +459,8 @@ namespace NativeCompressions.Interop
 
         /// <summary>
         ///  LZ4_resetStream() : deprecated (v1.11.0)
-        ///   Same as LZ4_initStream(streamPtr, sizeof(LZ4_stream_t)) : prefer LZ4_initStream().
-        ///   To start a new stream with an initialized state, LZ4_resetStream_fast() is faster.
+        ///   LZ4_resetStream(s) is replaced by LZ4_initStream(s, sizeof(*s)) : same behavior, @s may contain garbage.
+        ///   To start a new stream on an already initialized state, LZ4_resetStream_fast(s) is faster.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "LZ4_resetStream", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern void LZ4_resetStream(LZ4_stream_u* streamPtr);
@@ -975,12 +975,14 @@ namespace NativeCompressions.Interop
         ///              (see LZ4F_resumeFrame() in the static section).
         ///  @retval 0   The current frame is fully decoded. If *srcSizePtr is less than the provided value,
         ///              the unconsumed tail is the start of another frame (if any).
-        ///  @retval error  An error code; test with LZ4F_isError(ret). After an error, dctx is not
-        ///                 resumable: call LZ4F_resetDecompressionContext() before reusing it.
+        ///  @retval error  An error code; test with LZ4F_isError(ret). The size pointers still report
+        ///                 the bytes consumed and produced before the error, but produced bytes may be invalid.
+        ///                 After an error, dctx is not resumable: call LZ4F_resetDecompressionContext() before reusing it.
         /// 
         ///  @pre  @p dctx is a valid state created by LZ4F_createDecompressionContext().
         ///  @post *srcSizePtr and *dstSizePtr are updated with the actual bytes consumed/produced.
-        ///        @p dstBuffer contents in [0, *dstSizePtr) are valid decompressed data.
+        ///        @p dstBuffer contents in [0, *dstSizePtr) are decompressed data.
+        ///        The content checksum, if present, is only verified at the end of the frame (return 0).
         /// 
         ///  @note  The function may not consume all provided input on each call. Always check *srcSizePtr.
         ///         Present any unconsumed source bytes again on the next call.
