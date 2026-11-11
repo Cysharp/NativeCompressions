@@ -57,7 +57,13 @@ public static partial class LZ4
                 if (status == OperationStatus.Done) break;
                 if (status == OperationStatus.InvalidData) throw new LZ4Exception("Invalid LZ4 frame.");
                 if (status == OperationStatus.NeedMoreData && source.IsEmpty) throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
-                if (dest.IsEmpty) throw new LZ4Exception("Invalid LZ4 frame: content is larger than the recorded content size.");
+                if (dest.IsEmpty)
+                {
+                    // A full destination is not an error by itself. The rest of the frame may produce no output,
+                    // such as an empty block or the end mark.
+                    FinishFrameWithoutOutput(decoder, ref source);
+                    break;
+                }
             }
 
             if (dest.Length != 0)
@@ -73,13 +79,36 @@ public static partial class LZ4
             // more frames follow, decode them into a growing buffer and append
             decoder.Reset();
             var rest = DecompressToArray(decoder, source);
-            var combined = GC.AllocateUninitializedArray<byte>(destination.Length + rest.Length);
+            var combinedLength = (long)destination.Length + rest.Length;
+            if (combinedLength > Array.MaxLength)
+            {
+                throw new LZ4Exception($"Decompressed size {combinedLength} exceeds maximum array size");
+            }
+
+            var combined = GC.AllocateUninitializedArray<byte>((int)combinedLength);
             destination.CopyTo(combined, 0);
             rest.CopyTo(combined, destination.Length);
             return combined;
         }
 
         return DecompressToArray(decoder, source);
+    }
+
+    // The destination holds all of the recorded content. What is left of the frame is decoded into a scratch buffer,
+    // a single byte arriving there means the content is larger than the header says.
+    static void FinishFrameWithoutOutput(LZ4Decoder decoder, ref ReadOnlySpan<byte> source)
+    {
+        Span<byte> scratch = stackalloc byte[64];
+        while (true)
+        {
+            var status = decoder.Decompress(source, scratch, out var bytesConsumed, out var bytesWritten);
+            source = source.Slice(bytesConsumed);
+
+            if (bytesWritten > 0) throw new LZ4Exception("Invalid LZ4 frame: content is larger than the recorded content size.");
+            if (status == OperationStatus.Done) return;
+            if (status == OperationStatus.InvalidData) throw new LZ4Exception("Invalid LZ4 frame.");
+            if (source.IsEmpty) throw new LZ4Exception("Invalid LZ4 frame: input ends inside a frame.");
+        }
     }
 
     // Same behavior as LZ4Stream and DecompressAsync: every frame is decoded, input that ends inside a frame is an error.

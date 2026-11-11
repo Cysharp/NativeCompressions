@@ -44,6 +44,7 @@ public static partial class Zstandard
     public static async ValueTask CompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, ZstandardCompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
         using var encoder = CreateEncoder(options);
+        encoder.SetSourceLength(source.Length); // the length is known, it goes into the frame header like it does for ReadOnlyMemory
         await CompressAsync(source, destination, encoder, cancellationToken);
     }
 
@@ -111,7 +112,18 @@ public static partial class Zstandard
     public static async ValueTask CompressAsync(Stream source, PipeWriter destination, ZstandardCompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
         using var encoder = CreateEncoder(options);
+        DeclareLength(encoder, source);
         await CompressAsync(source, destination, encoder, cancellationToken);
+    }
+
+    // A seekable stream knows its length, which goes into the frame header. The frame fails to close when the stream
+    // turns out to deliver a different length. With an encoder owned by the caller, declaring a length is left to the caller.
+    static void DeclareLength(ZstandardEncoder encoder, Stream source)
+    {
+        if (source.CanSeek)
+        {
+            encoder.SetSourceLength(Math.Max(0, source.Length - source.Position));
+        }
     }
 
     /// <remarks>The encoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardEncoder.Reset()"/> before reusing it, or dispose it.</remarks>
@@ -238,7 +250,9 @@ public static partial class Zstandard
     public static async ValueTask CompressAsync(string sourceFilePath, PipeWriter destination, ZstandardCompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
         using var encoder = CreateEncoder(options);
-        await CompressAsync(sourceFilePath, destination, encoder, cancellationToken);
+        using var source = OpenSource(sourceFilePath);
+        DeclareLength(encoder, source);
+        await CompressAsync(source, destination, encoder, cancellationToken);
     }
 
     /// <remarks>The encoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardEncoder.Reset()"/> before reusing it, or dispose it.</remarks>
@@ -251,15 +265,21 @@ public static partial class Zstandard
     public static async ValueTask CompressAsync(string sourceFilePath, string destinationFilePath, ZstandardCompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
         using var encoder = CreateEncoder(options);
-        await CompressAsync(sourceFilePath, destinationFilePath, encoder, cancellationToken);
+        await CompressFileAsync(sourceFilePath, destinationFilePath, encoder, declareLength: true, cancellationToken);
     }
 
     /// <remarks>The encoder stays owned by the caller. When the call fails, reset it with <see cref="ZstandardEncoder.Reset()"/> before reusing it, or dispose it.</remarks>
-    public static async ValueTask CompressAsync(string sourceFilePath, string destinationFilePath, ZstandardEncoder encoder, CancellationToken cancellationToken = default)
+    public static ValueTask CompressAsync(string sourceFilePath, string destinationFilePath, ZstandardEncoder encoder, CancellationToken cancellationToken = default)
+    {
+        return CompressFileAsync(sourceFilePath, destinationFilePath, encoder, declareLength: false, cancellationToken);
+    }
+
+    static async ValueTask CompressFileAsync(string sourceFilePath, string destinationFilePath, ZstandardEncoder encoder, bool declareLength, CancellationToken cancellationToken)
     {
         // checked before any file is opened, a cancelled call must not truncate the destination
         cancellationToken.ThrowIfCancellationRequested();
         using var source = OpenSource(sourceFilePath);
+        if (declareLength) DeclareLength(encoder, source);
         using var destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
         var destinationWriter = PipeWriter.Create(destinationStream);
         try

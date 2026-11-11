@@ -71,6 +71,10 @@ public readonly record struct ZstandardCompressionOptions
     ///   parameters which have not been manually set. The manually set
     ///   ones will 'stick'.
     /// </summary>
+    /// <remarks>
+    /// When <see cref="Dictionary"/> is set, zstd compresses with the level the dictionary was created with
+    /// (<see cref="ZstandardDictionary.CompressionLevel"/>) and this value is not used.
+    /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">The value is outside <see cref="Zstandard.MinCompressionLevel"/> to <see cref="Zstandard.MaxCompressionLevel"/>.</exception>
     public int CompressionLevel
     {
@@ -286,6 +290,14 @@ public readonly record struct ZstandardCompressionOptions
         init => noDictId = !value;
     }
 
+    /// <summary>
+    /// The dictionary to compress with.
+    /// </summary>
+    /// <remarks>
+    /// The dictionary carries its own compression parameters, prepared for the level given to <see cref="ZstandardDictionary.Create"/>.
+    /// zstd uses those and ignores <see cref="CompressionLevel"/> and the other compression parameters of these options,
+    /// so create the dictionary with the level to compress at.
+    /// </remarks>
     public ZstandardDictionary? Dictionary
     {
         get => dictionary;

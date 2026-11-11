@@ -29,8 +29,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A `Read` or `ReadAsync` with an empty buffer on `LZ4Stream` and `ZstandardStream` waits until the inner stream delivers input before returning 0, like the streams of `System.IO.Compression`, so a caller can delay renting a buffer until data is available. Previously it returned 0 at once, also in Compress mode, where it now throws `InvalidOperationException` like any other read.
 - The macOS native libraries are built with an explicit minimum of macOS 15.0.
 - The netstandard and net8.0 builds depend on the 10.0.x versions of `System.IO.Pipelines` and `Microsoft.Bcl.AsyncInterfaces`.
+- `LZ4Decoder` and `ZstandardDecoder` return `OperationStatus.InvalidData` with nothing consumed and nothing written, and keep returning it until `Reset()`. `ZstandardEncoder` keeps returning `InvalidData` until `Reset()` as well, the same as `LZ4Encoder`. Previously a call after a failure reached the native context again.
+- While `ZstandardEncoder` is ending a frame (a call with `isFinalBlock` returned `DestinationTooSmall` after taking all of the source), only `Close` or an empty source with `isFinalBlock` can follow, the same as `LZ4Encoder`. `Flush` or more input returns `InvalidData`.
+- `Zstandard.CompressAsync` records the content size for a `ReadOnlySequence<byte>`, a seekable `Stream` and a file path, the same as `LZ4.CompressAsync`. Previously only a `ReadOnlyMemory<byte>` source did. The overloads that take a `ZstandardEncoder` leave it to the caller and `ZstandardEncoder.SetSourceLength`.
+- `LZ4CompressionOptions` with a `BlockMode`, `ContentChecksumFlag` or `BlockChecksumFlag` that is not a defined value throws `ArgumentOutOfRangeException`. Previously lz4 took the number as it was and wrote a frame that does not decode.
+- `LZ4.Block.GetMaxCompressedLength` throws `ArgumentOutOfRangeException` for a negative size and for one above 2,113,929,216 bytes, the largest input of a block. Previously it returned 0.
+- `Zstandard.GetMaxCompressedLength` throws `ArgumentOutOfRangeException` for a negative size, previously `OverflowException`, and for a size zstd cannot compress in one frame, previously the error code as a length.
+- `LZ4Decoder.GetFrameInfo` called again for the same frame returns the same information and consumes nothing.
+- The Zstandard native libraries are built with `ZSTD_LEGACY_SUPPORT=0`. Frames of the formats before zstd v0.8 are invalid data now. Their decoders did not honor `WindowLogMax`.
 
 ### Fixed
+- Calling `LZ4Decoder.Decompress` again after `OperationStatus.InvalidData`, or reading from an `LZ4Stream` again after it threw `LZ4Exception`, read outside the source and then copied the input over a native buffer of 64KB. lz4 cannot resume a context after an error.
+- `ZstandardDecoder` reported the whole destination as written when a frame of a format before zstd v0.8 failed, and `Zstandard.DecompressAsync` passed that memory on to the destination before it threw.
+- `ZstandardStream` threw `ZstandardException` for a valid frame, and for every read after it, once 15 reads in a row inside a frame got no data because the inner stream threw or the read was cancelled.
+- `LZ4.CompressAsync` and `LZ4.DecompressAsync` threw `ArgumentOutOfRangeException` for an empty `ReadOnlyMemory<byte>` or `ReadOnlySequence<byte>` that does not start at index 0, such as `array.AsMemory(array.Length)`.
+- `LZ4.Decompress(source, trustedData: true)` threw for a valid frame with a recorded content size whose last blocks produce no output, such as an empty block before the end mark.
+- A second `LZ4Decoder.GetFrameInfo` before `Decompress` made a decoder with a dictionary decode the frame without it, which ended in `InvalidData`.
+- A `Flush` that completed a frame `ZstandardEncoder` was ending left the encoder believing the frame was still open. The next frame was then not checked against the length given to `SetSourceLength`.
+- A failed `ZstandardDecoder.Reset(in options)` keeps the previous options, like the encoder. Previously the decoder went on with default options, without its dictionary and its `WindowLogMax`.
+- Decompressing more than 2GB into a `byte[]` ended in `OverflowException` after renting about 4GB. It is `OutOfMemoryException` now, or `LZ4Exception` for `trustedData`, as soon as the result cannot fit in an array.
+- `ZstandardStream` passed a write of no bytes to the inner stream for every write the encoder only buffered.
 - Disposing an encoder or decoder from two threads at once could release its dictionary lease twice.
 - A failed `ZstandardEncoder.Reset(in options)` restores the previous options, including a dictionary the caller disposed meanwhile. Previously it fell back to the default options.
 - `LZ4.Decompress(source, destination)` threw "Destination buffer is too small" for a valid frame whose last blocks produce no output, such as an empty block before the end mark, when the destination had exactly the size of the content. Found by fuzzing.

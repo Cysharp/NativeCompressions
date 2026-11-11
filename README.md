@@ -137,13 +137,14 @@ bufferWriter.Advance(finalWritten);
 For decompression, use `LZ4Decoder`.
 
 ```csharp
-// while(status != OperationStatus.Done && source.Length > 0)
+// call again while the status is NeedMoreData (with more source) or DestinationTooSmall (with more room)
 OperationStatus status = decoder.Decompress(source, destination, out int bytesConsumed, out int bytesWritten);
+if (status == OperationStatus.InvalidData) throw new InvalidDataException("Invalid LZ4 frame.");
 source = source.Slice(bytesConsumed);
 destination = destination.Slice(bytesWritten);
 ```
 
-In `Decompress`, both source and destination can receive incomplete data. When `OperationStatus.Done` is returned, all data is restored. Otherwise, `NeedMoreData` or `DestinationTooSmall` is returned.
+In `Decompress`, both source and destination can receive incomplete data. When `OperationStatus.Done` is returned, all data is restored. Otherwise, `NeedMoreData` or `DestinationTooSmall` is returned. `OperationStatus.InvalidData` means the input is not a valid frame. Nothing is consumed or written then, so a loop must stop on it, and the decoder keeps returning `InvalidData` until `Reset()`.
 
 ### High-level Streaming Compression
 
@@ -167,7 +168,7 @@ using var fs = new NetworkStream(socket);
 await LZ4.CompressAsync(source, PipeWriter.Create(fs));
 ```
 
-When source is `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, a seekable `Stream` or a file path, the length is known up front. It is recorded in the frame header as the content size, and the block size is chosen from it. A non-seekable `Stream` and `PipeReader` have no known length, so the frame has no content size and the default block size is used.
+When source is `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, a seekable `Stream` or a file path, the length is known up front. Without options it is recorded in the frame header as the content size. When `LZ4CompressionOptions` is passed, `ContentSize` decides, the same as for the simple API. The block size is chosen from the length unless the options set one. A non-seekable `Stream` and `PipeReader` have no known length, so the frame has no content size and the default block size is used.
 
 ```csharp
 // Compression from File to File
@@ -179,7 +180,7 @@ using var dest = new FileStream("foo.lz4", FileMode.Create, FileAccess.Write, Fi
 await LZ4.CompressAsync(source, PipeWriter.Create(dest));
 ```
 
-Compression and decompression run on the calling task, one block at a time. Output that is ready is flushed to the destination before more input is awaited, so the APIs work over a connection where the other side waits for a reply.
+Compression and decompression run on the calling task, one block at a time. Output that is ready is flushed to the destination before more input is awaited. Decompression hands over everything the input received so far decodes to, so it works over a connection where the other side waits for a reply. Compression holds input that does not fill a block yet (64KB by default for LZ4, up to 128KB for Zstandard) until more arrives or the source completes. For LZ4, `AutoFlush` writes every piece out as it comes.
 
 Similarly for Decompress, source can be `ReadOnlyMemory<byte>`, `ReadOnlySequence<byte>`, `Stream`, `PipeReader` or a file path, and destination can be `PipeWriter`.
 
@@ -383,8 +384,8 @@ The packages ship native libraries for the platforms listed in [Getting Started]
 
 What to build:
 
-* LZ4: `lz4/lib` of the version the submodule points at (v1.10.0), from `lz4.c`, `lz4hc.c`, `lz4frame.c` and `xxhash.c`. The binding uses the frame API and the HC compressor.
-* Zstandard: `zstd/lib` (v1.5.7) including the dictionary builder (`ZDICT_*`). Multithreading is not used. The packages are built with `make lib-release-nomt`.
+* LZ4: `lz4/lib` of the version the submodule points at (v1.11.1), from `lz4.c`, `lz4hc.c`, `lz4frame.c` and `xxhash.c`. The binding uses the frame API and the HC compressor. v1.11.0 is the oldest version that works. `LZ4Encoder` relies on `LZ4F_compressUpdate`, `LZ4F_flush` and `LZ4F_compressEnd` accepting a destination smaller than their worst case bound, which older versions answer with an error.
+* Zstandard: `zstd/lib` (v1.5.7) including the dictionary builder (`ZDICT_*`). Multithreading is not used. The packages are built with `make lib-release-nomt ZSTD_LEGACY_SUPPORT=0`. Leave the decoders of the formats before v0.8 out as well, they do not honor `WindowLogMax`.
 
 The binding looks the libraries up as `lz4` and `libzstd`. .NET adds the `lib` prefix and the extension on Linux and macOS, but not on Windows, so a Windows-like platform needs `lz4.dll` and `libzstd.dll` (lz4's own build produces `liblz4.dll`, rename it). When the platform needs another name or location, register `NativeLibrary.SetDllImportResolver` on the Core assemblies (`typeof(LZ4).Assembly` and `typeof(Zstandard).Assembly`).
 
