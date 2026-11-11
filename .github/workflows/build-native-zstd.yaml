@@ -102,7 +102,7 @@ jobs:
       - name: Build using Docker
         run: |
           docker run --rm -v "$PWD:/work" -e LDFLAGS=-Wl,--no-insert-timestamp \
-            mstorsjo/llvm-mingw:latest \
+            mstorsjo/llvm-mingw:20261104@sha256:b2a697af8fc50c5cc56011143453d02168ccfcff635d12ca76a1c363f5f6b0c6 \
             bash -c "cd /work/zstd/lib && \
               make lib-release-nomt TARGET_SYSTEM=Windows CC=aarch64-w64-mingw32-gcc"
           file zstd/lib/dll/libzstd.dll

@@ -144,7 +144,7 @@ jobs:
       # zstd/lz4 are linked statically and only OpenZL's API is exported, same as the build-windows job.
       - name: Build using Docker
         run: |
-          docker run --rm -i -v "$PWD:/work" -w /work/openzl mstorsjo/llvm-mingw:latest bash -euo pipefail -s <<'EOF'
+          docker run --rm -i -v "$PWD:/work" -w /work/openzl mstorsjo/llvm-mingw:20261104@sha256:b2a697af8fc50c5cc56011143453d02168ccfcff635d12ca76a1c363f5f6b0c6 bash -euo pipefail -s <<'EOF'
           git config --global --add safe.directory '*'
           CC=aarch64-w64-mingw32-gcc
           CFLAGS="-O3" make -C deps/zstd/lib libzstd.a CC="$CC" AR=llvm-ar -j "$(nproc)"
