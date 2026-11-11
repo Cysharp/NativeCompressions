@@ -147,6 +147,7 @@ public sealed class ZstandardStream : Stream
         this.needDisposeNativeCompressor = false;
         this.decoder = decoder ?? throw new ArgumentNullException(nameof(decoder));
         this.mode = CompressionMode.Decompress;
+        this.decoderMayHoldOutput = decoder.IsFrameInProgress; // a decoder handed over inside a frame is asked for its output first
     }
 
     public override bool CanRead => !isDisposed && mode == CompressionMode.Decompress && stream.CanRead;
@@ -290,7 +291,10 @@ public sealed class ZstandardStream : Stream
             }
 
             source = source.Slice(consumed);
-            stream.Write(dest, 0, written);
+            if (written > 0) // nothing is written while the encoder buffers a block
+            {
+                stream.Write(dest, 0, written);
+            }
         }
     }
 
@@ -318,7 +322,10 @@ public sealed class ZstandardStream : Stream
             }
 
             source = source.Slice(consumed);
-            await stream.WriteAsync(dest.AsMemory(0, written), cancellationToken);
+            if (written > 0) // nothing is written while the encoder buffers a block
+            {
+                await stream.WriteAsync(dest.AsMemory(0, written), cancellationToken);
+            }
         }
     }
 
@@ -403,20 +410,34 @@ public sealed class ZstandardStream : Stream
 
         while (destination.Length > 0)
         {
-            ReadOnlySpan<byte> source;
-
-            if (readBufferCount > 0)
+            if (readBufferCount == 0 && !decoderMayHoldOutput)
             {
-                // Use existing buffered data
-                source = buffer.AsSpan(readBufferOffset, readBufferCount);
-            }
-            else
-            {
-                // Buffer is empty, first flush decoder's internal buffer
-                source = ReadOnlySpan<byte>.Empty;
+                // Data decoded so far is returned before asking for more input.
+                // The inner stream may not deliver more until the caller has acted on this data.
+                if (totalRead > 0)
+                {
+                    return totalRead;
+                }
+
+                // Input is read before the decoder is called. The decoder is called without input only to take out
+                // output it holds, because the native decoder counts calls that can do nothing and gives up after a few.
+                // A read that waits for input and is cancelled or fails must not add to that count.
+                readBufferOffset = 0;
+                readBufferCount = stream.Read(buffer, 0, buffer.Length);
+
+                if (readBufferCount == 0)
+                {
+                    if (decoder!.IsFrameInProgress)
+                    {
+                        throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
+                    }
+
+                    return totalRead;
+                }
             }
 
-            var status = decoder!.Decompress(source, destination, out var consumed, out var written);
+            // empty when only the output held by the decoder is taken out
+            var status = decoder!.Decompress(buffer.AsSpan(readBufferOffset, readBufferCount), destination, out var consumed, out var written);
             decoderMayHoldOutput = status == OperationStatus.DestinationTooSmall;
 
             // Update buffer state
@@ -447,57 +468,31 @@ public sealed class ZstandardStream : Stream
                     return totalRead;
 
                 case OperationStatus.NeedMoreData:
-                    // Need more data
-
-                    // If written > 0, decoder likely has more data in its internal buffer
-                    // Exhaust the internal buffer before reading new data
-                    if (written > 0)
+                    // The input was taken completely, or the decoder produced output and goes on with the rest.
+                    // Either way the next turn of the loop continues, and reads more input when the buffer is empty.
+                    if (readBufferCount == 0 || written > 0)
                     {
-                        // Decoder produced output, retry in next loop
-                        // Don't read additional data
                         break;
                     }
 
-                    // Data decoded so far is returned before asking for more input.
-                    // The inner stream may not deliver more until the caller has acted on this data.
+                    // Input is left and nothing was written, the decoder wants it together with what follows.
+                    // Data decoded so far is returned first.
                     if (totalRead > 0)
                     {
                         return totalRead;
                     }
 
-                    // Only consider reading new data when written == 0
-                    if (readBufferCount == 0)
                     {
-                        // Buffer was completely consumed or was originally empty
-                        // Decoder's internal buffer is also empty, so read new data
-                        readBufferOffset = 0;
-                        readBufferCount = stream.Read(buffer, 0, buffer.Length);
-
-                        if (readBufferCount == 0)
-                        {
-                            if (decoder!.IsFrameInProgress)
-                            {
-                                throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
-                            }
-
-                            return totalRead;
-                        }
-                    }
-                    else
-                    {
-                        // readBufferCount > 0: still have unconsumed data
-                        // This happens when data was partially consumed (incomplete block header, etc.)
-
-                        // Move unconsumed data to the beginning of buffer
+                        // Move unconsumed data to the beginning of buffer. The offset is updated before the read,
+                        // so a read that throws leaves the buffer state valid.
                         if (readBufferOffset > 0)
                         {
                             Buffer.BlockCopy(buffer, readBufferOffset, buffer, 0, readBufferCount);
+                            readBufferOffset = 0;
                         }
 
                         // Read additional data
                         var bytesRead = stream.Read(buffer, readBufferCount, buffer.Length - readBufferCount);
-
-                        readBufferOffset = 0;
                         readBufferCount += bytesRead;
 
                         if (bytesRead == 0)
@@ -540,20 +535,34 @@ public sealed class ZstandardStream : Stream
 
         while (destination.Length > 0)
         {
-            ReadOnlySpan<byte> source;
-
-            if (readBufferCount > 0)
+            if (readBufferCount == 0 && !decoderMayHoldOutput)
             {
-                // Use existing buffered data
-                source = buffer.AsSpan(readBufferOffset, readBufferCount);
-            }
-            else
-            {
-                // Buffer is empty, first flush decoder's internal buffer
-                source = ReadOnlySpan<byte>.Empty;
+                // Data decoded so far is returned before asking for more input.
+                // The inner stream may not deliver more until the caller has acted on this data.
+                if (totalRead > 0)
+                {
+                    return totalRead;
+                }
+
+                // Input is read before the decoder is called. The decoder is called without input only to take out
+                // output it holds, because the native decoder counts calls that can do nothing and gives up after a few.
+                // A read that waits for input and is cancelled or fails must not add to that count.
+                readBufferOffset = 0;
+                readBufferCount = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
+
+                if (readBufferCount == 0)
+                {
+                    if (decoder!.IsFrameInProgress)
+                    {
+                        throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
+                    }
+
+                    return totalRead;
+                }
             }
 
-            var status = decoder!.Decompress(source, destination.Span, out var consumed, out var written);
+            // empty when only the output held by the decoder is taken out
+            var status = decoder!.Decompress(buffer.AsSpan(readBufferOffset, readBufferCount), destination.Span, out var consumed, out var written);
             decoderMayHoldOutput = status == OperationStatus.DestinationTooSmall;
 
             // Update buffer state
@@ -584,60 +593,31 @@ public sealed class ZstandardStream : Stream
                     return totalRead;
 
                 case OperationStatus.NeedMoreData:
-                    // Need more data
-
-                    // If written > 0, decoder likely has more data in its internal buffer
-                    // Exhaust the internal buffer before reading new data
-                    if (written > 0)
+                    // The input was taken completely, or the decoder produced output and goes on with the rest.
+                    // Either way the next turn of the loop continues, and reads more input when the buffer is empty.
+                    if (readBufferCount == 0 || written > 0)
                     {
-                        // Decoder produced output, retry in next loop
-                        // Don't read additional data
                         break;
                     }
 
-                    // Data decoded so far is returned before asking for more input.
-                    // The inner stream may not deliver more until the caller has acted on this data.
+                    // Input is left and nothing was written, the decoder wants it together with what follows.
+                    // Data decoded so far is returned first.
                     if (totalRead > 0)
                     {
                         return totalRead;
                     }
 
-                    // Only consider reading new data when written == 0
-                    if (readBufferCount == 0)
                     {
-                        // Buffer was completely consumed or was originally empty
-                        // Decoder's internal buffer is also empty, so read new data
-                        readBufferOffset = 0;
-                        readBufferCount = await stream.ReadAsync(
-                            buffer.AsMemory(0, buffer.Length), cancellationToken);
-
-                        if (readBufferCount == 0)
-                        {
-                            if (decoder!.IsFrameInProgress)
-                            {
-                                throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
-                            }
-
-                            return totalRead;
-                        }
-                    }
-                    else
-                    {
-                        // readBufferCount > 0: still have unconsumed data
-                        // This happens when data was partially consumed (incomplete block header, etc.)
-
-                        // Move unconsumed data to the beginning of buffer
+                        // Move unconsumed data to the beginning of buffer. The offset is updated before the read,
+                        // so a read that throws leaves the buffer state valid.
                         if (readBufferOffset > 0)
                         {
                             Buffer.BlockCopy(buffer, readBufferOffset, buffer, 0, readBufferCount);
+                            readBufferOffset = 0;
                         }
 
                         // Read additional data
-                        var bytesRead = await stream.ReadAsync(
-                            buffer.AsMemory(readBufferCount, buffer.Length - readBufferCount),
-                            cancellationToken);
-
-                        readBufferOffset = 0;
+                        var bytesRead = await stream.ReadAsync(buffer.AsMemory(readBufferCount, buffer.Length - readBufferCount), cancellationToken);
                         readBufferCount += bytesRead;
 
                         if (bytesRead == 0)

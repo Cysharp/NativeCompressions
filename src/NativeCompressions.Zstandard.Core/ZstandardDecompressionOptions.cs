@@ -23,6 +23,12 @@ public readonly record struct ZstandardDecompressionOptions
     /// By default, a decompression context accepts window sizes &lt;= (1 &lt;&lt; ZSTD_WINDOWLOG_LIMIT_DEFAULT).
     /// Special: value 0 means "use default maximum windowLog".
     /// </summary>
+    /// <remarks>
+    /// The limit applies where zstd decodes in streaming mode: <see cref="ZstandardDecoder"/>, <see cref="ZstandardStream"/>,
+    /// <c>Zstandard.DecompressAsync</c>, and <c>Zstandard.Decompress</c> returning an array without trustedData.
+    /// <c>Zstandard.Decompress</c> into a span, <c>Zstandard.TryDecompress</c>, and trustedData for input whose size the frame headers give,
+    /// decode in a single pass into a buffer whose size is already decided. That allocates no window, so the limit is not checked there.
+    /// </remarks>
     public int WindowLogMax
     {
         get => windowLogMax;

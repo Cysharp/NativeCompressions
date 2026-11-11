@@ -35,6 +35,12 @@ public sealed unsafe class ZstandardEncoder : IDisposable
     // true from the first call of a frame until the frame is completely written
     bool frameInProgress;
 
+    // The end of the frame was asked for and all input is taken, the last bytes wait for room in the destination.
+    bool ending;
+
+    // zstd failed, or a call came that cannot follow. Every call answers InvalidData without reaching zstd until Reset.
+    bool faulted;
+
     // Set by SetSourceLength for the next frame, -1 when nothing is declared.
     long declaredLength = -1;
 
@@ -112,7 +118,10 @@ public sealed unsafe class ZstandardEncoder : IDisposable
     /// When isFinalBlock is true, the method will attempt to flush all internal buffers and finalize the frame.
     /// The method is designed to be called multiple times for streaming scenarios.
     /// After <see cref="OperationStatus.InvalidData"/> the native context is in an error state and the frame cannot be continued.
-    /// Call <see cref="Reset()"/> before reusing the encoder, or dispose it.
+    /// Call <see cref="Reset()"/> before reusing the encoder, or dispose it. Until then every call returns <see cref="OperationStatus.InvalidData"/>.
+    /// When a call with isFinalBlock returned <see cref="OperationStatus.DestinationTooSmall"/> after taking all of the source,
+    /// the frame is being ended. Only a call that ends it further can follow, with an empty source and isFinalBlock, or <see cref="Close"/>.
+    /// <see cref="Flush"/> or more input returns <see cref="OperationStatus.InvalidData"/> then.
     /// </remarks>
     public OperationStatus Compress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
     {
@@ -150,13 +159,26 @@ public sealed unsafe class ZstandardEncoder : IDisposable
     {
         var context = GetContext();
 
-        // zstd takes the size from the input when a frame starts and ends in the same call, which would skip
-        // the check of the declared length
-        if (endOperation == ZSTD_EndDirective.ZSTD_e_end && !frameInProgress && declaredLength >= 0 && source.Length != declaredLength)
+        if (faulted)
         {
             bytesWritten = 0;
             bytesConsumed = 0;
             return OperationStatus.InvalidData;
+        }
+
+        // The frame is being ended, only ending it further can follow, the same as LZ4Encoder.
+        // zstd would complete the frame on a flush and take new input as the start of another frame,
+        // without the length declared for that one.
+        if (ending && !(endOperation == ZSTD_EndDirective.ZSTD_e_end && source.IsEmpty))
+        {
+            return Fault(out bytesConsumed, out bytesWritten);
+        }
+
+        // zstd takes the size from the input when a frame starts and ends in the same call, which would skip
+        // the check of the declared length
+        if (endOperation == ZSTD_EndDirective.ZSTD_e_end && !frameInProgress && declaredLength >= 0 && source.Length != declaredLength)
+        {
+            return Fault(out bytesConsumed, out bytesWritten);
         }
 
         fixed (byte* src = source)
@@ -182,13 +204,11 @@ public sealed unsafe class ZstandardEncoder : IDisposable
 
             if (Zstandard.IsError(remaining))
             {
-                frameInProgress = true; // the failed frame stays unfinished until Reset
-                bytesWritten = 0;
-                bytesConsumed = 0;
-                return OperationStatus.InvalidData;
+                return Fault(out bytesConsumed, out bytesWritten);
             }
 
             frameInProgress = !(endOperation == ZSTD_EndDirective.ZSTD_e_end && remaining == 0);
+            ending = endOperation == ZSTD_EndDirective.ZSTD_e_end && input.pos == input.size && remaining > 0;
             if (!frameInProgress)
             {
                 declaredLength = -1; // applies to one frame
@@ -221,6 +241,15 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         }
     }
 
+    OperationStatus Fault(out int bytesConsumed, out int bytesWritten)
+    {
+        faulted = true;
+        frameInProgress = true; // the failed frame stays unfinished until Reset
+        bytesConsumed = 0;
+        bytesWritten = 0;
+        return OperationStatus.InvalidData;
+    }
+
     /// <summary>
     /// Resets the encoder to start a new compression session.
     /// </summary>
@@ -246,6 +275,8 @@ public sealed unsafe class ZstandardEncoder : IDisposable
 
         ReleasePrefix();
         frameInProgress = false;
+        ending = false;
+        faulted = false;
         declaredLength = -1;
         GC.KeepAlive(this);
     }
@@ -282,6 +313,8 @@ public sealed unsafe class ZstandardEncoder : IDisposable
         ReleasePrefix();
         this.options = options;
         frameInProgress = false;
+        ending = false;
+        faulted = false;
         declaredLength = -1;
         GC.KeepAlive(this);
     }
@@ -305,6 +338,8 @@ public sealed unsafe class ZstandardEncoder : IDisposable
 
         ReleasePrefix();
         frameInProgress = false;
+        ending = false;
+        faulted = false;
         declaredLength = -1;
     }
 

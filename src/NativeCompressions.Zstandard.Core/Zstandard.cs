@@ -64,22 +64,29 @@ public static partial class Zstandard
     /// <summary>
     /// Gets the maximum compressed size for a given input size.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when inputSize is negative.</exception>
     public static int GetMaxCompressedLength(int inputSize)
     {
+        if (inputSize < 0) throw new ArgumentOutOfRangeException(nameof(inputSize));
         return checked((int)ZSTD_compressBound((nuint)inputSize));
     }
 
     /// <summary>
     /// Gets the maximum compressed size for a given input size.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when inputSize is larger than zstd can compress in one frame.</exception>
     public static nuint GetMaxCompressedLength(nuint inputSize)
     {
-        return ZSTD_compressBound(inputSize);
+        // an error code for a size at or above ZSTD_MAX_INPUT_SIZE, which would read as a very large length
+        var bound = ZSTD_compressBound(inputSize);
+        if (IsError(bound)) throw new ArgumentOutOfRangeException(nameof(inputSize));
+        return bound;
     }
 
     /// <summary>
     /// Reads the content size recorded in the frame header at the start of source.
     /// Returns false when the header does not record it, when source is too short for the header, or when source does not start with a Zstandard frame.
+    /// A skippable frame at the start of source gives true with a size of 0, whatever follows it.
     /// </summary>
     public static unsafe bool TryGetFrameContentSize(ReadOnlySpan<byte> source, out ulong size)
     {

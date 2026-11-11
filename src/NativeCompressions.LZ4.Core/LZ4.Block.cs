@@ -11,20 +11,25 @@ public static partial class LZ4
     /// </summary>
     public static class Block
     {
+        const int MaxInputSize = 0x7E000000; // LZ4_MAX_INPUT_SIZE, the largest input a single block can hold
+
         /// <summary>
         /// Gets the maximum size of a compressed block for the given input size.
         /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when inputSize is negative or larger than 2,113,929,216 (LZ4_MAX_INPUT_SIZE), the largest input a single block can hold.</exception>
         public static int GetMaxCompressedLength(int inputSize)
         {
+            // lz4 answers 0 for a size it cannot compress, which reads as a bound of no bytes
+            if ((uint)inputSize > MaxInputSize) throw new ArgumentOutOfRangeException(nameof(inputSize));
             return LZ4_compressBound(inputSize);
         }
 
         /// <summary>
         /// Compresses the source into a single LZ4 block.
         /// </summary>
-        /// <param name="source">The data to compress.</param>
+        /// <param name="source">The data to compress, at most 2,113,929,216 bytes.</param>
         /// <param name="destination">The buffer to write the block to. Must be at least <see cref="GetMaxCompressedLength"/> bytes.</param>
-        /// <returns>The number of bytes written, or 0 when the destination is too small.</returns>
+        /// <returns>The number of bytes written, or 0 when the destination is too small or the source is larger than that.</returns>
         public static unsafe int Compress(ReadOnlySpan<byte> source, Span<byte> destination)
         {
             fixed (byte* src = source)

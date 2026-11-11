@@ -76,14 +76,17 @@ public sealed unsafe class LZ4Encoder : IDisposable
     /// </summary>
     /// <param name="options">Frame format options such as block size, compression level, and checksums. Pass LZ4CompressionOptions.Default for defaults.</param>
     /// <exception cref="LZ4Exception">Thrown when the compression context cannot be created, or lz4 rejects the options.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when BlockMode, ContentChecksumFlag or BlockChecksumFlag is not a defined value.</exception>
     public LZ4Encoder(in LZ4CompressionOptions options)
     {
+        var preferences = options.ToPreferences(); // throws for undefined values, before anything is created
+
         LZ4F_cctx_s* context = null;
         var code = LZ4F_createCompressionContext(&context, LZ4.FrameVersion);
         LZ4.ThrowIfError(code);
 
         this.cctx = context;
-        this.preferences = options.ToPreferences();
+        this.preferences = preferences;
 
         try
         {
@@ -377,14 +380,16 @@ public sealed unsafe class LZ4Encoder : IDisposable
     /// </summary>
     /// <exception cref="ObjectDisposedException">Thrown when the encoder has been disposed.</exception>
     /// <exception cref="LZ4Exception">Thrown when the context cannot begin a frame with the new options. The previous options stay in effect.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when BlockMode, ContentChecksumFlag or BlockChecksumFlag is not a defined value. The previous options stay in effect.</exception>
     public void Reset(in LZ4CompressionOptions options)
     {
         ThrowIfDisposed();
 
+        var nextPreferences = options.ToPreferences(); // throws for undefined values, before the dictionary is taken
         var next = options.AcquireDictionary();
         var previousDictionary = dictionary;
         var previousPreferences = preferences;
-        preferences = options.ToPreferences();
+        preferences = nextPreferences;
         dictionary = next;
         try
         {

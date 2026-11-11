@@ -27,6 +27,14 @@ public sealed unsafe class LZ4Decoder : IDisposable
     LZ4Dictionary.Lease dictionary;
     bool frameInProgress; // tracked here so the layout of the native context is never read
 
+    // lz4 failed. lz4frame cannot resume a context after an error, calling it again reads and writes out of bounds,
+    // so every call answers InvalidData without reaching lz4 until Reset.
+    bool faulted;
+
+    // The header that GetFrameInfo decoded for the frame in progress.
+    LZ4FrameInfo decodedFrameInfo;
+    bool hasFrameInfo;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="LZ4Decoder"/>.
     /// </summary>
@@ -115,16 +123,27 @@ public sealed unsafe class LZ4Decoder : IDisposable
     /// <exception cref="ObjectDisposedException">Thrown when the decoder has been disposed.</exception>
     /// <exception cref="LZ4Exception">
     /// Thrown when the source doesn't contain a valid LZ4 frame header,
-    /// or when decompression context initialization fails.
+    /// when decompression context initialization fails,
+    /// or when the decoder returned <see cref="OperationStatus.InvalidData"/> before and was not reset.
     /// </exception>
     /// <remarks>
     /// This method serves two purposes: it extracts frame metadata from the header and it
     /// initializes the decompression context for subsequent <see cref="Decompress(ReadOnlySpan{byte}, Span{byte}, out int, out int)"/> calls.
     /// The bytes consumed should be skipped from the source when calling <see cref="Decompress(ReadOnlySpan{byte}, Span{byte}, out int, out int)"/>.
+    /// Calling it again for the same frame returns the same information and consumes nothing.
     /// </remarks>
     public LZ4FrameInfo GetFrameInfo(ReadOnlySpan<byte> source, out int bytesConsumed)
     {
         var context = GetContext();
+        if (faulted) throw new LZ4Exception("The decoder failed on invalid data. Call Reset before reusing it.");
+
+        // lz4frame answers a second call by running the context forward, which takes it past the point
+        // where a dictionary is installed. The first answer is returned instead.
+        if (hasFrameInfo)
+        {
+            bytesConsumed = 0;
+            return decodedFrameInfo;
+        }
 
         fixed (byte* src = source)
         {
@@ -138,6 +157,8 @@ public sealed unsafe class LZ4Decoder : IDisposable
 
             bytesConsumed = (int)consumed;
             if (bytesConsumed > 0) frameInProgress = true;
+            decodedFrameInfo = result;
+            hasFrameInfo = true;
             return result;
         }
     }
@@ -183,12 +204,21 @@ public sealed unsafe class LZ4Decoder : IDisposable
     /// The decoder maintains internal state between calls. When <see cref="OperationStatus.Done"/> is returned,
     /// the frame is complete and the decoder is ready for the next frame.
     /// After <see cref="OperationStatus.InvalidData"/>, call <see cref="Reset()"/> before reusing the decoder.
+    /// Until then every call returns <see cref="OperationStatus.InvalidData"/> with nothing consumed and nothing written.
     /// The distinction between <see cref="OperationStatus.NeedMoreData"/> and <see cref="OperationStatus.DestinationTooSmall"/>
     /// is heuristic: a completely filled destination is reported as too small, otherwise more source is requested.
     /// </remarks>
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, out int hintOfNextSrcSize)
     {
         var context = GetContext();
+
+        if (faulted)
+        {
+            bytesConsumed = 0;
+            bytesWritten = 0;
+            hintOfNextSrcSize = 0;
+            return OperationStatus.InvalidData;
+        }
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)
@@ -210,20 +240,24 @@ public sealed unsafe class LZ4Decoder : IDisposable
             }
             GC.KeepAlive(this);
 
-            bytesConsumed = (int)consumed;
-            bytesWritten = (int)written;
-
             if (LZ4.IsError(hintOrErrorCode))
             {
+                // Nothing is counted on failure, the same as the encoder. What lz4 wrote before the error may not be valid.
+                faulted = true;
+                bytesConsumed = 0;
+                bytesWritten = 0;
                 hintOfNextSrcSize = 0; // the value is an error code, not a size
                 return OperationStatus.InvalidData;
             }
 
+            bytesConsumed = (int)consumed;
+            bytesWritten = (int)written;
             hintOfNextSrcSize = hintOrErrorCode > int.MaxValue ? int.MaxValue : (int)hintOrErrorCode;
 
             if (hintOrErrorCode == 0)
             {
                 frameInProgress = false;
+                hasFrameInfo = false;
                 return OperationStatus.Done;
             }
 
@@ -249,6 +283,7 @@ public sealed unsafe class LZ4Decoder : IDisposable
                     : OperationStatus.InvalidData
             };
 
+            if (result == OperationStatus.InvalidData) faulted = true;
             return result;
         }
     }
@@ -261,6 +296,8 @@ public sealed unsafe class LZ4Decoder : IDisposable
         var context = GetContext();
         LZ4F_resetDecompressionContext(context);
         frameInProgress = false;
+        hasFrameInfo = false;
+        faulted = false;
         GC.KeepAlive(this);
     }
 
@@ -275,6 +312,8 @@ public sealed unsafe class LZ4Decoder : IDisposable
         var next = options.AcquireDictionary();
         LZ4F_resetDecompressionContext(context); // the reset ends the frame that read the previous dictionary
         frameInProgress = false;
+        hasFrameInfo = false;
+        faulted = false;
         this.options = options.ToDecompressOptions();
 
         var previous = dictionary;

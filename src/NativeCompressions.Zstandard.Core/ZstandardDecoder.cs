@@ -28,7 +28,14 @@ public sealed unsafe class ZstandardDecoder : IDisposable
     MemoryHandle prefixHandle;
     bool hasPrefix;
 
+    // What the native context is configured with, kept so a failed Reset(options) can put it back.
+    // SetPrefix removes the dictionary from it, the same as it does natively.
+    ZstandardDecompressionOptions options;
+
     bool frameInProgress;
+
+    // zstd failed. The context is in an error state, so every call answers InvalidData without reaching zstd until Reset.
+    bool faulted;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstandardDecoder"/>.
@@ -47,6 +54,7 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         try
         {
             this.dictionary = Configure(dctx, options);
+            this.options = options;
         }
         catch
         {
@@ -101,12 +109,21 @@ public sealed unsafe class ZstandardDecoder : IDisposable
     /// </returns>
     /// <exception cref="ObjectDisposedException">Thrown when the decoder has been disposed.</exception>
     /// <remarks>
-    /// After <see cref="OperationStatus.InvalidData"/> the native context is in an error state, and what further calls do is undefined.
+    /// After <see cref="OperationStatus.InvalidData"/> the native context is in an error state.
     /// Call <see cref="Reset()"/> before reusing the decoder, or dispose it.
+    /// Until then every call returns <see cref="OperationStatus.InvalidData"/> with nothing consumed and nothing written.
     /// </remarks>
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten, out int hintOfNextSrcSize)
     {
         var context = GetContext();
+
+        if (faulted)
+        {
+            bytesConsumed = 0;
+            bytesWritten = 0;
+            hintOfNextSrcSize = 0;
+            return OperationStatus.InvalidData;
+        }
 
         fixed (byte* src = source)
         fixed (byte* dest = destination)
@@ -133,15 +150,19 @@ public sealed unsafe class ZstandardDecoder : IDisposable
             var hintOrErrorCode = ZSTD_decompressStream(context, &output, &input);
             GC.KeepAlive(this); // keep the finalizer from freeing the context during the native call
 
-            bytesConsumed = (int)input.pos;
-            bytesWritten = (int)output.pos;
-
             if (Zstandard.IsError(hintOrErrorCode))
             {
+                // Nothing is counted on failure, the same as the encoder. The positions are not reliable then,
+                // a failing legacy frame reports the whole destination as written without writing to it.
+                faulted = true;
+                bytesConsumed = 0;
+                bytesWritten = 0;
                 hintOfNextSrcSize = 0; // the value is an error code, not a size
                 return OperationStatus.InvalidData;
             }
 
+            bytesConsumed = (int)input.pos;
+            bytesWritten = (int)output.pos;
             hintOfNextSrcSize = hintOrErrorCode > int.MaxValue ? int.MaxValue : (int)hintOrErrorCode;
 
             if (hintOrErrorCode == 0)
@@ -172,6 +193,7 @@ public sealed unsafe class ZstandardDecoder : IDisposable
                     : OperationStatus.InvalidData
             };
 
+            if (result == OperationStatus.InvalidData) faulted = true;
             return result;
         }
     }
@@ -187,6 +209,7 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         var result = ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_only);
         Zstandard.ThrowIfError(result);
         frameInProgress = false;
+        faulted = false;
 
         // A session reset keeps an unused prefix referenced by the native context, so drop that reference before unpinning.
         if (hasPrefix)
@@ -201,27 +224,58 @@ public sealed unsafe class ZstandardDecoder : IDisposable
     /// Abandons the current frame, if one is in progress, and applies new options. The next Decompress starts a new frame with them.
     /// </summary>
     /// <exception cref="ObjectDisposedException">Thrown when the decoder has been disposed.</exception>
-    /// <exception cref="ZstandardException">Thrown when the reset fails or the new options cannot be applied.</exception>
+    /// <exception cref="ZstandardException">Thrown when the new options cannot be applied. The previous options stay in effect.</exception>
     public void Reset(in ZstandardDecompressionOptions options)
     {
         var context = GetContext();
 
-        var result = ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
-        Zstandard.ThrowIfError(result);
-        frameInProgress = false;
-        ReleasePrefix();
-
-        // the reset dropped the native reference to the previous dictionary, whether or not the new options apply
-        var previous = dictionary;
-        dictionary = default;
+        ZstandardDictionary.Lease next;
         try
         {
-            dictionary = Configure(context, options);
+            var result = ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
+            Zstandard.ThrowIfError(result);
+            next = Configure(context, options);
         }
-        finally
+        catch
         {
-            previous.Dispose();
+            // The reset dropped the previous parameters and dictionary, and the new ones are applied in part at most.
+            // The previous options are put back, so the native parameters and the options kept here never disagree.
+            RestoreOptions(context);
+            throw;
         }
+
+        // the reset dropped the reference to the previous dictionary
+        dictionary.Dispose();
+        dictionary = next;
+
+        ReleasePrefix();
+        this.options = options;
+        frameInProgress = false;
+        faulted = false;
+        GC.KeepAlive(this);
+    }
+
+    // Puts the previous options back after a failed Reset. The lease on their dictionary is still held, so they
+    // apply even when the caller disposed the dictionary in the meantime.
+    void RestoreOptions(ZSTD_DCtx_s* context)
+    {
+        try
+        {
+            Zstandard.ThrowIfError(ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters));
+            options.SetParameter(context, dictionary);
+        }
+        catch
+        {
+            // Options that were applied once do not fail again, so this is only a last resort that keeps the decoder usable.
+            ZSTD_DCtx_reset(context, ZSTD_ResetDirective.ZSTD_reset_session_and_parameters);
+            options = ZstandardDecompressionOptions.Default;
+            dictionary.Dispose();
+            dictionary = default;
+        }
+
+        ReleasePrefix(); // the reset dropped the reference to it
+        frameInProgress = false;
+        faulted = false;
         GC.KeepAlive(this);
     }
 
@@ -251,6 +305,13 @@ public sealed unsafe class ZstandardDecoder : IDisposable
         hasPrefix = true;
         dictionary.Dispose(); // refPrefix replaced the referenced dictionary
         dictionary = default;
+
+        // The dictionary stays replaced after the frame, and the caller is free to dispose it from here on,
+        // so it must not be referenced again.
+        if (options.Dictionary != null)
+        {
+            options = options with { Dictionary = null };
+        }
         GC.KeepAlive(this);
     }
 

@@ -51,21 +51,29 @@ internal ref struct SegmentedArrayProvider<T>
     void Expand()
     {
         var currentSegmentLength = currentSegment.Length;
-        checked { countInFinishedSegments += currentSegmentLength; }
 
-        if (countInFinishedSegments > ArrayMaxLength)
+        // The total never passes the largest array, which is what the result is copied into.
+        // Counted as long, the sum of the segments reaches int.MaxValue before a check on an int could see it.
+        var finished = (long)countInFinishedSegments + currentSegmentLength;
+        var remaining = ArrayMaxLength - finished;
+        if (remaining <= 0)
         {
             throw new OutOfMemoryException();
         }
+        countInFinishedSegments = (int)finished;
 
-        var newSegmentLength = (int)Math.Min(Math.Max(16, currentSegmentLength) * 2L, ArrayMaxLength);
-        currentSegment =
+        var newSegmentLength = (int)Math.Min(Math.Max(16, currentSegmentLength) * 2L, remaining);
+        var array = ArrayPool<T>.Shared.Rent(newSegmentLength);
 #if NET8_0_OR_GREATER
-            segments[segmentsCount]
+        segments[segmentsCount]
 #else
-            InlineArrayMarshal.ElementRef<InlineArray27<T[]>, T[]>(ref segments, segmentsCount)
+        InlineArrayMarshal.ElementRef<InlineArray27<T[]>, T[]>(ref segments, segmentsCount)
 #endif
-            = ArrayPool<T>.Shared.Rent(newSegmentLength);
+            = array;
+
+        // The pool may hand out more than asked. Only the last possible segment is cut, it is never a finished one
+        // because filling it ends in the exception above, and finished segments are copied in full.
+        currentSegment = array.Length > remaining ? array.AsSpan(0, (int)remaining) : array;
         countInCurrentSegment = 0;
         segmentsCount++;
     }

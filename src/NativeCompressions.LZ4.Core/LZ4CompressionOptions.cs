@@ -93,6 +93,12 @@ public readonly record struct LZ4CompressionOptions
 
     internal unsafe LZ4F_preferences_t ToPreferences()
     {
+        // lz4 checks the block size only. The other values are used as numbers, an undefined one gives a frame
+        // that cannot be decoded, so they are rejected here.
+        if (blockMode is not (BlockMode.BlockLinked or BlockMode.BlockIndependent)) throw new ArgumentOutOfRangeException(nameof(BlockMode));
+        if (contentChecksumFlag is not (ContentChecksum.NoContentChecksum or ContentChecksum.ContentChecksumEnabled)) throw new ArgumentOutOfRangeException(nameof(ContentChecksumFlag));
+        if (blockChecksumFlag is not (BlockChecksum.NoBlockChecksum or BlockChecksum.BlockChecksumEnabled)) throw new ArgumentOutOfRangeException(nameof(BlockChecksumFlag));
+
         var prefs = new LZ4F_preferences_t
         {
             autoFlush = autoFlush,

@@ -14,7 +14,9 @@ public static partial class LZ4
 
     public static async ValueTask DecompressAsync(ReadOnlyMemory<byte> source, PipeWriter destination, LZ4DecompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var reader = PipeReader.Create(new ReadOnlySequence<byte>(source));
+        // An empty source goes in as the empty sequence. The reader answers a read of an empty sequence with that one,
+        // and a position taken from it does not belong to a slice that starts elsewhere.
+        var reader = PipeReader.Create(source.IsEmpty ? ReadOnlySequence<byte>.Empty : new ReadOnlySequence<byte>(source));
         try
         {
             await DecompressCoreAsync(reader, destination, options ?? LZ4DecompressionOptions.Default, cancellationToken);
@@ -27,7 +29,7 @@ public static partial class LZ4
 
     public static async ValueTask DecompressAsync(ReadOnlySequence<byte> source, PipeWriter destination, LZ4DecompressionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var reader = PipeReader.Create(source);
+        var reader = PipeReader.Create(source.IsEmpty ? ReadOnlySequence<byte>.Empty : source); // see the ReadOnlyMemory overload
         try
         {
             await DecompressCoreAsync(reader, destination, options ?? LZ4DecompressionOptions.Default, cancellationToken);
