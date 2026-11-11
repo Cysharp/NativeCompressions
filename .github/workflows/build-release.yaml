@@ -17,22 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # workflow_dispatch accepts any branch or tag, and the release tag is created at github.sha.
-  # Fail here so that only commits on main can be released.
-  check-ref:
-    permissions: {}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Require the main branch
-        run: |
-          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
-            echo "::error::Releases run only from refs/heads/main. This run is on $GITHUB_REF."
-            exit 1
-          fi
-
   validate-release:
-    needs: [check-ref]
     permissions:
       contents: read
     uses: Cysharp/Actions/.github/workflows/validate-release.yaml@main
