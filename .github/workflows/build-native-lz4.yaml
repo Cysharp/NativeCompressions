@@ -107,7 +107,7 @@ jobs:
           # lld rejects the -Wl,--force-exe-suffix that lz4 v1.11.0 adds for Windows targets.
           # MCM_LDFLAGS= drops it, and with it only the import library, which is not shipped.
           docker run --rm -v "$PWD:/work" -e LDFLAGS=-Wl,--no-insert-timestamp \
-            mstorsjo/llvm-mingw:latest \
+            mstorsjo/llvm-mingw:20261104@sha256:b2a697af8fc50c5cc56011143453d02168ccfcff635d12ca76a1c363f5f6b0c6 \
             bash -c "cd /work/lz4/lib && \
               make liblz4 MULTITHREAD=0 MCM_LDFLAGS= \
               TARGET_OS=Windows_NT LIBLZ4_NAME=lz4 \
