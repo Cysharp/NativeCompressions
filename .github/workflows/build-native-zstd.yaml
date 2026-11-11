@@ -66,7 +66,7 @@ jobs:
           LDFLAGS: -Wl,--no-insert-timestamp
         run: |
           cd zstd/lib
-          make lib-release-nomt TARGET_SYSTEM=Windows CC=gcc -j "$(nproc)"
+          make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 TARGET_SYSTEM=Windows CC=gcc -j "$(nproc)"
       - name: Prepare artifacts
         shell: pwsh
         run: |
@@ -104,7 +104,7 @@ jobs:
           docker run --rm -v "$PWD:/work" -e LDFLAGS=-Wl,--no-insert-timestamp \
             mstorsjo/llvm-mingw:20261104@sha256:b2a697af8fc50c5cc56011143453d02168ccfcff635d12ca76a1c363f5f6b0c6 \
             bash -c "cd /work/zstd/lib && \
-              make lib-release-nomt TARGET_SYSTEM=Windows CC=aarch64-w64-mingw32-gcc"
+              make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 TARGET_SYSTEM=Windows CC=aarch64-w64-mingw32-gcc"
           file zstd/lib/dll/libzstd.dll
       - name: Prepare artifacts
         run: |
@@ -176,7 +176,7 @@ jobs:
       - name: Build shared library
         run: |
           cd zstd/lib
-          make lib-release-nomt CC="${CC}" -j "$(nproc)"
+          make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 CC="${CC}" -j "$(nproc)"
           ls -la ./*.so*
           file libzstd.so*
       - name: Verify glibc requirement
@@ -236,7 +236,7 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: "15.0"
         run: |
           cd zstd/lib
-          make lib-release-nomt MOREFLAGS="${{ matrix.flags }}" -j "$(sysctl -n hw.ncpu)"
+          make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 MOREFLAGS="${{ matrix.flags }}" -j "$(sysctl -n hw.ncpu)"
           lipo -info ./*.dylib
           minos=$(otool -l libzstd.dylib | awk '/LC_BUILD_VERSION/ { found = 1 } found && /minos/ { print $2; exit }')
           test "$minos" = "$MACOSX_DEPLOYMENT_TARGET" || { echo "minos is $minos, expected $MACOSX_DEPLOYMENT_TARGET"; exit 1; }
@@ -304,7 +304,7 @@ jobs:
 
           # Build static library (iOS App Store requires static linking)
           cd zstd/lib
-          make libzstd.a-release-nomt CC="clang" CFLAGS="-O3 ${{ matrix.flags }} -isysroot $SDK_PATH" DEBUGFLAGS="" -j "$(sysctl -n hw.ncpu)"
+          make libzstd.a-release-nomt ZSTD_LEGACY_SUPPORT=0 CC="clang" CFLAGS="-O3 ${{ matrix.flags }} -isysroot $SDK_PATH" DEBUGFLAGS="" -j "$(sysctl -n hw.ncpu)"
 
           ls -la libzstd.a
           file libzstd.a
@@ -360,7 +360,7 @@ jobs:
           sdk="$(xcrun --sdk macosx --show-sdk-path)"
           flags="-O3 -target ${{ matrix.clang-arch }}-apple-ios15.0-macabi -isysroot $sdk"
           # Static-only single-threaded release build; no LTO
-          make -C zstd/lib libzstd.a-release-nomt \
+          make -C zstd/lib libzstd.a-release-nomt ZSTD_LEGACY_SUPPORT=0 \
             CC="$(xcrun --find clang)" AR="$(xcrun --find ar)" \
             CFLAGS="$flags" ASFLAGS="$flags" DEBUGFLAGS="" BUILD_DIR="$output/obj/catalyst" \
             -j "$(sysctl -n hw.ncpu)"
@@ -434,7 +434,7 @@ jobs:
           cd zstd/lib
           # 16 KB page size support, required for 64-bit devices running Android 15 or later.
           # LDFLAGS comes from the environment, on the command line it would replace the -shared the Makefile adds.
-          LDFLAGS="-Wl,-z,max-page-size=16384" make lib-release-nomt CC="${{ matrix.cc }}" -j "$(nproc)"
+          LDFLAGS="-Wl,-z,max-page-size=16384" make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 CC="${{ matrix.cc }}" -j "$(nproc)"
           ls -la libzstd.so*
           file libzstd.so*
           llvm-readelf -lW libzstd.so | grep LOAD
