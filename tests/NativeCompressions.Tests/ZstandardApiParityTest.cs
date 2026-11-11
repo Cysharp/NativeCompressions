@@ -90,10 +90,11 @@ public class ZstandardApiParityTest
         var concatenated = samples.SelectMany(x => x).ToArray();
         var lengths = samples.Select(x => x.Length).ToArray();
 
-        using var bclDict = BclDictionary.Train(concatenated, lengths, 16 * 1024);
-        using var nativeDict = ZstandardDictionary.Create(bclDict.Data.Span, 3);
+        var trained = BclDictionary.Train(concatenated, lengths, 16 * 1024);
+        using var bclDict = BclDictionary.Create(trained);
+        using var nativeDict = ZstandardDictionary.Create(trained, 3);
 
-        Assert.Equal(bclDict.Data.ToArray(), nativeDict.Data.ToArray());
+        Assert.Equal(trained, nativeDict.Data.ToArray());
 
         var data = samples[0].Concat(samples[1]).ToArray();
         var compressed = Zstandard.Compress(data, ZstandardCompressionOptions.Default with { Dictionary = nativeDict });
@@ -151,9 +152,9 @@ public class ZstandardApiParityTest
         var (concatenated, lengths, _) = TrainingSamples(seed: 13);
 
         var native = ZstandardDictionary.Train(concatenated, lengths, 8 * 1024);
-        using var bcl = BclDictionary.Train(concatenated, lengths, 8 * 1024);
+        var bcl = BclDictionary.Train(concatenated, lengths, 8 * 1024);
 
-        Assert.Equal(bcl.Data.ToArray(), native);
+        Assert.Equal(bcl, native);
     }
 
     [Fact]
