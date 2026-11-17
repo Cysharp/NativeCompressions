@@ -257,10 +257,13 @@ jobs:
       # (openzl/deps) statically and export only OpenZL's API (ZL_*, ZS2_*), like upstream's Python wheel
       # (openzl/py/pyproject.toml). Upstream `make libopenzl.so` links its shared deps/ builds instead,
       # which the Runtime package does not ship.
+      # -Bsymbolic binds the library's calls to its own exports at link time, so another libopenzl in the process
+      # cannot take them. ZSTD_TRACE=0 drops the bundled zstd's weak ZSTD_trace_* hooks, which -Bsymbolic does not
+      # cover because the library leaves them undefined, and which another zstd user in the process may define.
       - name: Build shared library
         working-directory: openzl
         run: |
-          CFLAGS="-O3 -fPIC" make -C deps/zstd/lib libzstd.a CC="${CC}" -j "$(nproc)"
+          CFLAGS="-O3 -fPIC" CPPFLAGS=-DZSTD_TRACE=0 make -C deps/zstd/lib libzstd.a CC="${CC}" -j "$(nproc)"
           CFLAGS="-O3 -fPIC" make -C deps/lz4/lib liblz4.a CC="${CC}" -j "$(nproc)"
           mkdir -p nc-static
           cp deps/zstd/lib/libzstd.a deps/lz4/lib/liblz4.a nc-static/
@@ -271,7 +274,7 @@ jobs:
           make libopenzl.so BUILD_TYPE=OPT CC="${CC}" MOREFLAGS="-flto" \
             LIBZSTD_SO=nc-static/libzstd.a LIBLZ4_SO=nc-static/liblz4.a \
             -o nc-static/libzstd.a -o nc-static/liblz4.a \
-            LDFLAGS="-Wl,--version-script=nc-static/exports.map -Wl,-soname,libopenzl.so -Wl,--no-undefined" \
+            LDFLAGS="-Wl,--version-script=nc-static/exports.map -Wl,-soname,libopenzl.so -Wl,--no-undefined -Wl,-Bsymbolic" \
             -j "$(nproc)"
           ls -la ./*.so*
           file -L libopenzl.so*
@@ -289,6 +292,8 @@ jobs:
             echo "::error::libopenzl.so exports bundled zstd/lz4 symbols"
             exit 1
           fi
+      - name: Verify symbol binding
+        run: sh .github/scripts/check-symbol-binding.sh openzl/libopenzl.so
       - name: Verify glibc requirement
         run: |
           max_glibc="$(objdump -T openzl/libopenzl.so | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)"
@@ -306,6 +311,107 @@ jobs:
         with:
           name: openzl-linux-${{ matrix.arch }}
           path: artifacts/linux-${{ matrix.arch }}/*
+          if-no-files-found: error
+
+  # Alpine and other musl distributions resolve linux-musl-<arch> before linux-<arch>. The glibc library does not
+  # load there: it references glibc-only symbols (__fprintf_chk, __memcpy_chk, ...), and on arm64 it also needs
+  # ld-linux-aarch64.so.1. Alpine runs through docker instead of a job container, because the runner cannot start
+  # JavaScript actions (checkout, upload-artifact) in an Alpine job container on arm64.
+  build-linux-musl:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+        musl: ["1.2.5"]
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      # Pin musl to matrix.musl by building inside Alpine 3.22 (musl 1.2.5).
+      ALPINE_IMAGE: alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
+      # Alpine 3.17 has musl 1.2.3, the oldest musl the README lists.
+      MIN_MUSL_IMAGE: alpine:3.17@sha256:8fc3dacfb6d69da8d44e42390de777e48577085db99aa4e4af35f483eb08b989
+      MUSL_VERSION: ${{ matrix.musl }}
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd openzl
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      - name: Start Alpine container
+        run: |
+          docker run -d --name alpine -v "${GITHUB_WORKSPACE}:/work" -w /work "${ALPINE_IMAGE}" sleep infinity
+          docker exec alpine apk add --no-cache build-base
+      - name: Verify container musl
+        run: |
+          actual="$(docker exec alpine sh -c 'ldd 2>&1 | sed -n "s/^Version //p"')"
+          if [ "${actual}" != "${MUSL_VERSION}" ]; then
+            echo "::error::container musl is ${actual}, but matrix.musl is ${MUSL_VERSION}"
+            exit 1
+          fi
+      # Same build as the glibc one, see build-linux, except -flto. With gcc 14, the only gcc of Alpine 3.22, the
+      # LTO build crashes in a zstd graph round trip of 64KB text (SmokeNative). gcc 14 + LTO on glibc crashes the
+      # same way, gcc 10 does not. The version script is written here, outside the single-quoted container script.
+      - name: Build shared library
+        run: |
+          mkdir -p openzl/nc-static
+          printf '{\n  global: ZL_*; ZS2_*;\n  local: *;\n};\n' > openzl/nc-static/exports.map
+          docker exec -w /work/openzl alpine sh -euc '
+            CFLAGS="-O3 -fPIC" CPPFLAGS=-DZSTD_TRACE=0 make -C deps/zstd/lib libzstd.a CC=gcc -j "$(nproc)"
+            CFLAGS="-O3 -fPIC" make -C deps/lz4/lib liblz4.a CC=gcc -j "$(nproc)"
+            cp deps/zstd/lib/libzstd.a deps/lz4/lib/liblz4.a nc-static/
+            make libopenzl.so BUILD_TYPE=OPT CC=gcc \
+              LIBZSTD_SO=nc-static/libzstd.a LIBLZ4_SO=nc-static/liblz4.a \
+              -o nc-static/libzstd.a -o nc-static/liblz4.a \
+              LDFLAGS="-Wl,--version-script=nc-static/exports.map -Wl,-soname,libopenzl.so -Wl,--no-undefined -Wl,-Bsymbolic" \
+              -j "$(nproc)"'
+          ls -la openzl/*.so*
+          file -L openzl/libopenzl.so
+      - name: Verify self-contained library
+        run: |
+          docker exec -w /work/openzl alpine sh -euc '
+            readelf -d libopenzl.so | grep NEEDED
+            if readelf -d libopenzl.so | grep NEEDED | grep -E "zstd|lz4"; then
+              echo "::error::libopenzl.so depends on a library the Runtime package does not ship"
+              exit 1
+            fi
+            nm -D --defined-only libopenzl.so > nc-static/exports.txt
+            grep -q " ZL_CCtx_compress$" nc-static/exports.txt
+            if grep -E " (ZSTD|ZDICT|LZ4|XXH|HUF|FSE)_" nc-static/exports.txt; then
+              echo "::error::libopenzl.so exports bundled zstd/lz4 symbols"
+              exit 1
+            fi'
+      # musl's ldd relocates every symbol eagerly, so a symbol or library that musl does not provide fails here.
+      - name: Verify musl loader
+        run: docker exec alpine ldd openzl/libopenzl.so
+      # musl has no symbol versions to compare like glibc, so load the library with the oldest supported musl instead.
+      - name: Verify musl requirement
+        run: docker run --rm -v "${GITHUB_WORKSPACE}:/work" -w /work "${MIN_MUSL_IMAGE}" ldd openzl/libopenzl.so
+      - name: Verify symbol binding
+        run: docker exec alpine sh .github/scripts/check-symbol-binding.sh openzl/libopenzl.so
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/linux-musl-${{ matrix.arch }}
+          cp -L openzl/libopenzl.so artifacts/linux-musl-${{ matrix.arch }}/
+      - name: Upload Linux musl artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: openzl-linux-musl-${{ matrix.arch }}
+          path: artifacts/linux-musl-${{ matrix.arch }}/*
           if-no-files-found: error
 
   build-macos:
@@ -650,6 +756,7 @@ jobs:
         build-windows,
         build-windows-arm64,
         build-linux,
+        build-linux-musl,
         build-macos,
         build-ios,
         build-catalyst,
@@ -669,6 +776,7 @@ jobs:
         run: |
           mkdir -p release/runtimes/{win-x64,win-arm64}/native
           mkdir -p release/runtimes/{linux-x64,linux-arm64}/native
+          mkdir -p release/runtimes/{linux-musl-x64,linux-musl-arm64}/native
           mkdir -p release/runtimes/{osx-x64,osx-arm64}/native
           mkdir -p release/runtimes/{android-arm,android-arm64,android-x64}/native
           mkdir -p release/runtimes/{ios-arm64,ios-x64,iossimulator-arm64}/native
@@ -688,6 +796,12 @@ jobs:
           fi
           if [ -f artifacts/openzl-linux-arm64/libopenzl.so ]; then
             cp artifacts/openzl-linux-arm64/libopenzl.so release/runtimes/linux-arm64/native/
+          fi
+          if [ -f artifacts/openzl-linux-musl-x64/libopenzl.so ]; then
+            cp artifacts/openzl-linux-musl-x64/libopenzl.so release/runtimes/linux-musl-x64/native/
+          fi
+          if [ -f artifacts/openzl-linux-musl-arm64/libopenzl.so ]; then
+            cp artifacts/openzl-linux-musl-arm64/libopenzl.so release/runtimes/linux-musl-arm64/native/
           fi
 
           # macOS
@@ -787,7 +901,7 @@ jobs:
         run: |
           echo "Updated openzl runtimes to ${LATEST_TAG}"
 
-          for arch in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64 ios-arm64 ios-x64 iossimulator-arm64 maccatalyst-arm64 maccatalyst-x64 android-arm android-arm64 android-x64; do
+          for arch in linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-x64 osx-arm64 win-x64 win-arm64 ios-arm64 ios-x64 iossimulator-arm64 maccatalyst-arm64 maccatalyst-x64 android-arm android-arm64 android-x64; do
             mkdir -p "${DEST_BASE_PATH}/${arch}/native"
           done
 
@@ -816,6 +930,12 @@ jobs:
             fi
             if [ -f artifacts/openzl-linux-arm64/libopenzl.so ]; then
               cp -f artifacts/openzl-linux-arm64/libopenzl.so "${DEST_BASE_PATH}/linux-arm64/native/libopenzl.so"
+            fi
+            if [ -f artifacts/openzl-linux-musl-x64/libopenzl.so ]; then
+              cp -f artifacts/openzl-linux-musl-x64/libopenzl.so "${DEST_BASE_PATH}/linux-musl-x64/native/libopenzl.so"
+            fi
+            if [ -f artifacts/openzl-linux-musl-arm64/libopenzl.so ]; then
+              cp -f artifacts/openzl-linux-musl-arm64/libopenzl.so "${DEST_BASE_PATH}/linux-musl-arm64/native/libopenzl.so"
             fi
 
             # macOS
