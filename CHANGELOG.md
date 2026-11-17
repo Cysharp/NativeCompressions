@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `LZ4Stream.BaseStream`, `LZ4Encoder.Reset(in LZ4CompressionOptions)` and `LZ4Decoder.Reset(in LZ4DecompressionOptions)`, matching the Zstandard side.
 - XML documentation is included in the Core packages.
 - `CHANGELOG.md`.
+- Native libraries for musl Linux, such as Alpine: `linux-musl-x64` and `linux-musl-arm64`, in the `NativeCompressions.LZ4.Runtime.linux-musl-*` and `NativeCompressions.Zstandard.Runtime.linux-musl-*` packages. The `Runtime` packages and `NativeCompressions` include them.
 
 ### Changed
 - `LZ4Encoder.Compress`, `Flush` and `Close` return an `OperationStatus` with `bytesConsumed` and `bytesWritten`, and `Compress` takes `isFinalBlock`, the same as `ZstandardEncoder` and `BrotliEncoder`. A call that runs out of room returns `DestinationTooSmall`, and the next call continues. Every call makes progress with a destination of at least `LZ4.MaxFrameHeaderLength` bytes. A failure, such as a frame length that differs from `ContentSize`, returns `InvalidData` with nothing counted, instead of throwing `LZ4Exception`, and the encoder needs `Reset()` afterwards. An empty source before the first input writes nothing, the header comes with the first input.
@@ -39,6 +40,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Zstandard native libraries are built with `ZSTD_LEGACY_SUPPORT=0`. Frames of the formats before zstd v0.8 are invalid data now. Their decoders did not honor `WindowLogMax`.
 
 ### Fixed
+- On Alpine and other musl distributions, the packages loaded the glibc libraries. On arm64 none of them loaded, they need `ld-linux-aarch64.so.1`. On x64 libzstd loaded with an unresolved glibc-only symbol (`__fprintf_chk`), and an eager loader rejected it. The musl libraries above replace them there.
+- The Linux libraries could call into another copy of lz4 or zstd in the process, such as the distribution library linked by the host executable, and corrupt memory. They are linked with `-Bsymbolic` now, so their calls to their own functions stay inside them, and zstd is built without its `ZSTD_trace_*` hooks, which a host could define.
 - Calling `LZ4Decoder.Decompress` again after `OperationStatus.InvalidData`, or reading from an `LZ4Stream` again after it threw `LZ4Exception`, read outside the source and then copied the input over a native buffer of 64KB. lz4 cannot resume a context after an error.
 - `ZstandardDecoder` reported the whole destination as written when a frame of a format before zstd v0.8 failed, and `Zstandard.DecompressAsync` passed that memory on to the destination before it threw.
 - `ZstandardStream` threw `ZstandardException` for a valid frame, and for every read after it, once 15 reads in a row inside a frame got no data because the inner stream threw or the read was cancelled.

@@ -20,6 +20,8 @@
   <ItemGroup>
     <ProjectReference Include="NativeCompressions.Zstandard.Runtime.linux-arm64.csproj" />
     <ProjectReference Include="NativeCompressions.Zstandard.Runtime.linux-x64.csproj" />
+    <ProjectReference Include="NativeCompressions.Zstandard.Runtime.linux-musl-arm64.csproj" />
+    <ProjectReference Include="NativeCompressions.Zstandard.Runtime.linux-musl-x64.csproj" />
     <ProjectReference Include="NativeCompressions.Zstandard.Runtime.osx-arm64.csproj" />
     <ProjectReference Include="NativeCompressions.Zstandard.Runtime.osx-x64.csproj" />
     <ProjectReference Include="NativeCompressions.Zstandard.Runtime.win-arm64.csproj" />

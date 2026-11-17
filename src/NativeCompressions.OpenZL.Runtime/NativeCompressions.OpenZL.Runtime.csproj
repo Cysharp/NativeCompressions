@@ -18,6 +18,8 @@
   <ItemGroup>
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.linux-arm64.csproj" />
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.linux-x64.csproj" />
+    <ProjectReference Include="NativeCompressions.OpenZL.Runtime.linux-musl-arm64.csproj" />
+    <ProjectReference Include="NativeCompressions.OpenZL.Runtime.linux-musl-x64.csproj" />
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.osx-arm64.csproj" />
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.osx-x64.csproj" />
     <ProjectReference Include="NativeCompressions.OpenZL.Runtime.win-arm64.csproj" />

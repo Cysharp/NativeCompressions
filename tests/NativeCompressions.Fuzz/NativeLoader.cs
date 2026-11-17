@@ -44,7 +44,9 @@ public static class NativeLoader
         }
         else
         {
-            platform = "linux"; prefix = libraryName.StartsWith("lib") ? "" : "lib"; ext = ".so";
+            // musl's dynamic loader (/lib/ld-musl-<arch>.so.1) is mapped in a musl process
+            platform = File.ReadAllText("/proc/self/maps").Contains("/ld-musl-", StringComparison.Ordinal) ? "linux-musl" : "linux";
+            prefix = libraryName.StartsWith("lib") ? "" : "lib"; ext = ".so";
         }
 
         var arch = RuntimeInformation.OSArchitecture switch
