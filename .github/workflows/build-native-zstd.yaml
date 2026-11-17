@@ -173,12 +173,21 @@ jobs:
             git checkout ${{ needs.check_new_release.outputs.latest_tag }}
           cd ..
           echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      # -Bsymbolic binds the library's calls to its own exports at link time, so another libzstd in the process
+      # (e.g. the distro one linked by the host executable) cannot take them. ZSTD_TRACE=0 drops the weak
+      # ZSTD_trace_* hooks, which -Bsymbolic does not cover because the library leaves them undefined.
+      # Both come from the environment so the Makefile can still add to them.
       - name: Build shared library
+        env:
+          CPPFLAGS: -DZSTD_TRACE=0
+          LDFLAGS: -Wl,-Bsymbolic
         run: |
           cd zstd/lib
           make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 CC="${CC}" -j "$(nproc)"
           ls -la ./*.so*
           file libzstd.so*
+      - name: Verify symbol binding
+        run: sh .github/scripts/check-symbol-binding.sh zstd/lib/libzstd.so
       - name: Verify glibc requirement
         run: |
           max_glibc="$(objdump -T zstd/lib/libzstd.so | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)"
@@ -201,6 +210,82 @@ jobs:
         with:
           name: zstd-linux-${{ matrix.arch }}
           path: artifacts/linux-${{ matrix.arch }}/*
+          if-no-files-found: error
+
+  # Alpine and other musl distributions resolve linux-musl-<arch> before linux-<arch>. The glibc library does not
+  # load there: it references glibc-only symbols (__fprintf_chk), and on arm64 it also needs ld-linux-aarch64.so.1.
+  # Alpine runs through docker instead of a job container, because the runner cannot start JavaScript actions
+  # (checkout, upload-artifact) in an Alpine job container on arm64.
+  build-linux-musl:
+    needs: [check_new_release]
+    if: ${{ needs.check_new_release.outputs.needs_update == 'true' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+        musl: ["1.2.5"]
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      # Pin musl to matrix.musl by building inside Alpine 3.22 (musl 1.2.5).
+      ALPINE_IMAGE: alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
+      # Alpine 3.17 has musl 1.2.3, the oldest musl the README lists.
+      MIN_MUSL_IMAGE: alpine:3.17@sha256:8fc3dacfb6d69da8d44e42390de777e48577085db99aa4e4af35f483eb08b989
+      MUSL_VERSION: ${{ matrix.musl }}
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Update submodule to latest release
+        if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        run: |
+          cd zstd
+            git fetch --tags
+            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+          cd ..
+          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+      - name: Start Alpine container
+        run: |
+          docker run -d --name alpine -v "${GITHUB_WORKSPACE}:/work" -w /work "${ALPINE_IMAGE}" sleep infinity
+          docker exec alpine apk add --no-cache build-base
+      - name: Verify container musl
+        run: |
+          actual="$(docker exec alpine sh -c 'ldd 2>&1 | sed -n "s/^Version //p"')"
+          if [ "${actual}" != "${MUSL_VERSION}" ]; then
+            echo "::error::container musl is ${actual}, but matrix.musl is ${MUSL_VERSION}"
+            exit 1
+          fi
+      # Same build as the glibc one, see build-linux.
+      - name: Build shared library
+        run: |
+          docker exec -w /work/zstd/lib -e CPPFLAGS=-DZSTD_TRACE=0 -e LDFLAGS=-Wl,-Bsymbolic alpine \
+            sh -c 'make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 CC=gcc -j "$(nproc)"'
+          ls -la zstd/lib/*.so*
+          file -L zstd/lib/libzstd.so
+      # musl's ldd relocates every symbol eagerly, so a symbol or library that musl does not provide fails here.
+      - name: Verify musl loader
+        run: docker exec alpine ldd zstd/lib/libzstd.so
+      # musl has no symbol versions to compare like glibc, so load the library with the oldest supported musl instead.
+      - name: Verify musl requirement
+        run: docker run --rm -v "${GITHUB_WORKSPACE}:/work" -w /work "${MIN_MUSL_IMAGE}" ldd zstd/lib/libzstd.so
+      - name: Verify symbol binding
+        run: docker exec alpine sh .github/scripts/check-symbol-binding.sh zstd/lib/libzstd.so
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/linux-musl-${{ matrix.arch }}
+          cp -L zstd/lib/libzstd.so artifacts/linux-musl-${{ matrix.arch }}/
+      - name: Upload Linux musl artifacts
+        uses: Cysharp/Actions/.github/actions/upload-artifact@main
+        with:
+          name: zstd-linux-musl-${{ matrix.arch }}
+          path: artifacts/linux-musl-${{ matrix.arch }}/*
           if-no-files-found: error
 
   build-macos:
@@ -457,6 +542,7 @@ jobs:
         build-windows,
         build-windows-arm64,
         build-linux,
+        build-linux-musl,
         build-macos,
         build-ios,
         build-catalyst,
@@ -476,6 +562,7 @@ jobs:
         run: |
           mkdir -p release/runtimes/{win-x64,win-arm64}/native
           mkdir -p release/runtimes/{linux-x64,linux-arm64}/native
+          mkdir -p release/runtimes/{linux-musl-x64,linux-musl-arm64}/native
           mkdir -p release/runtimes/{osx-x64,osx-arm64}/native
           mkdir -p release/runtimes/{android-arm,android-arm64,android-x64}/native
           mkdir -p release/runtimes/{ios-arm64,ios-x64,iossimulator-arm64}/native
@@ -495,6 +582,12 @@ jobs:
           fi
           if [ -f artifacts/zstd-linux-arm64/libzstd.so ]; then
             cp artifacts/zstd-linux-arm64/libzstd.so release/runtimes/linux-arm64/native/
+          fi
+          if [ -f artifacts/zstd-linux-musl-x64/libzstd.so ]; then
+            cp artifacts/zstd-linux-musl-x64/libzstd.so release/runtimes/linux-musl-x64/native/
+          fi
+          if [ -f artifacts/zstd-linux-musl-arm64/libzstd.so ]; then
+            cp artifacts/zstd-linux-musl-arm64/libzstd.so release/runtimes/linux-musl-arm64/native/
           fi
 
           # macOS
@@ -594,7 +687,7 @@ jobs:
         run: |
           echo "Updated zstd runtimes to ${LATEST_TAG}"
 
-          for arch in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64 ios-arm64 ios-x64 iossimulator-arm64 maccatalyst-arm64 maccatalyst-x64 android-arm android-arm64 android-x64; do
+          for arch in linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-x64 osx-arm64 win-x64 win-arm64 ios-arm64 ios-x64 iossimulator-arm64 maccatalyst-arm64 maccatalyst-x64 android-arm android-arm64 android-x64; do
             mkdir -p "${DEST_BASE_PATH}/${arch}/native"
           done
 
@@ -623,6 +716,12 @@ jobs:
             fi
             if [ -f artifacts/zstd-linux-arm64/libzstd.so ]; then
               cp -f artifacts/zstd-linux-arm64/libzstd.so "${DEST_BASE_PATH}/linux-arm64/native/libzstd.so"
+            fi
+            if [ -f artifacts/zstd-linux-musl-x64/libzstd.so ]; then
+              cp -f artifacts/zstd-linux-musl-x64/libzstd.so "${DEST_BASE_PATH}/linux-musl-x64/native/libzstd.so"
+            fi
+            if [ -f artifacts/zstd-linux-musl-arm64/libzstd.so ]; then
+              cp -f artifacts/zstd-linux-musl-arm64/libzstd.so "${DEST_BASE_PATH}/linux-musl-arm64/native/libzstd.so"
             fi
 
             # macOS
