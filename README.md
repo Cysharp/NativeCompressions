@@ -40,9 +40,9 @@ The package includes native libraries for Windows (x64, arm64), Linux (x64, arm6
 | `NativeCompressions.LZ4` / `NativeCompressions.Zstandard` | one algorithm, all platforms |
 | `NativeCompressions.LZ4.Core` / `NativeCompressions.Zstandard.Core` | the managed binding only, no native libraries |
 | `NativeCompressions.LZ4.Runtime` / `NativeCompressions.Zstandard.Runtime` | the native libraries of all platforms |
-| `NativeCompressions.LZ4.Runtime.<rid>` / `NativeCompressions.Zstandard.Runtime.<rid>` | the native library of one platform. `<rid>` is one of `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`, `android-arm`, `android-arm64`, `android-x64`, `ios-arm64`, `ios-x64`, `maccatalyst-x64`, `maccatalyst-arm64` |
+| `NativeCompressions.LZ4.Runtime.<rid>` / `NativeCompressions.Zstandard.Runtime.<rid>` | the native library of one platform. `<rid>` is one of `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `linux-musl-x64`, `linux-musl-arm64`, `osx-x64`, `osx-arm64`, `android-arm`, `android-arm64`, `android-x64`, `ios-arm64`, `ios-x64`, `maccatalyst-x64`, `maccatalyst-arm64` |
 
-For example, a Linux server that only needs Zstandard takes `NativeCompressions.Zstandard.Core` and `NativeCompressions.Zstandard.Runtime.linux-x64`.
+For example, a Linux server that only needs Zstandard takes `NativeCompressions.Zstandard.Core` and `NativeCompressions.Zstandard.Runtime.linux-x64`, or `NativeCompressions.Zstandard.Runtime.linux-musl-x64` in an Alpine container.
 
 iOS and Mac Catalyst apps need .NET 10 or later. The native libraries are linked statically on those platforms, and the assemblies that call them that way are built for `net10.0-ios` and `net10.0-maccatalyst` onward. An app that targets .NET 8 or 9 there fails at build time with a message saying so.
 

@@ -56,6 +56,15 @@ jobs:
       # Run net8.0, net9.0 and net11.0 against the matching library builds on every OS.
       - run: dotnet test -c Release --no-build
         working-directory: tests/NativeCompressions.Tests
+      # Another lz4 and zstd in the process's global scope, such as the distro libraries linked by a native host,
+      # must not take the calls of the bundled libraries to their own functions. The runner image has the distro ones.
+      - name: Test with the distro lz4 and zstd preloaded
+        if: ${{ runner.os == 'Linux' }}
+        working-directory: artifacts/bin/NativeCompressions.Tests/release_net8.0
+        run: |
+          libdir="/usr/lib/$(gcc -dumpmachine)"
+          ls -l "${libdir}/liblz4.so.1" "${libdir}/libzstd.so.1"
+          LD_PRELOAD="${libdir}/liblz4.so.1:${libdir}/libzstd.so.1" dotnet NativeCompressions.Tests.dll
       # Smoke the native binaries directly via P/Invoke, without NativeCompressions.
       - run: dotnet run --project sandbox/SmokeNative -c Release --no-build
       - run: dotnet pack -c Release --no-build -p:IncludeSymbols=true
@@ -64,3 +73,43 @@ jobs:
         working-directory: tests/NativeCompressions.Tests
       - run: dotnet test -c Release -f net8.0 -p:TestCoreTfm=netstandard2.1
         working-directory: tests/NativeCompressions.Tests
+
+  # Alpine and other musl distributions load the linux-musl-<arch> libraries.
+  test-musl:
+    name: ${{ matrix.platform }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-musl-x64
+            runner: ubuntu-24.04
+          - platform: linux-musl-arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: Cysharp/Actions/.github/actions/checkout@main
+        with:
+          ref: ${{ inputs.git-ref || github.sha }}
+      - uses: Cysharp/Actions/.github/actions/setup-dotnet@main
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+            11.0.x
+      - run: dotnet build tests/NativeCompressions.Tests -c Release
+      - run: dotnet build sandbox/SmokeNative -c Release
+      # Run net8.0, net9.0 and net11.0 in the Alpine runtime image of the same version.
+      - name: Test on Alpine
+        run: |
+          for tfm in net8.0 net9.0 net11.0; do
+            docker run --rm -v "${GITHUB_WORKSPACE}:/work" -w "/work/artifacts/bin/NativeCompressions.Tests/release_${tfm}" \
+              "mcr.microsoft.com/dotnet/runtime:${tfm#net}-alpine" dotnet NativeCompressions.Tests.dll
+          done
+      # Smoke the musl binaries directly via P/Invoke, without NativeCompressions.
+      - name: Smoke native on Alpine
+        run: |
+          docker run --rm -v "${GITHUB_WORKSPACE}:/work" -w /work mcr.microsoft.com/dotnet/runtime:10.0-alpine dotnet artifacts/bin/SmokeNative/release/SmokeNative.dll

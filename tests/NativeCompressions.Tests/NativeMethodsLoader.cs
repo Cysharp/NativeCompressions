@@ -46,7 +46,7 @@ internal static class NativeMethodsLoader
             }
             else
             {
-                platform = "linux";
+                platform = IsMusl() ? "linux-musl" : "linux";
                 prefix = libraryName.StartsWith("lib") ? "" : "lib";
                 ext = ".so";
             }
@@ -64,4 +64,8 @@ internal static class NativeMethodsLoader
 
         return IntPtr.Zero;
     }
+
+    // The process runs on musl when musl's dynamic loader (/lib/ld-musl-<arch>.so.1) is mapped.
+    // RuntimeInformation.RuntimeIdentifier is not enough: a distro-built .NET reports e.g. alpine.3.22-x64.
+    static bool IsMusl() => File.ReadAllText("/proc/self/maps").Contains("/ld-musl-", StringComparison.Ordinal);
 }
