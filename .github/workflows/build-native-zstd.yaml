@@ -45,12 +45,15 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
+        shell: bash
         run: |
           cd zstd
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated zstd submodule to ${LATEST_TAG}"
       - name: Setup MSYS2
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
@@ -66,7 +69,26 @@ jobs:
           LDFLAGS: -Wl,--no-insert-timestamp
         run: |
           cd zstd/lib
-          make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 TARGET_SYSTEM=Windows CC=gcc -j "$(nproc)"
+          make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 TARGET_SYSTEM=Windows CC=gcc MOREFLAGS="-fstack-protector-strong" -j "$(nproc)"
+      - name: Verify hardening
+        shell: msys2 {0}
+        run: |
+          dll=zstd/lib/dll/libzstd.dll
+          # mingw-w64 has the stack protector in its static CRT, so no libssp or other extra DLL may show up.
+          imports="$(objdump -p "${dll}" | awk '/DLL Name:/ { print $NF }')"
+          echo "${imports}"
+          if [ -z "${imports}" ]; then
+            echo "::error::${dll} has no import table"
+            exit 1
+          fi
+          if echo "${imports}" | grep -v -i -E '^(KERNEL32|msvcrt|api-ms-win-crt-[a-z0-9-]+)\.dll$'; then
+            echo "::error::${dll} imports a DLL other than KERNEL32.dll, msvcrt.dll and api-ms-win-crt-*.dll"
+            exit 1
+          fi
+          if ! nm "${dll}" | grep __stack_chk_fail; then
+            echo "::error::${dll} has no __stack_chk_fail, the stack protector is missing"
+            exit 1
+          fi
       - name: Prepare artifacts
         shell: pwsh
         run: |
@@ -86,26 +108,49 @@ jobs:
       contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    env:
+      LLVM_MINGW_IMAGE: mstorsjo/llvm-mingw:20261104@sha256:b2a697af8fc50c5cc56011143453d02168ccfcff635d12ca76a1c363f5f6b0c6
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
           submodules: recursive
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd zstd
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated zstd submodule to ${LATEST_TAG}"
       # `-fPIC` is not needed on Windows
       - name: Build using Docker
         run: |
           docker run --rm -v "$PWD:/work" -e LDFLAGS=-Wl,--no-insert-timestamp \
-            mstorsjo/llvm-mingw:20261104@sha256:b2a697af8fc50c5cc56011143453d02168ccfcff635d12ca76a1c363f5f6b0c6 \
+            "${LLVM_MINGW_IMAGE}" \
             bash -c "cd /work/zstd/lib && \
-              make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 TARGET_SYSTEM=Windows CC=aarch64-w64-mingw32-gcc"
+              make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 TARGET_SYSTEM=Windows CC=aarch64-w64-mingw32-gcc MOREFLAGS=-fstack-protector-strong"
           file zstd/lib/dll/libzstd.dll
+      # The host binutils cannot read an ARM64 DLL, so the tools come from the same image.
+      - name: Verify hardening
+        run: |
+          dll=zstd/lib/dll/libzstd.dll
+          # mingw-w64 has the stack protector in its static CRT, so no libssp or other extra DLL may show up.
+          imports="$(docker run --rm -v "$PWD:/work" "${LLVM_MINGW_IMAGE}" llvm-objdump -p "/work/${dll}" | awk '/DLL Name:/ { print $NF }')"
+          echo "${imports}"
+          if [ -z "${imports}" ]; then
+            echo "::error::${dll} has no import table"
+            exit 1
+          fi
+          if echo "${imports}" | grep -v -i -E '^(KERNEL32|msvcrt|api-ms-win-crt-[a-z0-9-]+)\.dll$'; then
+            echo "::error::${dll} imports a DLL other than KERNEL32.dll, msvcrt.dll and api-ms-win-crt-*.dll"
+            exit 1
+          fi
+          if ! docker run --rm -v "$PWD:/work" "${LLVM_MINGW_IMAGE}" llvm-nm "/work/${dll}" | grep __stack_chk_fail; then
+            echo "::error::${dll} has no __stack_chk_fail, the stack protector is missing"
+            exit 1
+          fi
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/win-arm64
@@ -167,20 +212,23 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd zstd
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated zstd submodule to ${LATEST_TAG}"
       # -Bsymbolic binds the library's calls to its own exports at link time, so another libzstd in the process
       # (e.g. the distro one linked by the host executable) cannot take them. ZSTD_TRACE=0 drops the weak
       # ZSTD_trace_* hooks, which -Bsymbolic does not cover because the library leaves them undefined.
+      # -z relro -z now resolves the imports at load time and makes the tables they go through read-only.
       # Both come from the environment so the Makefile can still add to them.
       - name: Build shared library
         env:
           CPPFLAGS: -DZSTD_TRACE=0
-          LDFLAGS: -Wl,-Bsymbolic
+          LDFLAGS: -Wl,-Bsymbolic -Wl,-z,relro,-z,now
         run: |
           cd zstd/lib
           make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 CC="${CC}" -j "$(nproc)"
@@ -188,6 +236,17 @@ jobs:
           file libzstd.so*
       - name: Verify symbol binding
         run: sh .github/scripts/check-symbol-binding.sh zstd/lib/libzstd.so
+      - name: Verify hardening
+        run: |
+          # BIND_NOW comes from the LDFLAGS above, the stack protector is the Ubuntu gcc default.
+          if ! readelf -d zstd/lib/libzstd.so | grep BIND_NOW; then
+            echo "::error::libzstd.so has no BIND_NOW"
+            exit 1
+          fi
+          if ! nm -D zstd/lib/libzstd.so | grep __stack_chk_fail; then
+            echo "::error::libzstd.so has no __stack_chk_fail, the stack protector is missing"
+            exit 1
+          fi
       - name: Verify glibc requirement
         run: |
           max_glibc="$(objdump -T zstd/lib/libzstd.so | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)"
@@ -245,12 +304,14 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd zstd
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated zstd submodule to ${LATEST_TAG}"
       - name: Start Alpine container
         run: |
           docker run -d --name alpine -v "${GITHUB_WORKSPACE}:/work" -w /work "${ALPINE_IMAGE}" sleep infinity
@@ -309,12 +370,14 @@ jobs:
           submodules: recursive
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd zstd
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated zstd submodule to ${LATEST_TAG}"
       - name: Build dynamic library
         env:
           # The minimum macOS version is fixed here, not by the runner image. README says the same version.
@@ -375,12 +438,14 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd zstd
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated zstd submodule to ${LATEST_TAG}"
       - name: Build static library for iOS
         env:
           ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
@@ -430,12 +495,14 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd zstd
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated zstd submodule to ${LATEST_TAG}"
       - name: Build static library for Mac Catalyst
         env:
           ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
@@ -500,12 +567,14 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd zstd
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated zstd submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated zstd submodule to ${LATEST_TAG}"
       - name: Setup Android NDK
         uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
         id: setup-ndk
@@ -519,11 +588,24 @@ jobs:
           cd zstd/lib
           # 16 KB page size support, required for 64-bit devices running Android 15 or later.
           # LDFLAGS comes from the environment, on the command line it would replace the -shared the Makefile adds.
-          LDFLAGS="-Wl,-z,max-page-size=16384" make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 CC="${{ matrix.cc }}" -j "$(nproc)"
+          LDFLAGS="-Wl,-z,max-page-size=16384" make lib-release-nomt ZSTD_LEGACY_SUPPORT=0 CC="${{ matrix.cc }}" MOREFLAGS="-fstack-protector-strong" -j "$(nproc)"
           ls -la libzstd.so*
           file libzstd.so*
           llvm-readelf -lW libzstd.so | grep LOAD
           if llvm-readelf -lW libzstd.so | grep LOAD | grep -v -E "0x4000[[:space:]]*$"; then echo "LOAD segment is not aligned to 16 KB"; exit 1; fi
+      - name: Verify hardening
+        run: |
+          export PATH="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+
+          # BIND_NOW is the NDK linker default, the stack protector comes from the MOREFLAGS above.
+          if ! llvm-readelf -d zstd/lib/libzstd.so | grep BIND_NOW; then
+            echo "::error::libzstd.so has no BIND_NOW"
+            exit 1
+          fi
+          if ! llvm-nm -D zstd/lib/libzstd.so | grep __stack_chk_fail; then
+            echo "::error::libzstd.so has no __stack_chk_fail, the stack protector is missing"
+            exit 1
+          fi
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/android-${{ matrix.arch }}

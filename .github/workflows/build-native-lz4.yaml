@@ -48,12 +48,15 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
+        shell: bash
         run: |
           cd lz4
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated lz4 submodule to ${LATEST_TAG}"
       - name: Setup MSYS2
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
@@ -65,12 +68,33 @@ jobs:
       - name: Build DLL
         shell: msys2 {0}
         env:
+          # CFLAGS comes from the environment, on the command line it would replace the -O3 the Makefile adds.
+          CFLAGS: -fstack-protector-strong
           LDFLAGS: -Wl,--no-insert-timestamp
         run: |
           cd lz4/lib
           make liblz4 MULTITHREAD=0 SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
           ls -la *.dll
           file -L *.dll
+      - name: Verify hardening
+        shell: msys2 {0}
+        run: |
+          dll=lz4/lib/liblz4.dll
+          # mingw-w64 has the stack protector in its static CRT, so no libssp or other extra DLL may show up.
+          imports="$(objdump -p "${dll}" | awk '/DLL Name:/ { print $NF }')"
+          echo "${imports}"
+          if [ -z "${imports}" ]; then
+            echo "::error::${dll} has no import table"
+            exit 1
+          fi
+          if echo "${imports}" | grep -v -i -E '^(KERNEL32|msvcrt|api-ms-win-crt-[a-z0-9-]+)\.dll$'; then
+            echo "::error::${dll} imports a DLL other than KERNEL32.dll, msvcrt.dll and api-ms-win-crt-*.dll"
+            exit 1
+          fi
+          if ! nm "${dll}" | grep __stack_chk_fail; then
+            echo "::error::${dll} has no __stack_chk_fail, the stack protector is missing"
+            exit 1
+          fi
       - name: Prepare artifacts
         shell: bash
         run: |
@@ -90,30 +114,54 @@ jobs:
       contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    env:
+      LLVM_MINGW_IMAGE: mstorsjo/llvm-mingw:20261104@sha256:b2a697af8fc50c5cc56011143453d02168ccfcff635d12ca76a1c363f5f6b0c6
     steps:
       - uses: Cysharp/Actions/.github/actions/checkout@main
         with:
           submodules: recursive
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd lz4
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated lz4 submodule to ${LATEST_TAG}"
       - name: Build using Docker
         run: |
           # lld rejects the -Wl,--force-exe-suffix that lz4 v1.11.0 adds for Windows targets.
           # MCM_LDFLAGS= drops it, and with it only the import library, which is not shipped.
-          docker run --rm -v "$PWD:/work" -e LDFLAGS=-Wl,--no-insert-timestamp \
-            mstorsjo/llvm-mingw:20261104@sha256:b2a697af8fc50c5cc56011143453d02168ccfcff635d12ca76a1c363f5f6b0c6 \
+          # CFLAGS comes from the environment, on the command line it would replace the -O3 the Makefile adds.
+          docker run --rm -v "$PWD:/work" -e CFLAGS=-fstack-protector-strong -e LDFLAGS=-Wl,--no-insert-timestamp \
+            "${LLVM_MINGW_IMAGE}" \
             bash -c "cd /work/lz4/lib && \
               make liblz4 MULTITHREAD=0 MCM_LDFLAGS= \
               TARGET_OS=Windows_NT LIBLZ4_NAME=lz4 \
               CC=aarch64-w64-mingw32-gcc WINDRES=aarch64-w64-mingw32-windres \
               SRCFILES='lz4.c lz4hc.c lz4frame.c xxhash.c'"
           file -L lz4/lib/lz4.dll
+      # The host binutils cannot read an ARM64 DLL, so the tools come from the same image.
+      - name: Verify hardening
+        run: |
+          dll=lz4/lib/lz4.dll
+          # mingw-w64 has the stack protector in its static CRT, so no libssp or other extra DLL may show up.
+          imports="$(docker run --rm -v "$PWD:/work" "${LLVM_MINGW_IMAGE}" llvm-objdump -p "/work/${dll}" | awk '/DLL Name:/ { print $NF }')"
+          echo "${imports}"
+          if [ -z "${imports}" ]; then
+            echo "::error::${dll} has no import table"
+            exit 1
+          fi
+          if echo "${imports}" | grep -v -i -E '^(KERNEL32|msvcrt|api-ms-win-crt-[a-z0-9-]+)\.dll$'; then
+            echo "::error::${dll} imports a DLL other than KERNEL32.dll, msvcrt.dll and api-ms-win-crt-*.dll"
+            exit 1
+          fi
+          if ! docker run --rm -v "$PWD:/work" "${LLVM_MINGW_IMAGE}" llvm-nm "/work/${dll}" | grep __stack_chk_fail; then
+            echo "::error::${dll} has no __stack_chk_fail, the stack protector is missing"
+            exit 1
+          fi
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/win-arm64
@@ -175,18 +223,21 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd lz4
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated lz4 submodule to ${LATEST_TAG}"
       # -Bsymbolic binds the library's calls to its own exports at link time, so another liblz4 in the process
       # (e.g. the distro one linked by the host executable) cannot take them.
+      # -z relro -z now resolves the imports at load time and makes the tables they go through read-only.
       # LDFLAGS comes from the environment so the Makefile can still add to it.
       - name: Build shared library
         env:
-          LDFLAGS: -Wl,-Bsymbolic
+          LDFLAGS: -Wl,-Bsymbolic -Wl,-z,relro,-z,now
         run: |
           cd lz4/lib
           make liblz4 MULTITHREAD=0 CC="${CC}" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
@@ -194,6 +245,17 @@ jobs:
           file -L liblz4.so*
       - name: Verify symbol binding
         run: sh .github/scripts/check-symbol-binding.sh lz4/lib/liblz4.so
+      - name: Verify hardening
+        run: |
+          # BIND_NOW comes from the LDFLAGS above, the stack protector is the Ubuntu gcc default.
+          if ! readelf -d lz4/lib/liblz4.so | grep BIND_NOW; then
+            echo "::error::liblz4.so has no BIND_NOW"
+            exit 1
+          fi
+          if ! nm -D lz4/lib/liblz4.so | grep __stack_chk_fail; then
+            echo "::error::liblz4.so has no __stack_chk_fail, the stack protector is missing"
+            exit 1
+          fi
       - name: Verify glibc requirement
         run: |
           max_glibc="$(objdump -T lz4/lib/liblz4.so | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)"
@@ -246,12 +308,14 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd lz4
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated lz4 submodule to ${LATEST_TAG}"
       - name: Start Alpine container
         run: |
           docker run -d --name alpine -v "${GITHUB_WORKSPACE}:/work" -w /work "${ALPINE_IMAGE}" sleep infinity
@@ -310,12 +374,14 @@ jobs:
           submodules: recursive
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd lz4
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated lz4 submodule to ${LATEST_TAG}"
       - name: Build dynamic library
         env:
           # The minimum macOS version is fixed here, not by the runner image. README says the same version.
@@ -371,12 +437,14 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd lz4
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated lz4 submodule to ${LATEST_TAG}"
       - name: Build static library for iOS
         env:
           ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
@@ -431,12 +499,14 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd lz4
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated lz4 submodule to ${LATEST_TAG}"
       - name: Build static library for Mac Catalyst
         env:
           ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
@@ -496,12 +566,14 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd lz4
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated lz4 submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated lz4 submodule to ${LATEST_TAG}"
       - name: Setup Android NDK
         uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
         id: setup-ndk
@@ -515,11 +587,24 @@ jobs:
           cd lz4/lib
           # 16 KB page size support, required for 64-bit devices running Android 15 or later.
           # LDFLAGS comes from the environment so the Makefile can still add to it.
-          LDFLAGS="-Wl,-z,max-page-size=16384" make liblz4 MULTITHREAD=0 CC="${{ matrix.cc }}" CFLAGS="-O3 -fPIC -DXXH_NAMESPACE=LZ4_" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
+          LDFLAGS="-Wl,-z,max-page-size=16384" make liblz4 MULTITHREAD=0 CC="${{ matrix.cc }}" CFLAGS="-O3 -fPIC -fstack-protector-strong -DXXH_NAMESPACE=LZ4_" SRCFILES="lz4.c lz4hc.c lz4frame.c xxhash.c" -j "$(nproc)"
           ls -la liblz4.so*
           file -L liblz4.so*
           llvm-readelf -lW liblz4.so | grep LOAD
           if llvm-readelf -lW liblz4.so | grep LOAD | grep -v -E "0x4000[[:space:]]*$"; then echo "LOAD segment is not aligned to 16 KB"; exit 1; fi
+      - name: Verify hardening
+        run: |
+          export PATH="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+
+          # BIND_NOW is the NDK linker default, the stack protector comes from the CFLAGS above.
+          if ! llvm-readelf -d lz4/lib/liblz4.so | grep BIND_NOW; then
+            echo "::error::liblz4.so has no BIND_NOW"
+            exit 1
+          fi
+          if ! llvm-nm -D lz4/lib/liblz4.so | grep __stack_chk_fail; then
+            echo "::error::liblz4.so has no __stack_chk_fail, the stack protector is missing"
+            exit 1
+          fi
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts/android-${{ matrix.arch }}
