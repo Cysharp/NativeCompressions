@@ -102,7 +102,7 @@ public static partial class LZ4
     {
         // checked before anything is decoded, output already handed to the destination cannot be taken back
         cancellationToken.ThrowIfCancellationRequested();
-        using var decoder = new LZ4Decoder(options.WithoutStableDst());
+        using var decoder = new LZ4Decoder(options);
         var status = OperationStatus.NeedMoreData;
         var progress = new FeedProgress();
 

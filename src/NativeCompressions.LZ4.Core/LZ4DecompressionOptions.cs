@@ -4,24 +4,18 @@ using System.Runtime.InteropServices;
 namespace NativeCompressions;
 
 // LZ4F_decompressOptions_t + dictionary ref
+// stableDst of LZ4F_decompressOptions_t is left out. With it lz4frame keeps the address of the previous destination
+// between calls, and the GC can move a managed buffer in the meantime, so the decoder would read whatever is there now.
 
 [StructLayout(LayoutKind.Auto)]
 public readonly record struct LZ4DecompressionOptions
 {
     public static readonly LZ4DecompressionOptions Default = new LZ4DecompressionOptions();
 
-    readonly uint stableDst;
     readonly uint skipChecksums;
 
     // other reference
     readonly LZ4Dictionary? dictionary;
-
-    /// <summary>
-    /// pledges that last 64KB decompressed data is present right before @dstBuffer pointer.
-    /// This optimization skips internal storage operations.
-    /// Once set, this pledge must remain valid up to the end of current frame.
-    /// </summary>
-    public bool StableDst { get => stableDst == 1; init => stableDst = (value) ? 1u : 0; }
 
     /// <summary>
     /// disable checksum calculation and verification, even when one is present in frame, to save CPU time.
@@ -43,16 +37,12 @@ public readonly record struct LZ4DecompressionOptions
 
     internal LZ4Dictionary.Lease AcquireDictionary() => dictionary == null ? default : dictionary.Acquire();
 
-    // For the APIs that choose the destination themselves: arrays that grow, PipeWriter memory and the buffers
-    // handed to Stream.Read do not stay at one address, so StableDst cannot be honored there.
-    internal LZ4DecompressionOptions WithoutStableDst() => StableDst ? this with { StableDst = false } : this;
-
     internal unsafe LZ4F_decompressOptions_t ToDecompressOptions()
     {
+        // stableDst stays 0, lz4frame then copies the history it needs into its own buffer before every call returns
         var options = new LZ4F_decompressOptions_t
         {
             skipChecksums = skipChecksums,
-            stableDst = stableDst
         };
 
         return options;

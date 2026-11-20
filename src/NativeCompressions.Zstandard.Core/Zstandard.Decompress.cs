@@ -18,6 +18,10 @@ public static partial class Zstandard
     /// before the allocation. When false, the data is decoded in blocks into a growing buffer instead. Every frame
     /// in the input is decoded either way.
     /// </param>
+    /// <remarks>
+    /// The array grows with the decompressed data, up to the largest array. For input from an untrusted source,
+    /// decompress into a destination of the size you accept, or use <see cref="ZstandardDecoder"/> and stop at your own limit.
+    /// </remarks>
     public static byte[] Decompress(ReadOnlySpan<byte> source, bool trustedData = false)
     {
         return Decompress(source, ZstandardDecompressionOptions.Default, trustedData);
@@ -34,6 +38,10 @@ public static partial class Zstandard
     /// before the allocation. When false, the data is decoded in blocks into a growing buffer instead. Every frame
     /// in the input is decoded either way.
     /// </param>
+    /// <remarks>
+    /// The array grows with the decompressed data, up to the largest array. For input from an untrusted source,
+    /// decompress into a destination of the size you accept, or use <see cref="ZstandardDecoder"/> and stop at your own limit.
+    /// </remarks>
     public static unsafe byte[] Decompress(ReadOnlySpan<byte> source, in ZstandardDecompressionOptions options, bool trustedData = false)
     {
         if (source.IsEmpty)

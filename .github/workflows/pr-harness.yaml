@@ -10,3 +10,8 @@ jobs:
       contents: read
       pull-requests: read
     uses: Cysharp/Actions/.github/workflows/pr-harness.yaml@main
+    with:
+      # The Rust crates that generate the bindings and the web tool inside the openzl submodule are not shipped.
+      exclude-license-input-paths: |
+        bindgen/
+        openzl/tools/web/

@@ -45,12 +45,15 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
+        shell: bash
         run: |
           cd openzl
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated OpenZL submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated OpenZL submodule to ${LATEST_TAG}"
       - name: Setup MSYS2
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
@@ -134,12 +137,14 @@ jobs:
           submodules: recursive
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd openzl
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated openzl submodule to ${LATEST_TAG}"
       # TODO: Currently, the build artifact extension is .so even on Windows. OpenZL may update the Makefile in the future to create .dll files for Windows, which could cause CI errors. Please update the file extensions accordingly if this change occurs.
       # zstd/lz4 are linked statically and only OpenZL's API is exported, same as the build-windows job.
       - name: Build using Docker
@@ -247,12 +252,14 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd openzl
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated openzl submodule to ${LATEST_TAG}"
       # OpenZL uses zstd/lz4 *_STATIC_LINKING_ONLY APIs, which have no stable ABI. Link the versions it pins
       # (openzl/deps) statically and export only OpenZL's API (ZL_*, ZS2_*), like upstream's Python wheel
       # (openzl/py/pyproject.toml). Upstream `make libopenzl.so` links its shared deps/ builds instead,
@@ -346,12 +353,14 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd openzl
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated openzl submodule to ${LATEST_TAG}"
       - name: Start Alpine container
         run: |
           docker run -d --name alpine -v "${GITHUB_WORKSPACE}:/work" -w /work "${ALPINE_IMAGE}" sleep infinity
@@ -435,12 +444,14 @@ jobs:
           submodules: recursive
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd openzl
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated openzl submodule to ${LATEST_TAG}"
       # TODO: Currently, the build artifact extension is .so even on macOS. OpenZL may update the Makefile in the future to create .dylib files for macOS, which could cause CI errors. Please update the file extensions accordingly if this change occurs.
       # OpenZL uses zstd/lz4 *_STATIC_LINKING_ONLY APIs, which have no stable ABI. Link the versions it pins
       # (openzl/deps) statically and export only OpenZL's API (ZL_*, ZS2_*), like upstream's Python wheel
@@ -537,12 +548,14 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd openzl
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated openzl submodule to ${LATEST_TAG}"
       - name: Build static library for iOS
         env:
           ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
@@ -597,12 +610,14 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd openzl
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated openzl submodule to ${LATEST_TAG}"
       - name: Build static library for Mac Catalyst
         env:
           ZERO_AR_DATE: "1" # Apple ar/libtool/ranlib write a zero mtime into the .a so rebuilds are byte-identical
@@ -684,12 +699,14 @@ jobs:
           fetch-depth: 1
       - name: Update submodule to latest release
         if: ${{ needs.check_new_release.outputs.needs_update == 'true' }}
+        env:
+          LATEST_TAG: ${{ needs.check_new_release.outputs.latest_tag }}
         run: |
           cd openzl
             git fetch --tags
-            git checkout ${{ needs.check_new_release.outputs.latest_tag }}
+            git checkout "${LATEST_TAG}"
           cd ..
-          echo "Updated openzl submodule to ${{ needs.check_new_release.outputs.latest_tag }}"
+          echo "Updated openzl submodule to ${LATEST_TAG}"
       - name: Setup Android NDK
         uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
         id: setup-ndk

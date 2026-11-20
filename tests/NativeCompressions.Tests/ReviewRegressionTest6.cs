@@ -136,13 +136,14 @@ public class ReviewRegressionTest6 : IDisposable
         await output.Writer.CompleteAsync();
     }
 
-    // ---- 3. StableDst is not passed on by the APIs that choose the destination themselves
+    // ---- 3. the APIs that choose the destination themselves decode linked blocks without relying on an earlier destination
+    //         (the review item was StableDst being passed on to them, the option was removed later, see ReviewRegressionTest13)
 
     [Fact]
-    public async Task LZ4_StableDst_IsIgnoredByHighLevelApis()
+    public async Task LZ4_LinkedBlocks_DecodeWithChangingDestinations()
     {
         var data = Compressible(3 * 1024 * 1024, 93);
-        var options = LZ4DecompressionOptions.Default with { StableDst = true };
+        var options = LZ4DecompressionOptions.Default;
 
         // linked blocks refer to the output that came before them
         var compressed = LZ4.Compress(data, LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockLinked, BlockSizeId = BlockSizeId.Max64KB });

@@ -27,6 +27,7 @@ public sealed class ZstandardStream : Stream
     int readBufferOffset; // for decompress
     int readBufferCount; // for decompress
     bool decoderMayHoldOutput; // for decompress, the last call filled the destination so the decoder may still hold output
+    int activeAsyncOperation; // 1 while a ReadAsync, WriteAsync or FlushAsync runs
 
     public ZstandardStream(Stream stream, CompressionMode mode, bool leaveOpen = false)
     {
@@ -209,6 +210,7 @@ public sealed class ZstandardStream : Stream
 #endif
     {
         ValidateDisposed();
+        EnsureNoActiveAsyncOperation();
         return cancellationToken.IsCancellationRequested
             ? ValueTask.FromCanceled(cancellationToken)
             : WriteCoreAsync(buffer, cancellationToken);
@@ -221,6 +223,7 @@ public sealed class ZstandardStream : Stream
         {
             return; // nothing to flush while decompressing, the same as the BCL streams
         }
+        EnsureNoActiveAsyncOperation();
 
         // An encoder handed in by the caller may hold data this stream never saw, so the buffer is rented here too.
         buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
@@ -251,20 +254,28 @@ public sealed class ZstandardStream : Stream
         // so a cancelled write after that would lose it.
         cancellationToken.ThrowIfCancellationRequested();
 
-        // An encoder handed in by the caller may hold data this stream never saw, so the buffer is rented here too.
-        buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
+        AsyncOperationStarting();
+        try
+        {
+            // An encoder handed in by the caller may hold data this stream never saw, so the buffer is rented here too.
+            buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
 
-        var status = OperationStatus.DestinationTooSmall;
-        while (status == OperationStatus.DestinationTooSmall)
-        {
-            status = encoder!.Flush(buffer, out var written);
-            await stream.WriteAsync(buffer.AsMemory(0, written), cancellationToken); // use ValueTask overload.
+            var status = OperationStatus.DestinationTooSmall;
+            while (status == OperationStatus.DestinationTooSmall)
+            {
+                status = encoder!.Flush(buffer, out var written);
+                await stream.WriteAsync(buffer.AsMemory(0, written), cancellationToken); // use ValueTask overload.
+            }
+            if (status != OperationStatus.Done)
+            {
+                throw new InvalidOperationException($"Flush failed: {status}");
+            }
+            await stream.FlushAsync(cancellationToken);
         }
-        if (status != OperationStatus.Done)
+        finally
         {
-            throw new InvalidOperationException($"Flush failed: {status}");
+            AsyncOperationCompleting();
         }
-        await stream.FlushAsync(cancellationToken);
     }
 
     void WriteCore(ReadOnlySpan<byte> source)
@@ -274,6 +285,7 @@ public sealed class ZstandardStream : Stream
         {
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
+        EnsureNoActiveAsyncOperation();
 
         var dest = buffer;
         if (dest == null)
@@ -306,26 +318,34 @@ public sealed class ZstandardStream : Stream
             throw new InvalidOperationException("Write operation must be Compress mode.");
         }
 
-        var dest = buffer;
-        if (dest == null)
+        AsyncOperationStarting();
+        try
         {
-            dest = buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
+            var dest = buffer;
+            if (dest == null)
+            {
+                dest = buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
+            }
+
+            var status = OperationStatus.DestinationTooSmall;
+            while (status == OperationStatus.DestinationTooSmall)
+            {
+                status = encoder!.Compress(source.Span, dest, out var consumed, out var written, isFinalBlock: false);
+                if (status == OperationStatus.InvalidData)
+                {
+                    throw new InvalidOperationException("Compression failed.");
+                }
+
+                source = source.Slice(consumed);
+                if (written > 0) // nothing is written while the encoder buffers a block
+                {
+                    await stream.WriteAsync(dest.AsMemory(0, written), cancellationToken);
+                }
+            }
         }
-
-        var status = OperationStatus.DestinationTooSmall;
-        while (status == OperationStatus.DestinationTooSmall)
+        finally
         {
-            status = encoder!.Compress(source.Span, dest, out var consumed, out var written, isFinalBlock: false);
-            if (status == OperationStatus.InvalidData)
-            {
-                throw new InvalidOperationException("Compression failed.");
-            }
-
-            source = source.Slice(consumed);
-            if (written > 0) // nothing is written while the encoder buffers a block
-            {
-                await stream.WriteAsync(dest.AsMemory(0, written), cancellationToken);
-            }
+            AsyncOperationCompleting();
         }
     }
 
@@ -382,6 +402,7 @@ public sealed class ZstandardStream : Stream
 #endif
     {
         ValidateDisposed();
+        EnsureNoActiveAsyncOperation();
         return ReadCoreAsync(buffer, cancellationToken);
     }
 
@@ -391,6 +412,7 @@ public sealed class ZstandardStream : Stream
         {
             throw new InvalidOperationException("Read operation must be Decompress mode.");
         }
+        EnsureNoActiveAsyncOperation();
 
         buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
         var totalRead = 0;
@@ -517,119 +539,127 @@ public sealed class ZstandardStream : Stream
         // checked before the decoder is touched, a cancelled read must not consume input
         cancellationToken.ThrowIfCancellationRequested();
 
-        buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
-        var totalRead = 0;
-
-        if (destination.IsEmpty)
+        AsyncOperationStarting();
+        try
         {
-            // A zero-byte read waits until input is available, the way the System.IO.Compression streams do,
-            // so callers can delay renting a buffer. Buffered input or output held by the decoder counts as
-            // available, otherwise the inner stream is read once. End of input is reported by the next real read.
-            if (readBufferCount == 0 && !decoderMayHoldOutput)
-            {
-                readBufferOffset = 0;
-                readBufferCount = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
-            }
-            return 0;
-        }
+            buffer ??= ArrayPool<byte>.Shared.Rent(BufferSize);
+            var totalRead = 0;
 
-        while (destination.Length > 0)
-        {
-            if (readBufferCount == 0 && !decoderMayHoldOutput)
+            if (destination.IsEmpty)
             {
-                // Data decoded so far is returned before asking for more input.
-                // The inner stream may not deliver more until the caller has acted on this data.
-                if (totalRead > 0)
+                // A zero-byte read waits until input is available, the way the System.IO.Compression streams do,
+                // so callers can delay renting a buffer. Buffered input or output held by the decoder counts as
+                // available, otherwise the inner stream is read once. End of input is reported by the next real read.
+                if (readBufferCount == 0 && !decoderMayHoldOutput)
                 {
-                    return totalRead;
+                    readBufferOffset = 0;
+                    readBufferCount = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
                 }
+                return 0;
+            }
 
-                // Input is read before the decoder is called. The decoder is called without input only to take out
-                // output it holds, because the native decoder counts calls that can do nothing and gives up after a few.
-                // A read that waits for input and is cancelled or fails must not add to that count.
-                readBufferOffset = 0;
-                readBufferCount = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
-
-                if (readBufferCount == 0)
+            while (destination.Length > 0)
+            {
+                if (readBufferCount == 0 && !decoderMayHoldOutput)
                 {
-                    if (decoder!.IsFrameInProgress)
-                    {
-                        throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
-                    }
-
-                    return totalRead;
-                }
-            }
-
-            // empty when only the output held by the decoder is taken out
-            var status = decoder!.Decompress(buffer.AsSpan(readBufferOffset, readBufferCount), destination.Span, out var consumed, out var written);
-            decoderMayHoldOutput = status == OperationStatus.DestinationTooSmall;
-
-            // Update buffer state
-            if (consumed > 0)
-            {
-                readBufferOffset += consumed;
-                readBufferCount -= consumed;
-            }
-
-            if (written > 0)
-            {
-                totalRead += written;
-                destination = destination.Slice(written);
-            }
-
-            switch (status)
-            {
-                case OperationStatus.InvalidData:
-                    throw new ZstandardException("Invalid Zstandard frame.");
-
-                case OperationStatus.Done:
-                    // Frame completed, there might be another frame so continue
-                    decoder!.Reset();
-                    break;
-
-                case OperationStatus.DestinationTooSmall:
-                    // Output buffer is full
-                    return totalRead;
-
-                case OperationStatus.NeedMoreData:
-                    // The input was taken completely, or the decoder produced output and goes on with the rest.
-                    // Either way the next turn of the loop continues, and reads more input when the buffer is empty.
-                    if (readBufferCount == 0 || written > 0)
-                    {
-                        break;
-                    }
-
-                    // Input is left and nothing was written, the decoder wants it together with what follows.
-                    // Data decoded so far is returned first.
+                    // Data decoded so far is returned before asking for more input.
+                    // The inner stream may not deliver more until the caller has acted on this data.
                     if (totalRead > 0)
                     {
                         return totalRead;
                     }
 
+                    // Input is read before the decoder is called. The decoder is called without input only to take out
+                    // output it holds, because the native decoder counts calls that can do nothing and gives up after a few.
+                    // A read that waits for input and is cancelled or fails must not add to that count.
+                    readBufferOffset = 0;
+                    readBufferCount = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
+
+                    if (readBufferCount == 0)
                     {
-                        // Move unconsumed data to the beginning of buffer. The offset is updated before the read,
-                        // so a read that throws leaves the buffer state valid.
-                        if (readBufferOffset > 0)
-                        {
-                            Buffer.BlockCopy(buffer, readBufferOffset, buffer, 0, readBufferCount);
-                            readBufferOffset = 0;
-                        }
-
-                        // Read additional data
-                        var bytesRead = await stream.ReadAsync(buffer.AsMemory(readBufferCount, buffer.Length - readBufferCount), cancellationToken);
-                        readBufferCount += bytesRead;
-
-                        if (bytesRead == 0)
+                        if (decoder!.IsFrameInProgress)
                         {
                             throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
                         }
-                    }
-                    break;
-            }
-        }
 
-        return totalRead;
+                        return totalRead;
+                    }
+                }
+
+                // empty when only the output held by the decoder is taken out
+                var status = decoder!.Decompress(buffer.AsSpan(readBufferOffset, readBufferCount), destination.Span, out var consumed, out var written);
+                decoderMayHoldOutput = status == OperationStatus.DestinationTooSmall;
+
+                // Update buffer state
+                if (consumed > 0)
+                {
+                    readBufferOffset += consumed;
+                    readBufferCount -= consumed;
+                }
+
+                if (written > 0)
+                {
+                    totalRead += written;
+                    destination = destination.Slice(written);
+                }
+
+                switch (status)
+                {
+                    case OperationStatus.InvalidData:
+                        throw new ZstandardException("Invalid Zstandard frame.");
+
+                    case OperationStatus.Done:
+                        // Frame completed, there might be another frame so continue
+                        decoder!.Reset();
+                        break;
+
+                    case OperationStatus.DestinationTooSmall:
+                        // Output buffer is full
+                        return totalRead;
+
+                    case OperationStatus.NeedMoreData:
+                        // The input was taken completely, or the decoder produced output and goes on with the rest.
+                        // Either way the next turn of the loop continues, and reads more input when the buffer is empty.
+                        if (readBufferCount == 0 || written > 0)
+                        {
+                            break;
+                        }
+
+                        // Input is left and nothing was written, the decoder wants it together with what follows.
+                        // Data decoded so far is returned first.
+                        if (totalRead > 0)
+                        {
+                            return totalRead;
+                        }
+
+                        {
+                            // Move unconsumed data to the beginning of buffer. The offset is updated before the read,
+                            // so a read that throws leaves the buffer state valid.
+                            if (readBufferOffset > 0)
+                            {
+                                Buffer.BlockCopy(buffer, readBufferOffset, buffer, 0, readBufferCount);
+                                readBufferOffset = 0;
+                            }
+
+                            // Read additional data
+                            var bytesRead = await stream.ReadAsync(buffer.AsMemory(readBufferCount, buffer.Length - readBufferCount), cancellationToken);
+                            readBufferCount += bytesRead;
+
+                            if (bytesRead == 0)
+                            {
+                                throw new ZstandardException("Invalid Zstandard frame: input ends inside a frame.");
+                            }
+                        }
+                        break;
+                }
+            }
+
+            return totalRead;
+        }
+        finally
+        {
+            AsyncOperationCompleting();
+        }
     }
 
     #endregion
@@ -762,6 +792,25 @@ public sealed class ZstandardStream : Stream
         {
             Throws.ObjectDisposedException();
         }
+    }
+
+    // One asynchronous operation at a time, the same rule as the streams of System.IO.Compression.
+    // A second one that starts before the first has completed would use the native context and the buffer at the same time.
+    void EnsureNoActiveAsyncOperation()
+    {
+        if (Volatile.Read(ref activeAsyncOperation) != 0) ThrowActiveAsyncOperation();
+    }
+
+    void AsyncOperationStarting()
+    {
+        if (Interlocked.Exchange(ref activeAsyncOperation, 1) != 0) ThrowActiveAsyncOperation();
+    }
+
+    void AsyncOperationCompleting() => Volatile.Write(ref activeAsyncOperation, 0);
+
+    static void ThrowActiveAsyncOperation()
+    {
+        throw new InvalidOperationException("An asynchronous read, write or flush is still running on this stream. Await it before the next call.");
     }
 }
 

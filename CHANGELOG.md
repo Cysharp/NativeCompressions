@@ -38,6 +38,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `Zstandard.GetMaxCompressedLength` throws `ArgumentOutOfRangeException` for a negative size, previously `OverflowException`, and for a size zstd cannot compress in one frame, previously the error code as a length.
 - `LZ4Decoder.GetFrameInfo` called again for the same frame returns the same information and consumes nothing.
 - The Zstandard native libraries are built with `ZSTD_LEGACY_SUPPORT=0`. Frames of the formats before zstd v0.8 are invalid data now. Their decoders did not honor `WindowLogMax`.
+- On Windows the native libraries are no longer looked up in the current directory and `PATH`. They are found in the native asset directories of the app, next to the assembly, and in the directories Windows treats as safe: the application directory, the system directory and the ones added with `AddDllDirectory`. Previously a library placed in the current directory or on `PATH` was loaded when the bundled one was missing. A deployment that relied on `PATH` has to put the library next to the assembly, or call `AddDllDirectory` or `NativeLibrary.SetDllImportResolver`. Other platforms are unchanged.
+- The `LZ4Encoder` constructor throws `LZ4Exception` when the loaded lz4 is older than v1.11.0, which happens when the bundled library is missing and the system provides its own. Previously `Compress` failed in the middle of a frame.
+- `LZ4Stream` and `ZstandardStream` throw `InvalidOperationException` for a read, write or flush that starts while a `ReadAsync`, `WriteAsync` or `FlushAsync` is still running, like the streams of `System.IO.Compression`. Previously both used the native context and the buffer at the same time.
+
+### Removed
+- `LZ4DecompressionOptions.StableDst`. With it lz4 kept the address of the previous destination between `LZ4Decoder.Decompress` calls. When the GC moved that buffer in between, the next block was decoded from whatever was at the old address, without an error. The option only saved a copy of up to 64KB per call. `LZ4.Decompress`, `LZ4.DecompressAsync` and `LZ4Stream` already ignored it.
 
 ### Fixed
 - On Alpine and other musl distributions, the packages loaded the glibc libraries. On arm64 none of them loaded, they need `ld-linux-aarch64.so.1`. On x64 libzstd loaded with an unresolved glibc-only symbol (`__fprintf_chk`), and an eager loader rejected it. The musl libraries above replace them there.

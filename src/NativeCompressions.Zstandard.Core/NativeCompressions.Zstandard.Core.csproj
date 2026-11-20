@@ -25,6 +25,8 @@
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Throws.cs" Link="Internal\Throws.cs" />
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\SegmentedArrayProvider.cs" Link="Internal\SegmentedArrayProvider.cs" />
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\PipeWriterExtensions.cs" Link="Internal\PipeWriterExtensions.cs" />
+    <!-- assembly attribute that keeps the current directory and PATH out of the native library lookup -->
+    <Compile Include="..\NativeCompressions.LZ4.Core\Internal\NativeLibrarySearchPaths.cs" Link="Internal\NativeLibrarySearchPaths.cs" />
     <!-- netstandard2.1 polyfills: Array.MaxLength, GC.AllocateUninitializedArray, ValueTask.FromCanceled -->
     <Compile Include="..\NativeCompressions.LZ4.Core\Internal\Polyfill\StaticExtensions.cs" Link="Internal\Polyfill\StaticExtensions.cs" />
     <!-- netstandard2.0 polyfills: Stream Span / Memory overloads and DisposeAsync -->
