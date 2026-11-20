@@ -32,6 +32,10 @@ namespace NativeCompressions;
 /// </remarks>
 public sealed unsafe class LZ4Encoder : IDisposable
 {
+    // lz4 v1.11.0, the first version whose LZ4F_compressUpdate, LZ4F_flush and LZ4F_compressEnd take a destination of any size.
+    // Before that they failed unless the destination held their worst case, which the calls here do not provide.
+    const int MinimumVersionNumber = 1_11_00;
+
     // Held as a raw pointer instead of SafeHandle to keep a single managed allocation.
     // Released by Dispose or the finalizer.
     LZ4F_cctx_s* cctx;
@@ -75,10 +79,16 @@ public sealed unsafe class LZ4Encoder : IDisposable
     /// Initializes a new instance of the <see cref="LZ4Encoder"/> with specified options.
     /// </summary>
     /// <param name="options">Frame format options such as block size, compression level, and checksums. Pass LZ4CompressionOptions.Default for defaults.</param>
-    /// <exception cref="LZ4Exception">Thrown when the compression context cannot be created, or lz4 rejects the options.</exception>
+    /// <exception cref="LZ4Exception">Thrown when the compression context cannot be created, lz4 rejects the options, or the loaded lz4 library is older than v1.11.0.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when BlockMode, ContentChecksumFlag or BlockChecksumFlag is not a defined value.</exception>
     public LZ4Encoder(in LZ4CompressionOptions options)
     {
+        // The bundled library is newer. An older one gets loaded when the bundled one is missing and the system has its own.
+        if (LZ4.VersionNumber < MinimumVersionNumber)
+        {
+            throw new LZ4Exception($"LZ4Encoder requires lz4 v1.11.0 or later, the loaded library is v{LZ4.Version}.");
+        }
+
         var preferences = options.ToPreferences(); // throws for undefined values, before anything is created
 
         LZ4F_cctx_s* context = null;

@@ -96,6 +96,8 @@ var destination = destinationBuffer[0..written];
 
 These APIs can be customized by passing `LZ4CompressionOptions`, `LZ4DecompressionOptions`. When decompressing to `byte[]`, setting the `bool trustedData` argument to `true` will trust the `ContentSize` in the LZ4 frame header if present, pre-allocating the buffer for improved performance. When `false`, it processes in blocks to an internal buffer then concatenates, which is more resistant to attacks sending malicious data. Default is `false`.
 
+Either way the array grows with the decompressed data, up to about 2GB. For input from an untrusted source, decompress into a `Span<byte>` of the size you accept, or use `LZ4Decoder` and stop at your own limit.
+
 ### Low-level Streaming Compression
 
 APIs similar to [BrotliEncoder](https://learn.microsoft.com/en-us/dotnet/api/system.io.compression.brotliencoder)/[BrotliDecoder](https://learn.microsoft.com/en-us/dotnet/api/system.io.compression.brotliencoder) in System.IO.Compression to encode and decode data in a streamless, non-allocating, and performant manner using the LZ4 frame format specification.
@@ -214,6 +216,8 @@ int read = await lz4Stream.ReadAsync(buffer);
 Each `Write` and `Read` goes to the native codec once, the same as the streams in `System.IO.Compression`. The native codec keeps its own block buffers, so a small read or write costs one call of about 10 ns and no buffering is done in the stream itself. Code that processes many small pieces at once, a serializer for example, is better served by the `PipeWriter` based `CompressAsync` and `DecompressAsync`.
 
 A `Read` with an empty buffer waits until the inner stream delivers input and then returns 0, like the streams in `System.IO.Compression`. Code that reads from a connection can use it to delay renting a buffer until data is available.
+
+One asynchronous read, write or flush runs at a time, like the streams in `System.IO.Compression`. Starting another one before the previous has completed throws `InvalidOperationException`.
 
 ### Options
 You can change `with` operator.
@@ -384,10 +388,22 @@ The packages ship native libraries for the platforms listed in [Getting Started]
 
 What to build:
 
-* LZ4: `lz4/lib` of the version the submodule points at (v1.11.1), from `lz4.c`, `lz4hc.c`, `lz4frame.c` and `xxhash.c`. The binding uses the frame API and the HC compressor. v1.11.0 is the oldest version that works. `LZ4Encoder` relies on `LZ4F_compressUpdate`, `LZ4F_flush` and `LZ4F_compressEnd` accepting a destination smaller than their worst case bound, which older versions answer with an error.
+* LZ4: `lz4/lib` of the version the submodule points at (v1.11.1), from `lz4.c`, `lz4hc.c`, `lz4frame.c` and `xxhash.c`. The packages are built with `make liblz4 MULTITHREAD=0`, the binding does not use lz4's worker threads. It uses the frame API and the HC compressor. v1.11.0 is the oldest version that works. `LZ4Encoder` relies on `LZ4F_compressUpdate`, `LZ4F_flush` and `LZ4F_compressEnd` accepting a destination smaller than their worst case bound, and its constructor throws `LZ4Exception` for an older library.
 * Zstandard: `zstd/lib` (v1.5.7) including the dictionary builder (`ZDICT_*`). Multithreading is not used. The packages are built with `make lib-release-nomt ZSTD_LEGACY_SUPPORT=0`. Leave the decoders of the formats before v0.8 out as well, they do not honor `WindowLogMax`.
+* A shared library for Linux or another ELF platform: link it with `-Wl,-Bsymbolic` and build zstd with `-DZSTD_TRACE=0`, as the packages do. Otherwise its calls to its own functions can end up in another copy of lz4 or zstd that the process has already loaded.
 
-The binding looks the libraries up as `lz4` and `libzstd`. .NET adds the `lib` prefix and the extension on Linux and macOS, but not on Windows, so a Windows-like platform needs `lz4.dll` and `libzstd.dll` (lz4's own build produces `liblz4.dll`, rename it). When the platform needs another name or location, register `NativeLibrary.SetDllImportResolver` on the Core assemblies (`typeof(LZ4).Assembly` and `typeof(Zstandard).Assembly`).
+The binding looks the libraries up as `lz4` and `libzstd`. .NET adds the `lib` prefix and the extension on Linux and macOS, but not on Windows, so a Windows-like platform needs `lz4.dll` and `libzstd.dll` (lz4's own build produces `liblz4.dll`, rename it).
+
+Put the files next to the application's assemblies, where .NET finds them without further setup. In a project file that is:
+
+```xml
+<ItemGroup>
+  <None Include="native/liblz4.so" Link="liblz4.so" CopyToOutputDirectory="PreserveNewest" />
+  <None Include="native/libzstd.so" Link="libzstd.so" CopyToOutputDirectory="PreserveNewest" />
+</ItemGroup>
+```
+
+In Unity, import them as native plugins of that platform instead. On Windows the current directory and `PATH` are not searched, only the directory of the assemblies, the application directory, the system directory and the ones added with `AddDllDirectory`. When the platform needs another name or location, register `NativeLibrary.SetDllImportResolver` on the Core assemblies (`typeof(LZ4).Assembly` and `typeof(Zstandard).Assembly`).
 
 When the platform links native code statically, the P/Invoke library name has to be `__Internal`, as on iOS. In Unity, the `NativeCompressions.Unity` package rewrites the names for iOS builds only. Build xxhash with `-DXXH_NAMESPACE=LZ4_`, as the iOS and Android libraries are, so its symbols do not collide with another copy of xxhash in the same executable.
 

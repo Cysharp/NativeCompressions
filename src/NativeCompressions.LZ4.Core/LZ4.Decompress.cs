@@ -17,6 +17,10 @@ public static partial class LZ4
     /// up front from the header. Only use this for data you control, since the header is not verified before the allocation.
     /// Every frame in the input is decoded either way.
     /// </param>
+    /// <remarks>
+    /// The array grows with the decompressed data, up to the largest array. For input from an untrusted source,
+    /// decompress into a destination of the size you accept, or use <see cref="LZ4Decoder"/> and stop at your own limit.
+    /// </remarks>
     public static byte[] Decompress(ReadOnlySpan<byte> source, bool trustedData = false) => Decompress(source, LZ4DecompressionOptions.Default, trustedData);
 
     /// <summary>
@@ -29,6 +33,10 @@ public static partial class LZ4
     /// up front from the header. Only use this for data you control, since the header is not verified before the allocation.
     /// Every frame in the input is decoded either way.
     /// </param>
+    /// <remarks>
+    /// The array grows with the decompressed data, up to the largest array. For input from an untrusted source,
+    /// decompress into a destination of the size you accept, or use <see cref="LZ4Decoder"/> and stop at your own limit.
+    /// </remarks>
     public static byte[] Decompress(ReadOnlySpan<byte> source, in LZ4DecompressionOptions options, bool trustedData = false)
     {
         if (source.IsEmpty)
@@ -36,7 +44,7 @@ public static partial class LZ4
             return [];
         }
 
-        using var decoder = new LZ4Decoder(options.WithoutStableDst());
+        using var decoder = new LZ4Decoder(options);
 
         if (trustedData && TryGetFrameInfo(source, out var frameInfo) && frameInfo.FrameType == FrameType.Frame && frameInfo.ContentSize != 0)
         {
@@ -175,7 +183,7 @@ public static partial class LZ4
 
         // lz4frame is called directly instead of through LZ4Decoder. All of the input is here, so anything
         // short of a finished frame is an error, and the call allocates nothing managed.
-        var decompressOptions = options.WithoutStableDst().ToDecompressOptions();
+        var decompressOptions = options.ToDecompressOptions();
 
         LZ4F_dctx_s* context = null;
         LZ4Dictionary.Lease dictionary = default;

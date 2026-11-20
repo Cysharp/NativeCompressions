@@ -32,30 +32,27 @@ public class ReviewRegressionTest8
         return ms.ToArray();
     }
 
-    // ---- 1. a decoder created with StableDst is refused by the stream
+    // ---- 1. a decoder owned by the caller is accepted by the stream
+    //         (the review item was a decoder created with StableDst, the option was removed later, see ReviewRegressionTest13)
 
     [Fact]
-    public void LZ4Stream_RejectsStableDstDecoder()
+    public void LZ4Stream_AcceptsCallerDecoder()
     {
-        using var stableDst = new LZ4Decoder(LZ4DecompressionOptions.Default with { StableDst = true });
-        var ex = Assert.Throws<ArgumentException>(() => new LZ4Stream(new MemoryStream(), stableDst));
-        Assert.Equal("decoder", ex.ParamName);
-
         var data = Compressible(100_000, 11);
         var compressed = LZ4.Compress(data);
 
-        // the option path turns the setting off instead
-        using (var stream = new LZ4Stream(new MemoryStream(compressed), LZ4DecompressionOptions.Default with { StableDst = true }))
+        using (var stream = new LZ4Stream(new MemoryStream(compressed), LZ4DecompressionOptions.Default))
         {
             Assert.Equal(data, ReadAll(stream));
         }
 
-        // a decoder without the setting is accepted
-        using var plain = new LZ4Decoder();
-        using (var stream = new LZ4Stream(new MemoryStream(compressed), plain))
+        using var decoder = new LZ4Decoder();
+        using (var stream = new LZ4Stream(new MemoryStream(compressed), decoder))
         {
             Assert.Equal(data, ReadAll(stream));
         }
+
+        Assert.Throws<ArgumentNullException>(() => new LZ4Stream(new MemoryStream(), (LZ4Decoder)null!));
     }
 
     // ---- 2. the input reader stays usable when the output fails

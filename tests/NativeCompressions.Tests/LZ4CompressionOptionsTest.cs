@@ -172,18 +172,5 @@ public class LZ4CompressionOptionsTest
         var d2 = LZ4DecompressionOptions.Default with { SkipChecksums = true };
         Assert.Equal(d1, d2);
         Assert.NotEqual(d1, LZ4DecompressionOptions.Default);
-        Assert.False(LZ4DecompressionOptions.Default.StableDst);
-    }
-
-    [Fact]
-    public void DecompressionOptions_StableDst()
-    {
-        var compressed = LZ4.Compress(Data, LZ4CompressionOptions.Default with { BlockMode = BlockMode.BlockLinked });
-        var options = LZ4DecompressionOptions.Default with { StableDst = true };
-
-        // one contiguous destination satisfies stableDst
-        var dest = new byte[Data.Length];
-        Assert.Equal(Data.Length, LZ4.Decompress(compressed, dest, options));
-        Assert.Equal(Data, dest);
     }
 }

@@ -76,9 +76,6 @@ public sealed unsafe class LZ4Decoder : IDisposable
     // true once bytes of a frame were taken and until that frame completes or the decoder is reset
     internal bool IsFrameInProgress => frameInProgress;
 
-    // The decoder was created with StableDst, so it expects every destination to stay where it is.
-    internal bool StableDst => options.stableDst != 0;
-
     /// <summary>
     /// Determines the size of an LZ4 frame header from the beginning of a compressed stream.
     /// </summary>
