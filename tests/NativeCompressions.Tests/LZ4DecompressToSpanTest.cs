@@ -192,6 +192,11 @@ public class LZ4DecompressToSpanTest
 
         for (var i = 0; i < 20; i++) LZ4.Decompress(compressed, destination);
 
+        // A background GC discards what is left of this thread's allocation buffer, and the counter below
+        // then reports that rest as allocated, up to 8KB. Tests running in parallel trigger such a GC.
+        // After a blocking collection the thread has no buffer to lose until it allocates again.
+        GC.Collect();
+
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < 20; i++) LZ4.Decompress(compressed, destination);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
