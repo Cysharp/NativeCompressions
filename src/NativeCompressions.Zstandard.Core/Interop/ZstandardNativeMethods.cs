@@ -97,6 +97,16 @@ namespace NativeCompressions.Interop
         [DllImport(__DllName, EntryPoint = "ZSTD_findFrameCompressedSize", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern nuint ZSTD_findFrameCompressedSize(void* src, nuint srcSize);
 
+        /// <summary>
+        ///  ZSTD_getFrameHeader() : Requires v1.6.0+
+        ///   decode Frame Header into `zfhPtr`, or requires larger `srcSize`.
+        ///  @return : 0 =&gt; header is complete, `zfhPtr` is correctly filled,
+        ///           &gt;0 =&gt; `srcSize` is too small, @return value is the wanted `srcSize` amount, `zfhPtr` is not filled,
+        ///            or an error code, which can be tested using ZSTD_isError()
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZSTD_getFrameHeader", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern nuint ZSTD_getFrameHeader(ZSTD_FrameHeader* zfhPtr, void* src, nuint srcSize);
+
         [DllImport(__DllName, EntryPoint = "ZSTD_compressBound", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern nuint ZSTD_compressBound(nuint srcSize);
 
@@ -147,6 +157,9 @@ namespace NativeCompressions.Interop
         ///   Same as ZSTD_decompress(),
         ///   requires an allocated ZSTD_DCtx.
         ///   Compatible with sticky parameters (see below).
+        ///   The streaming session of @dctx is reset first, as with
+        ///   ZSTD_DCtx_reset(dctx, ZSTD_reset_session_only).
+        ///   See ZSTD_DCtx_refPrefix() for the effect on a referenced prefix.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZSTD_decompressDCtx", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern nuint ZSTD_decompressDCtx(ZSTD_DCtx_s* dctx, void* dst, nuint dstCapacity, void* src, nuint srcSize);
@@ -202,6 +215,7 @@ namespace NativeCompressions.Interop
         ///   - The session : will stop compressing current frame, and make CCtx ready to start a new one.
         ///                   Useful after an error, or to interrupt any ongoing compression.
         ///                   Any internal data not yet flushed is cancelled.
+        ///                   With nbWorkers &gt;= 1, it waits for the jobs already started to complete.
         ///                   Compression parameters and dictionary remain unchanged.
         ///                   They will be used to compress next frame.
         ///                   Resetting session never fails.
@@ -256,7 +270,11 @@ namespace NativeCompressions.Interop
         ///  ZSTD_DCtx_reset() :
         ///   Return a DCtx to clean state.
         ///   Session and parameters can be reset jointly or separately.
-        ///   Parameters can only be reset when no active frame is being decompressed.
+        ///   ZSTD_reset_parameters can only be used when no frame is being decompressed;
+        ///   otherwise it returns ZSTD_error_stage_wrong without resetting the parameters.
+        ///   ZSTD_reset_session_and_parameters also abandons any active frame.
+        ///   A successful parameter reset discards any referenced prefix or dictionary.
+        ///   See ZSTD_DCtx_refPrefix() for the effect of a session-only reset on a prefix.
         ///  @return : 0, or an error code, which can be tested with ZSTD_isError()
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZSTD_DCtx_reset", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -377,8 +395,11 @@ namespace NativeCompressions.Interop
         ///  Note: when an operation returns with an error code, the @zds state may be left in undefined state.
         ///        It's UB to invoke `ZSTD_decompressStream()` on such a state.
         ///        In order to re-use such a state, it must be first reset,
-        ///        which can be done explicitly (`ZSTD_DCtx_reset()`),
-        ///        or is implied for operations starting some new decompression job (`ZSTD_initDStream`, `ZSTD_decompressDCtx()`, `ZSTD_decompress_usingDict()`)
+        ///        which can be done explicitly (`ZSTD_DCtx_reset(zds, ZSTD_reset_session_only)`),
+        ///        or is implied for operations starting some new decompression job
+        ///        (`ZSTD_initDStream()`, `ZSTD_decompressDCtx()`, `ZSTD_decompress_usingDict()`, `ZSTD_decompress_usingDDict()`).
+        ///        The single-shot functions also leave the session clean:
+        ///        streaming can start a new frame afterwards without an explicit reset.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZSTD_decompressStream", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern nuint ZSTD_decompressStream(ZSTD_DCtx_s* zds, ZSTD_outBuffer_s* output, ZSTD_inBuffer_s* input);
@@ -410,6 +431,8 @@ namespace NativeCompressions.Interop
         ///   Note : This function loads the dictionary, resulting in significant startup delay.
         ///          It's intended for a dictionary used only once.
         ///   Note : When `dict == NULL || dictSize &lt; 8` no dictionary is used.
+        ///   Note : The streaming session of @dctx is reset first, as with
+        ///          ZSTD_DCtx_reset(dctx, ZSTD_reset_session_only).
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZSTD_decompress_usingDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern nuint ZSTD_decompress_usingDict(ZSTD_DCtx_s* dctx, void* dst, nuint dstCapacity, void* src, nuint srcSize, void* dict, nuint dictSize);
@@ -458,6 +481,16 @@ namespace NativeCompressions.Interop
         public static extern ZSTD_DDict_s* ZSTD_createDDict(void* dictBuffer, nuint dictSize);
 
         /// <summary>
+        ///  ZSTD_createDDict_byReference() : Requires v1.6.0+
+        ///   Create a digested dictionary, ready to start decompression operation without startup delay.
+        ///   Dictionary content is referenced, and therefore stays in dictBuffer.
+        ///   It is important that dictBuffer outlives DDict,
+        ///   it must remain read accessible throughout the lifetime of DDict
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZSTD_createDDict_byReference", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern ZSTD_DDict_s* ZSTD_createDDict_byReference(void* dictBuffer, nuint dictSize);
+
+        /// <summary>
         ///  ZSTD_freeDDict() :
         ///   Function frees memory allocated with ZSTD_createDDict()
         ///   If a NULL pointer is passed, no operation is performed.
@@ -469,6 +502,9 @@ namespace NativeCompressions.Interop
         ///  ZSTD_decompress_usingDDict() :
         ///   Decompression using a digested Dictionary.
         ///   Recommended when same dictionary is used multiple times.
+        ///   Uses the supplied DDict, regardless of dictionaries referenced in dctx.
+        ///   The streaming session of @dctx is reset first, as with
+        ///   ZSTD_DCtx_reset(dctx, ZSTD_reset_session_only).
         /// </summary>
         [DllImport(__DllName, EntryPoint = "ZSTD_decompress_usingDDict", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern nuint ZSTD_decompress_usingDDict(ZSTD_DCtx_s* dctx, void* dst, nuint dstCapacity, void* src, nuint srcSize, ZSTD_DDict_s* ddict);
@@ -542,6 +578,15 @@ namespace NativeCompressions.Interop
         public static extern nuint ZSTD_CCtx_loadDictionary(ZSTD_CCtx_s* cctx, void* dict, nuint dictSize);
 
         /// <summary>
+        ///  ZSTD_CCtx_loadDictionary_advanced() : Requires v1.6.0+
+        ///   Same as ZSTD_CCtx_loadDictionary(), but gives finer control over
+        ///   how to load the dictionary (by copy ? by reference ?)
+        ///   and how to interpret it (automatic ? force raw mode ? full mode only ?)
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZSTD_CCtx_loadDictionary_advanced", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern nuint ZSTD_CCtx_loadDictionary_advanced(ZSTD_CCtx_s* cctx, void* dict, nuint dictSize, ZSTD_dictLoadMethod_e dictLoadMethod, ZSTD_dictContentType_e dictContentType);
+
+        /// <summary>
         ///  ZSTD_CCtx_refCDict() : Requires v1.4.0+
         ///   Reference a prepared dictionary, to be used for all future compressed frames.
         ///   Note that compression parameters are enforced from within CDict,
@@ -590,6 +635,8 @@ namespace NativeCompressions.Interop
         ///  @result : 0, or an error code (which can be tested with ZSTD_isError()).
         ///   Special : Adding a NULL (or 0-size) dictionary invalidates any previous dictionary,
         ///             meaning "return to no-dictionary mode".
+        ///   Loading any dictionary also discards the multiple-DDict reference table,
+        ///   without disabling ZSTD_d_refMultipleDDicts.
         ///   Note 1 : Loading a dictionary involves building tables,
         ///            which has a non-negligible impact on CPU usage and latency.
         ///            It's recommended to "load once, use many times", to amortize the cost
@@ -602,15 +649,32 @@ namespace NativeCompressions.Interop
         public static extern nuint ZSTD_DCtx_loadDictionary(ZSTD_DCtx_s* dctx, void* dict, nuint dictSize);
 
         /// <summary>
+        ///  ZSTD_DCtx_loadDictionary_advanced() : Requires v1.6.0+
+        ///   Same as ZSTD_DCtx_loadDictionary(),
+        ///   but gives direct control over
+        ///   how to load the dictionary (by copy ? by reference ?)
+        ///   and how to interpret it (automatic ? force raw mode ? full mode only ?).
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "ZSTD_DCtx_loadDictionary_advanced", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern nuint ZSTD_DCtx_loadDictionary_advanced(ZSTD_DCtx_s* dctx, void* dict, nuint dictSize, ZSTD_dictLoadMethod_e dictLoadMethod, ZSTD_dictContentType_e dictContentType);
+
+        /// <summary>
         ///  ZSTD_DCtx_refDDict() : Requires v1.4.0+
         ///   Reference a prepared dictionary, to be used to decompress next frames.
-        ///   The dictionary remains active for decompression of future frames using same DCtx.
+        ///   In single-DDict mode, the dictionary remains active for decompression of
+        ///   future frames using the same DCtx.
         /// 
         ///   If called with ZSTD_d_refMultipleDDicts enabled, repeated calls of this function
         ///   will store the DDict references in a table, and the DDict used for decompression
         ///   will be determined at decompression time, as per the dict ID in the frame.
-        ///   The memory for the table is allocated on the first call to refDDict, and can be
-        ///   freed with ZSTD_freeDCtx().
+        ///   The memory for the table is allocated on the first call to refDDict.
+        ///   The table is freed by ZSTD_DCtx_refDDict(dctx, NULL), by ZSTD_DCtx_reset()
+        ///   with ZSTD_reset_parameters or ZSTD_reset_session_and_parameters, by any
+        ///   ZSTD_DCtx_loadDictionary() or ZSTD_DCtx_refPrefix() call, by disabling
+        ///   multiple-DDict mode, and by ZSTD_freeDCtx().
+        ///   Disabling multiple-DDict mode releases all dictionary references from the set;
+        ///   no dictionary from the set is retained for subsequent decompression.
+        ///   Referencing a DDict invalidates any previously loaded dictionary or prefix.
         /// 
         ///   If called with ZSTD_d_refMultipleDDicts disabled (the default), only one dictionary
         ///   will be managed, and referencing a dictionary effectively "discards" any previous one.
@@ -624,18 +688,40 @@ namespace NativeCompressions.Interop
 
         /// <summary>
         ///  ZSTD_DCtx_refPrefix() : Requires v1.4.0+
-        ///   Reference a prefix (single-usage dictionary) to decompress next frame.
+        ///   Reference a prefix (single-usage dictionary) for decompression.
         ///   This is the reverse operation of ZSTD_CCtx_refPrefix(),
         ///   and must use the same prefix as the one used during compression.
-        ///   Prefix is **only used once**. Reference is discarded at end of frame.
-        ///   End of frame is reached when ZSTD_decompressStream() returns 0.
+        ///   The prefix is **only used once**:
+        ///   - ZSTD_decompressDCtx() uses it for exactly one call, including all frames
+        ///     in concatenated input. The call consumes the prefix even if the input
+        ///     is empty, contains only skippable frames, or produces an error.
+        ///   - ZSTD_decompressStream() uses it until the first frame is completely
+        ///     decoded and flushed, as indicated by a return value of 0. This includes
+        ///     empty and skippable frames, even though they produce no output.
+        ///   The explicit-dictionary functions ZSTD_decompress_usingDict() and
+        ///   ZSTD_decompress_usingDDict() use their dictionary argument instead and
+        ///   do not consume the prefix configured on the DCtx.
+        /// 
+        ///   ZSTD_DCtx_reset(dctx, ZSTD_reset_session_only) preserves an unused prefix
+        ///   if streaming decompression has not started. Once streaming has started,
+        ///   even with an incomplete header, a session-only reset abandons the frame
+        ///   and discards the prefix. After a streaming error the DCtx may be in an
+        ///   undefined state and must be reset before streaming can resume. Errors
+        ///   returned before streaming starts may leave an unused prefix installed.
+        ///   To unconditionally discard it, use ZSTD_reset_session_and_parameters,
+        ///   or ZSTD_reset_parameters when no frame is active. The latter can fail
+        ///   with ZSTD_error_stage_wrong during decompression.
         ///  @result : 0, or an error code (which can be tested with ZSTD_isError()).
-        ///   Note 1 : Adding any prefix (including NULL) invalidates any previously set prefix or dictionary
+        ///   Note 1 : Adding any prefix (including NULL or a zero-sized prefix) invalidates
+        ///            any previously set prefix or dictionary,
+        ///            including the multiple-DDict reference table.
+        ///            Successfully loading or referencing another dictionary, or calling
+        ///            ZSTD_initDStream(), also discards the prefix.
         ///   Note 2 : Prefix buffer is referenced. It **must** outlive decompression.
-        ///            Prefix buffer must remain unmodified up to the end of frame,
-        ///            reached when ZSTD_decompressStream() returns 0.
+        ///            It must remain unmodified until the one-shot call returns, the
+        ///            streaming frame completes, or the prefix is explicitly discarded.
         ///   Note 3 : By default, the prefix is treated as raw content (ZSTD_dct_rawContent).
-        ///            Use ZSTD_CCtx_refPrefix_advanced() to alter dictMode (Experimental section)
+        ///            Use ZSTD_DCtx_refPrefix_advanced() to alter dictMode (Experimental section)
         ///   Note 4 : Referencing a raw content prefix has almost no cpu nor memory cost.
         ///            A full dictionary is more costly, as it requires building tables.
         /// </summary>
@@ -744,6 +830,32 @@ namespace NativeCompressions.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    public unsafe partial struct ZSTD_FrameHeader
+    {
+        /// <summary>
+        /// &lt; if == ZSTD_CONTENTSIZE_UNKNOWN, it means this field is not available. 0 means "empty"
+        /// </summary>
+        public ulong frameContentSize;
+        /// <summary>
+        /// &lt; can be very large, up to &lt;= frameContentSize
+        /// </summary>
+        public ulong windowSize;
+        public uint blockSizeMax;
+        /// <summary>
+        /// &lt; if == ZSTD_skippableFrame, frameContentSize is the size of skippable content
+        /// </summary>
+        public ZSTD_FrameType_e frameType;
+        public uint headerSize;
+        /// <summary>
+        /// &lt; for ZSTD_skippableFrame, contains the skippable magic variant [0-15]
+        /// </summary>
+        public uint dictID;
+        public uint checksumFlag;
+        public uint _reserved1;
+        public uint _reserved2;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     public unsafe partial struct ZSTD_CCtx_s
     {
         public fixed byte _unused[1];
@@ -836,7 +948,7 @@ namespace NativeCompressions.Interop
     }
 
 
-    public enum ZSTD_ErrorCode : int
+    public enum ZSTD_ErrorCode : uint
     {
         ZSTD_error_no_error = 0,
         ZSTD_error_GENERIC = 1,
@@ -876,7 +988,13 @@ namespace NativeCompressions.Interop
         ZSTD_error_maxCode = 120,
     }
 
-    public enum ZSTD_cParameter : int
+    public enum ZSTD_FrameType_e : uint
+    {
+        ZSTD_frame = 0,
+        ZSTD_skippableFrame = 1,
+    }
+
+    public enum ZSTD_cParameter : uint
     {
         ZSTD_c_compressionLevel = 100,
         ZSTD_c_windowLog = 101,
@@ -919,7 +1037,7 @@ namespace NativeCompressions.Interop
         ZSTD_c_experimentalParam20 = 1017,
     }
 
-    public enum ZSTD_ResetDirective : int
+    public enum ZSTD_ResetDirective : uint
     {
         ZSTD_reset_session_only = 1,
         ZSTD_reset_parameters = 2,
@@ -929,7 +1047,7 @@ namespace NativeCompressions.Interop
     /// <summary>
     ///   Advanced decompression API (Requires v1.4.0+)
     /// </summary>
-    public enum ZSTD_dParameter : int
+    public enum ZSTD_dParameter : uint
     {
         ZSTD_d_windowLogMax = 100,
         ZSTD_d_experimentalParam1 = 1000,
@@ -940,11 +1058,39 @@ namespace NativeCompressions.Interop
         ZSTD_d_experimentalParam6 = 1005,
     }
 
-    public enum ZSTD_EndDirective : int
+    public enum ZSTD_EndDirective : uint
     {
         ZSTD_e_continue = 0,
         ZSTD_e_flush = 1,
         ZSTD_e_end = 2,
+    }
+
+    public enum ZSTD_dictContentType_e : uint
+    {
+        /// <summary>
+        /// &lt; dictionary is "full" when starting with ZSTD_MAGIC_DICTIONARY, otherwise it is "rawContent"
+        /// </summary>
+        ZSTD_dct_auto = 0,
+        /// <summary>
+        /// &lt; ensures dictionary is always loaded as rawContent, even if it starts with ZSTD_MAGIC_DICTIONARY
+        /// </summary>
+        ZSTD_dct_rawContent = 1,
+        /// <summary>
+        /// &lt; refuses to load a dictionary if it does not respect Zstandard's specification, starting with ZSTD_MAGIC_DICTIONARY
+        /// </summary>
+        ZSTD_dct_fullDict = 2,
+    }
+
+    public enum ZSTD_dictLoadMethod_e : uint
+    {
+        /// <summary>
+        /// &lt; Copy dictionary content internally
+        /// </summary>
+        ZSTD_dlm_byCopy = 0,
+        /// <summary>
+        /// &lt; Reference dictionary content -- the dictionary buffer must outlive its users.
+        /// </summary>
+        ZSTD_dlm_byRef = 1,
     }
 
 
