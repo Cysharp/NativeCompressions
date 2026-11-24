@@ -389,7 +389,7 @@ The packages ship native libraries for the platforms listed in [Getting Started]
 What to build:
 
 * LZ4: `lz4/lib` of the version the submodule points at (v1.11.1), from `lz4.c`, `lz4hc.c`, `lz4frame.c` and `xxhash.c`. The packages are built with `make liblz4 MULTITHREAD=0`, the binding does not use lz4's worker threads. It uses the frame API and the HC compressor. v1.11.0 is the oldest version that works. `LZ4Encoder` relies on `LZ4F_compressUpdate`, `LZ4F_flush` and `LZ4F_compressEnd` accepting a destination smaller than their worst case bound, and its constructor throws `LZ4Exception` for an older library.
-* Zstandard: `zstd/lib` (v1.5.7) including the dictionary builder (`ZDICT_*`). Multithreading is not used. The packages are built with `make lib-release-nomt ZSTD_LEGACY_SUPPORT=0`. Leave the decoders of the formats before v0.8 out as well, they do not honor `WindowLogMax`.
+* Zstandard: `zstd/lib` (v1.6.0) including the dictionary builder (`ZDICT_*`). Multithreading is not used. The packages are built with `make lib-release-nomt ZSTD_LEGACY_SUPPORT=0`. Leave the decoders of the formats before v0.8 out as well, they do not honor `WindowLogMax`.
 * A shared library for Linux or another ELF platform: link it with `-Wl,-Bsymbolic` and build zstd with `-DZSTD_TRACE=0`, as the packages do. Otherwise its calls to its own functions can end up in another copy of lz4 or zstd that the process has already loaded.
 
 The binding looks the libraries up as `lz4` and `libzstd`. .NET adds the `lib` prefix and the extension on Linux and macOS, but not on Windows, so a Windows-like platform needs `lz4.dll` and `libzstd.dll` (lz4's own build produces `liblz4.dll`, rename it).
