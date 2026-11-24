@@ -31,7 +31,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Zstandard (https://github.com/facebook/zstd)
+Zstandard (https://github.com/meta/zstd)
 ================================================================================
 
 BSD License
@@ -66,7 +66,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-OpenZL (https://github.com/facebook/openzl)
+OpenZL (https://github.com/meta/openzl)
 ================================================================================
 
 BSD License

@@ -6,7 +6,7 @@ on:
   workflow_call:
     inputs:
       repository:
-        description: "The repository to check for new releases (e.g. facebook/openzl)"
+        description: "The repository to check for new releases (e.g. meta/openzl)"
         required: true
         type: string
       submodule_path:

@@ -1,9 +1,9 @@
 [submodule "zstd"]
 	path = zstd
-	url = https://github.com/facebook/zstd.git
+	url = https://github.com/meta/zstd.git
 [submodule "lz4"]
 	path = lz4
 	url = https://github.com/lz4/lz4.git
 [submodule "openzl"]
 	path = openzl
-	url = https://github.com/facebook/openzl.git
+	url = https://github.com/meta/openzl.git

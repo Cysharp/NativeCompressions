@@ -3,7 +3,7 @@ NativeCompressions
 <!-- [![CI](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml/badge.svg)](https://github.com/Cysharp/NativeCompressions/actions/workflows/build-debug.yaml)
 [![NuGet](https://img.shields.io/nuget/v/NativeCompressions)](https://www.nuget.org/packages/NativeCompressions) -->
 
-NativeCompressions provides native library bindings and streaming processing for [LZ4](https://github.com/lz4/lz4) with its excellent decompression speed, and [Zstandard](https://github.com/facebook/zstd) with its superior balance of compression ratio and performance, and new [OpenZL](https://github.com/facebook/openzl) novel data compression framework.
+NativeCompressions provides native library bindings and streaming processing for [LZ4](https://github.com/lz4/lz4) with its excellent decompression speed, and [Zstandard](https://github.com/meta/zstd) with its superior balance of compression ratio and performance, and new [OpenZL](https://github.com/meta/openzl) novel data compression framework.
 
 ![](docs/benchmark_graph.jpg)
 
@@ -301,7 +301,7 @@ Options (`ZstandardCompressionOptions`, `ZstandardDecompressionOptions`), dictio
 
 OpenZL
 ---
-[OpenZL](https://github.com/facebook/openzl) is a new compression library announced in October 2025. NativeCompressions carries experimental bindings for it in this repository, but they are not part of the 1.0 release and no NuGet package is published for them. To try OpenZL, build `src/NativeCompressions.OpenZL.csproj` from source.
+[OpenZL](https://github.com/meta/openzl) is a new compression library announced in October 2025. NativeCompressions carries experimental bindings for it in this repository, but they are not part of the 1.0 release and no NuGet package is published for them. To try OpenZL, build `src/NativeCompressions.OpenZL.csproj` from source.
 
 There are no high-level C# APIs yet. All of the C API is exposed in `NativeCompressions.Interop.OpenZLNativeMethods`, so you can try out OpenZL using that. APIs for C# will be created progressively.
 
@@ -435,5 +435,5 @@ This library includes precompiled binaries of LZ4, Zstandard and OpenZL. See [TH
 
 ### Third-party Notices
 * LZ4 - [Licensed under BSD 2-Clause license](https://github.com/lz4/lz4/blob/dev/LICENSE)
-* Zstandard - [Licensed under BSD License](https://github.com/facebook/zstd/blob/dev/LICENSE)
-* OpenZL - [Licensed under BSD License](https://github.com/facebook/openzl/blob/dev/LICENSE)
+* Zstandard - [Licensed under BSD License](https://github.com/meta/zstd/blob/dev/LICENSE)
+* OpenZL - [Licensed under BSD License](https://github.com/meta/openzl/blob/dev/LICENSE)

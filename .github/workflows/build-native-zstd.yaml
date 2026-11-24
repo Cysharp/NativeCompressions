@@ -21,7 +21,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/check-new-release.yaml
     with:
-      repository: facebook/zstd
+      repository: meta/zstd
       submodule_path: zstd
 
   build-windows:
