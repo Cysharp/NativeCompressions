@@ -10,7 +10,7 @@
 //        fixed (byte* src = source)
 //        fixed (byte* dest = destination)
 //        {
-//            // simple sample: https://github.com/facebook/openzl/blob/dev/examples/compress_app.cpp
+//            // simple sample: https://github.com/meta/openzl/blob/dev/examples/compress_app.cpp
 
 //            var cctx = ZL_CCtx_create();
 //            try

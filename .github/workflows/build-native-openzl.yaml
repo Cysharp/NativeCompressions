@@ -21,7 +21,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/check-new-release.yaml
     with:
-      repository: facebook/openzl
+      repository: meta/openzl
       submodule_path: openzl
 
   build-windows:
